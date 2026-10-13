@@ -1,0 +1,25 @@
+package app.komori
+
+import android.app.Application
+import androidx.room.Room
+import app.komori.data.*
+import coil.ImageLoader
+import coil.ImageLoaderFactory
+import coil.memory.MemoryCache
+
+class KomoriApp : Application(), ImageLoaderFactory {
+    val database by lazy {
+        Room.databaseBuilder(this, LibraryDatabase::class.java, "komori.db").build()
+    }
+    val dao
+        get() = database.dao()
+
+    val settings by lazy { SettingsStore(this) }
+    val source by lazy { MangaDex(MangaDex.client()) }
+
+    override fun newImageLoader() =
+        ImageLoader.Builder(this)
+            .memoryCache { MemoryCache.Builder(this).maxSizePercent(0.12).build() }
+            .crossfade(false)
+            .build()
+}
