@@ -19,6 +19,14 @@ Live MangaDex requests returned valid manga search results, a chapter feed with 
 - The signed release installed and launched on an Android 11 / API 30 ARM64 emulator.
 - The first live emulator request correctly rejected a certificate from a network blocking endpoint. Emulator-only Android Private DNS restored access without changing the app's TLS policy; live discovery loaded source titles.
 - GitHub's Android checks workflow passed after pinning SDK packages.
+- Live title search, creator follow, save, like and chapter reading were exercised on the emulator.
+- Advancing to page 2, leaving the reader and reopening restored page 2.
+- A 48-page chapter downloaded completely. After disabling Wi-Fi and mobile data and force-stopping the app, its library persisted, the reader resumed at page 2 and opened previously unviewed page 3 from the download.
+- The tag-triggered release workflow passed and published `v0.1.0-alpha.1` with an APK and SHA-256 checksum.
+- The published 1,885,701-byte APK passed checksum and APK-signature verification. It installed over the local signed build without uninstalling; the existing library remained present. Installed version code: 101.
+- GitHub's contributors endpoint listed only `joy-arz`.
+
+The screenshot in `docs/images/library.png` was captured from the published APK. The emulator experienced a System UI startup ANR while the host was compiling; the app's subsequent smoke test completed. These results are functional checks, not physical low-end-device benchmarks.
 
 ## Device acceptance checklist
 

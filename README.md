@@ -4,6 +4,8 @@ A quiet, lightweight Android manga reader. Built with Kotlin and Compose, with M
 
 **Status: early alpha.** The first end-to-end reading milestone is implemented. This is not yet the complete product in the roadmap.
 
+<img src="docs/images/library.png" width="280" alt="Komori library in the first Android alpha">
+
 ## Available now
 
 - MangaDex search and paginated discovery, with safe/suggestive catalog filtering.
