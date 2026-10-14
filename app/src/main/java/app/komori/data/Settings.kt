@@ -19,6 +19,9 @@ data class Settings(
     val webtoon: Boolean = false,
     val rtl: Boolean = false,
     val keepScreenOn: Boolean = false,
+    val showUnavailable: Boolean = true,
+    val newestFirst: Boolean = false,
+    val libraryAlphabetical: Boolean = false,
 )
 
 class SettingsStore(private val context: Context) {
@@ -36,6 +39,9 @@ class SettingsStore(private val context: Context) {
                 p[booleanPreferencesKey("webtoon")] ?: false,
                 p[booleanPreferencesKey("rtl")] ?: false,
                 p[booleanPreferencesKey("keepScreenOn")] ?: false,
+                p[booleanPreferencesKey("showUnavailable")] ?: true,
+                p[booleanPreferencesKey("newestFirst")] ?: false,
+                p[booleanPreferencesKey("libraryAlphabetical")] ?: false,
             )
         }
 

@@ -10,7 +10,7 @@ import coil.memory.MemoryCache
 class KomoriApp : Application(), ImageLoaderFactory {
     val database by lazy {
         Room.databaseBuilder(this, LibraryDatabase::class.java, "komori.db")
-            .addMigrations(SCROLL_MIGRATION, READER_MODE_MIGRATION)
+            .addMigrations(SCROLL_MIGRATION, READER_MODE_MIGRATION, FEED_MIGRATION)
             .build()
     }
     val dao

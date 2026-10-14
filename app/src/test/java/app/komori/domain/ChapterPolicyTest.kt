@@ -126,4 +126,86 @@ class ChapterPolicyTest {
     fun `empty feed has no reading target`() {
         assertNull(ChapterPolicy.start(emptyList(), null, emptySet(), true))
     }
+
+    @Test
+    fun `first reading ignores missing volume and descending input`() {
+        val releases =
+            listOf(
+                chapter("late", "290", volume = null),
+                chapter("first", "1"),
+                chapter("extra", null),
+            )
+        assertEquals("first", ChapterPolicy.select(releases, ChapterPreferences()).first().id)
+        assertEquals("first", ChapterPolicy.start(releases, null, emptySet(), false)?.id)
+    }
+
+    @Test
+    fun `current scanlation supplies later chapters without explicit preference`() {
+        val releases =
+            listOf(chapter("current", "1", "b"), chapter("a", "2", "a"), chapter("b", "2", "b"))
+        assertEquals(
+            listOf("current", "b"),
+            ChapterPolicy.select(releases, ChapterPreferences(), "current").map { it.id },
+        )
+    }
+
+    @Test
+    fun `unavailable preferred release cannot hide readable alternative`() {
+        val releases =
+            listOf(chapter("a", group = "a").copy(unavailable = true), chapter("b", group = "b"))
+        assertEquals(
+            "b",
+            ChapterPolicy.select(releases, ChapterPreferences(preferredGroup = "a")).single().id,
+        )
+        assertNull(ChapterPolicy.start(listOf(releases.first()), null, emptySet(), true))
+    }
+
+    @Test
+    fun `all languages retains translations and ambiguous extras`() {
+        val releases =
+            listOf(
+                chapter("a", "extra"),
+                chapter("b", "extra"),
+                chapter("c", language = "id"),
+                chapter("d"),
+            )
+        assertEquals(4, ChapterPolicy.select(releases, ChapterPreferences(language = "*")).size)
+    }
+
+    @Test
+    fun `unavailable filter is independent of smart deduplication`() {
+        val releases = listOf(chapter("a").copy(unavailable = true), chapter("b", "2"))
+        assertEquals(2, ChapterPolicy.select(releases, ChapterPreferences(smart = false)).size)
+        assertEquals(
+            listOf("b"),
+            ChapterPolicy.select(
+                    releases,
+                    ChapterPreferences(smart = false, showUnavailable = false),
+                )
+                .map { it.id },
+        )
+    }
+
+    @Test
+    fun `downloads survive empty refreshed feeds and unavailable metadata`() {
+        val saved = chapter("saved", "1")
+        val stale = chapter("stale", "2")
+        val offline =
+            retainDownloadedChapters(emptyList(), listOf(saved, stale), mapOf("saved" to 20))
+        assertEquals(listOf("saved"), offline.map { it.id })
+        assertTrue(offline.single().readable)
+        val removed =
+            retainDownloadedChapters(
+                listOf(saved.copy(unavailable = true, pages = 0)),
+                listOf(saved),
+                mapOf("saved" to 20),
+            )
+        assertEquals(20, removed.single().pages)
+        assertTrue(
+            ChapterPolicy.select(removed, ChapterPreferences(showUnavailable = false))
+                .single()
+                .readable
+        )
+        assertEquals("saved", ChapterPolicy.start(removed, null, emptySet(), false)?.id)
+    }
 }

@@ -31,6 +31,14 @@ data class Chapter(@PrimaryKey val id: String, val mangaId: String, val json: St
     fun release(): Release = releaseFromJson(JSONObject(json))
 }
 
+@Entity(tableName = "chapter_feeds", primaryKeys = ["mangaId", "language"])
+data class ChapterFeed(
+    val mangaId: String,
+    val language: String,
+    val releaseIds: String,
+    val fetchedAt: Long,
+)
+
 @Entity(tableName = "progress")
 data class Progress(
     @PrimaryKey val releaseId: String,
@@ -103,6 +111,24 @@ interface LibraryDao {
 
     @Upsert suspend fun putChapters(chapters: List<Chapter>)
 
+    @Query("SELECT * FROM chapter_feeds WHERE mangaId = :id AND language = :language")
+    suspend fun feed(id: String, language: String): ChapterFeed?
+
+    @Upsert suspend fun putFeed(feed: ChapterFeed)
+
+    @Transaction
+    suspend fun saveFeed(id: String, language: String, chapters: List<Chapter>) {
+        putChapters(chapters)
+        putFeed(
+            ChapterFeed(
+                id,
+                language,
+                JSONArray(chapters.map { it.id }).toString(),
+                System.currentTimeMillis(),
+            )
+        )
+    }
+
     @Upsert suspend fun putProgress(progress: Progress)
 
     @Upsert suspend fun putDownload(download: Download)
@@ -124,12 +150,13 @@ interface LibraryDao {
             Manga::class,
             Shelf::class,
             Chapter::class,
+            ChapterFeed::class,
             Progress::class,
             Download::class,
             Creator::class,
             TitlePreferences::class,
         ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class LibraryDatabase : RoomDatabase() {
@@ -163,6 +190,7 @@ fun releaseFromJson(o: JSONObject): Release {
             .ifEmpty { "Independent release" },
         a.optInt("pages"),
         a.nullable("externalUrl"),
+        a.optBoolean("isUnavailable", false),
     )
 }
 
@@ -178,6 +206,15 @@ val READER_MODE_MIGRATION =
         override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
             db.execSQL(
                 "ALTER TABLE chapter_preferences ADD COLUMN readerMode TEXT NOT NULL DEFAULT ''"
+            )
+        }
+    }
+
+val FEED_MIGRATION =
+    object : androidx.room.migration.Migration(3, 4) {
+        override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS chapter_feeds (mangaId TEXT NOT NULL, language TEXT NOT NULL, releaseIds TEXT NOT NULL, fetchedAt INTEGER NOT NULL, PRIMARY KEY(mangaId, language))"
             )
         }
     }

@@ -17,10 +17,13 @@ interface MangaSource {
 
     suspend fun chapters(mangaId: String, language: String): List<Chapter>
 
+    suspend fun languages(mangaId: String): List<String>
+
     suspend fun pages(chapterId: String, saver: Boolean): List<String>
 }
 
-class MangaDex(val client: OkHttpClient) : MangaSource {
+class MangaDex(val client: OkHttpClient, private val baseUrl: String = "https://api.mangadex.org") :
+    MangaSource {
     private val throttle = Mutex()
     private var lastRequest = 0L
 
@@ -30,11 +33,11 @@ class MangaDex(val client: OkHttpClient) : MangaSource {
     ): JSONObject =
         withContext(Dispatchers.IO) {
             throttle.withLock {
-                val wait = 300 - (android.os.SystemClock.elapsedRealtime() - lastRequest)
+                val wait = 300 - ((System.nanoTime() / 1_000_000) - lastRequest)
                 if (wait > 0) delay(wait)
-                lastRequest = android.os.SystemClock.elapsedRealtime()
+                lastRequest = (System.nanoTime() / 1_000_000)
                 val url =
-                    "https://api.mangadex.org/$path"
+                    "$baseUrl/$path"
                         .toHttpUrl()
                         .newBuilder()
                         .apply { params.forEach { addQueryParameter(it.first, it.second) } }
@@ -43,7 +46,10 @@ class MangaDex(val client: OkHttpClient) : MangaSource {
                     .newCall(
                         Request.Builder()
                             .url(url)
-                            .header("User-Agent", "Komori/0.1 (Android reader)")
+                            .header(
+                                "User-Agent",
+                                "Komori/${app.komori.BuildConfig.VERSION_NAME} (Android reader)",
+                            )
                             .build()
                     )
                     .execute()
@@ -127,23 +133,44 @@ class MangaDex(val client: OkHttpClient) : MangaSource {
                 json(
                     "manga/$mangaId/feed",
                     listOf(
-                        "limit" to "100",
+                        "limit" to "500",
                         "offset" to "$offset",
-                        "translatedLanguage[]" to language,
                         "includes[]" to "scanlation_group",
-                        "order[volume]" to "asc",
                         "order[chapter]" to "asc",
-                        "includeFutureUpdates" to "0",
-                    ),
+                        "includeFuturePublishAt" to "0",
+                        // Omit includeExternalUrl: 1 means external-only, 0 hosted-only.
+                        "includeUnavailable" to "1",
+                    ) +
+                        if (language == "*") emptyList()
+                        else listOf("translatedLanguage[]" to language),
                 )
             val batch = result.getJSONArray("data").objects()
+            val total = result.getInt("total")
+            if (result.getInt("offset") != offset || (batch.isEmpty() && offset < total))
+                throw IOException("Incomplete chapter list from MangaDex. Please refresh.")
+            val previousIds = all.map { it.id }.toHashSet()
+            if (batch.isNotEmpty() && batch.all { it.getString("id") in previousIds })
+                throw IOException("MangaDex repeated a chapter page. Please refresh.")
             all += batch.map { Chapter(it.getString("id"), mangaId, it.toString()) }
             offset += batch.size
             if (batch.isEmpty()) break
             if (offset >= 10000 && offset < result.optInt("total"))
                 throw IOException("This title exceeds the source's chapter paging limit.")
         } while (offset < result.optInt("total"))
-        return all
+        return all.distinctBy { it.id }
+    }
+
+    override suspend fun languages(mangaId: String): List<String> {
+        val values =
+            json("manga/$mangaId")
+                .getJSONObject("data")
+                .getJSONObject("attributes")
+                .optJSONArray("availableTranslatedLanguages") ?: return emptyList()
+        return (0 until values.length())
+            .mapNotNull {
+                values.optString(it).takeIf { code -> code.isNotBlank() && code != "null" }
+            }
+            .sorted()
     }
 
     override suspend fun pages(chapterId: String, saver: Boolean): List<String> {

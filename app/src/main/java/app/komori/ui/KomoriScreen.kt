@@ -330,6 +330,11 @@ private fun Library(vm: ReaderViewModel, discover: () -> Unit, browseCreator: (C
                 entries
                     .mapNotNull { entry -> manga.find { it.id == entry.mangaId } }
                     .filter { it.title.contains(query, true) }
+                    .let {
+                        if (settings.libraryAlphabetical)
+                            it.sortedBy { book -> book.title.lowercase() }
+                        else it
+                    }
             if (titles.isEmpty())
                 EmptyState(
                     KomoriIcons.MenuBook,
@@ -463,6 +468,9 @@ private fun Details(vm: ReaderViewModel, manga: Manga, browseCreator: (Creator) 
     val shelf by vm.shelf.collectAsStateWithLifecycle()
     val followed by vm.creators.collectAsStateWithLifecycle()
     val raw by vm.chapters.collectAsStateWithLifecycle()
+    val chapterStatus by vm.chapterStatus.collectAsStateWithLifecycle()
+    val sourceLanguages by vm.sourceLanguages.collectAsStateWithLifecycle()
+    val loading by vm.loading.collectAsStateWithLifecycle()
     val preferences by vm.preferences.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
     val progress by vm.progress.collectAsStateWithLifecycle()
@@ -470,6 +478,25 @@ private fun Details(vm: ReaderViewModel, manga: Manga, browseCreator: (Creator) 
     val entry = shelf.find { it.mangaId == manga.id }
     val pref = preferences.find { it.mangaId == manga.id }
     val selected = remember(raw, preferences, settings, shelf) { vm.selectedChapters() }
+    var showLanguages by remember { mutableStateOf(false) }
+    var chapterFilter by remember(manga.id) { mutableStateOf("All") }
+    val visibleChapters =
+        (if (chapterFilter == "Downloaded")
+                app.komori.domain.ChapterPolicy.readingOrder(
+                    raw.filter { chapter ->
+                        downloads.any { it.releaseId == chapter.id && it.state == "Complete" }
+                    }
+                )
+            else selected)
+            .filter { chapter ->
+                when (chapterFilter) {
+                    "Unread" -> progress.none { it.chapterKey == chapter.key && it.completed }
+                    "Downloaded" ->
+                        downloads.any { it.releaseId == chapter.id && it.state == "Complete" }
+                    else -> true
+                }
+            }
+            .let { if (settings.newestFirst) it.reversed() else it }
     var showGroups by remember { mutableStateOf(false) }
     var showStatus by remember { mutableStateOf(false) }
     val uri = LocalUriHandler.current
@@ -514,7 +541,7 @@ private fun Details(vm: ReaderViewModel, manga: Manga, browseCreator: (Creator) 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
                     onClick = { vm.startReading() },
-                    enabled = selected.isNotEmpty(),
+                    enabled = selected.any { !it.unavailable || it.local } && !loading,
                     modifier = Modifier.weight(1f),
                 ) {
                     Icon(KomoriIcons.PlayArrow, null)
@@ -539,7 +566,7 @@ private fun Details(vm: ReaderViewModel, manga: Manga, browseCreator: (Creator) 
                 }
             }
             Row {
-                TextButton(onClick = { vm.startReading(true) }) { Text("Read again") }
+                TextButton(onClick = { vm.startReading(true) }) { Text("Read from first chapter") }
                 TextButton(onClick = { showStatus = true }) { Text(entry?.status ?: "Set status") }
             }
         }
@@ -578,21 +605,43 @@ private fun Details(vm: ReaderViewModel, manga: Manga, browseCreator: (Creator) 
                 )
                 TextButton(onClick = { showGroups = true }) {
                     Icon(KomoriIcons.FilterList, null)
-                    Text("Scanlations")
+                    Text("Filters")
                 }
             }
             Text(
-                "${selected.size} shown · ${settings.language.uppercase()} · ${if (settings.smart) "Smart Chapters" else "All releases"}",
+                "${visibleChapters.size} shown / ${raw.size} available · ${languageName(settings.language)} · ${if (settings.smart) "Smart Chapters" else "All releases"}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Text(chapterStatus, style = MaterialTheme.typography.bodySmall)
+            if (pref?.strict == true && !pref.groupId.isBlank())
+                Text(
+                    "Only preferred group is enabled; other groups are hidden.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
             Row {
-                TextButton(onClick = { vm.open(manga) }) { Text("Refresh") }
+                TextButton(onClick = { showLanguages = true }) { Text("Language") }
+                TextButton(onClick = { vm.open(manga) }, enabled = !loading) { Text("Refresh") }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("All", "Unread", "Downloaded").forEach { label ->
+                    FilterChip(
+                        chapterFilter == label,
+                        { chapterFilter = label },
+                        label = { Text(label) },
+                    )
+                }
+            }
+            Row {
+                TextButton(onClick = { vm.setting("newestFirst", !settings.newestFirst) }) {
+                    Text(if (settings.newestFirst) "Newest first ↓" else "Oldest first ↑")
+                }
                 TextButton(
                     onClick = {
                         selected
                             .filter { release ->
-                                progress.none { it.chapterKey == release.key && it.completed }
+                                release.readable &&
+                                    progress.none { it.chapterKey == release.key && it.completed }
                             }
                             .take(5)
                             .forEach(vm::download)
@@ -602,21 +651,29 @@ private fun Details(vm: ReaderViewModel, manga: Manga, browseCreator: (Creator) 
                 }
             }
         }
-        if (selected.isEmpty())
+        if (visibleChapters.isEmpty())
             item {
                 Text(
-                    "No chapters in this language or scanlation. Change preferences in Settings or Scanlations.",
+                    if (loading) "Loading chapters…"
+                    else if (raw.isEmpty())
+                        "No chapters are available for this language. Check the refresh status above, or choose another language. Smart Chapters cannot restore source-removed chapters."
+                    else
+                        "Chapters are hidden by your filters. Choose All, disable Only preferred group, or show unavailable chapters in Filters.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
-        items(selected, key = { it.id }) { chapter ->
+        items(visibleChapters, key = { it.id }) { chapter ->
             val downloaded = downloads.find { it.releaseId == chapter.id }
             val read = progress.any { it.chapterKey == chapter.key && it.completed }
             Row(
                 Modifier.fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
                     .clickable {
-                        if (chapter.externalUrl?.startsWith("https://") == true)
+                        if (
+                            !chapter.local &&
+                                !chapter.unavailable &&
+                                chapter.externalUrl?.startsWith("https://") == true
+                        )
                             uri.openUri(chapter.externalUrl)
                         else vm.read(chapter)
                     }
@@ -631,18 +688,22 @@ private fun Details(vm: ReaderViewModel, manga: Manga, browseCreator: (Creator) 
                 Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
                     Text(chapter.label, style = MaterialTheme.typography.titleSmall)
                     Text(
-                        chapter.groupNames,
+                        "${chapter.language.uppercase()} · ${chapter.groupNames}",
                         style = MaterialTheme.typography.bodySmall,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    if (chapter.externalUrl != null)
+                    if (chapter.local)
+                        Text(
+                            "Downloaded · Read offline",
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                    else if (chapter.unavailable)
+                        Text("Unavailable on MangaDex", style = MaterialTheme.typography.labelSmall)
+                    else if (chapter.externalUrl != null)
                         Text("Open external source", style = MaterialTheme.typography.labelSmall)
                 }
-                IconButton(
-                    onClick = { vm.download(chapter) },
-                    enabled = chapter.externalUrl == null && chapter.pages > 0,
-                ) {
+                IconButton(onClick = { vm.download(chapter) }, enabled = chapter.readable) {
                     Icon(
                         if (downloaded?.state == "Complete") KomoriIcons.OfflinePin
                         else KomoriIcons.Download,
@@ -683,11 +744,16 @@ private fun Details(vm: ReaderViewModel, manga: Manga, browseCreator: (Creator) 
             },
             confirmButton = {},
         )
+    if (showLanguages)
+        LanguagePicker(settings.language, sourceLanguages, { showLanguages = false }) {
+            vm.language(it)
+            showLanguages = false
+        }
     if (showGroups)
         ModalBottomSheet(onDismissRequest = { showGroups = false }) {
             LazyColumn(Modifier.padding(20.dp)) {
                 item {
-                    Text("Choose your scanlation", style = MaterialTheme.typography.headlineSmall)
+                    Text("Chapter filters", style = MaterialTheme.typography.headlineSmall)
                     Text(
                         "Your current release stays selected while you read. Group preferences apply to other chapters.",
                         Modifier.padding(vertical = 12.dp),
@@ -701,6 +767,15 @@ private fun Details(vm: ReaderViewModel, manga: Manga, browseCreator: (Creator) 
                         settings.smart,
                     ) {
                         vm.setting("smart", it)
+                    }
+                }
+                item {
+                    Toggle(
+                        "Show unavailable chapters",
+                        "Display source-unavailable entries with an explanation",
+                        settings.showUnavailable,
+                    ) {
+                        vm.setting("showUnavailable", it)
                     }
                 }
                 item {
@@ -917,17 +992,26 @@ private fun SettingsScreen(vm: ReaderViewModel, settings: Settings) {
         }
         item {
             Text("Chapter language", style = MaterialTheme.typography.titleSmall)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("en" to "English", "id" to "Indonesian", "ja" to "Japanese").forEach {
-                    (code, name) ->
-                    FilterChip(
-                        settings.language == code,
-                        { vm.language(code) },
-                        label = { Text(name) },
-                    )
+            var languageDialog by remember { mutableStateOf(false) }
+            TextButton(onClick = { languageDialog = true }) {
+                Text(languageName(settings.language))
+            }
+            if (languageDialog)
+                LanguagePicker(settings.language, emptyList(), { languageDialog = false }) {
+                    vm.language(it)
+                    languageDialog = false
                 }
+        }
+        item {
+            Toggle(
+                "Alphabetical library",
+                "Off sorts your shelf by last activity",
+                settings.libraryAlphabetical,
+            ) {
+                vm.setting("libraryAlphabetical", it)
             }
         }
+
         item {
             HorizontalDivider()
             Text(
@@ -973,4 +1057,63 @@ private fun SettingsScreen(vm: ReaderViewModel, settings: Settings) {
             )
         }
     }
+}
+
+private fun languageName(code: String): String =
+    if (code == "*") "All languages"
+    else if (code == "es-la") "Spanish (Latin America)"
+    else if (code == "zh-hk") "Chinese (Traditional)"
+    else
+        java.util.Locale.forLanguageTag(code).getDisplayName(java.util.Locale.ENGLISH).ifBlank {
+            code
+        }
+
+@Composable
+private fun LanguagePicker(
+    current: String,
+    sourceLanguages: List<String>,
+    dismiss: () -> Unit,
+    choose: (String) -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = dismiss,
+        title = { Text("Chapter language") },
+        text = {
+            LazyColumn(Modifier.heightIn(max = 400.dp)) {
+                item {
+                    Text(
+                        "Applies across the app. MangaDex language metadata can include translations that are no longer available.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                items(
+                    (listOf("*", current, "en", "id", "ja") +
+                            sourceLanguages +
+                            listOf(
+                                "es",
+                                "es-la",
+                                "pt-br",
+                                "fr",
+                                "ko",
+                                "zh",
+                                "zh-hk",
+                                "ru",
+                                "vi",
+                                "th",
+                                "de",
+                                "it",
+                                "ar",
+                                "tr",
+                                "pl",
+                            ))
+                        .distinct()
+                ) { code ->
+                    TextButton(onClick = { choose(code) }, modifier = Modifier.fillMaxWidth()) {
+                        Text((if (code == current) "✓ " else "") + languageName(code))
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = dismiss) { Text("Close") } },
+    )
 }

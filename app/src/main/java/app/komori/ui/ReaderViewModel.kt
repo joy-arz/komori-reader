@@ -32,6 +32,8 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     val results = MutableStateFlow<List<Manga>>(emptyList())
     val selected = MutableStateFlow<Manga?>(null)
     val chapters = MutableStateFlow<List<Release>>(emptyList())
+    val chapterStatus = MutableStateFlow("")
+    val sourceLanguages = MutableStateFlow<List<String>>(emptyList())
     val loading = MutableStateFlow(false)
     val error = MutableStateFlow<String?>(null)
     val notice = MutableStateFlow<String?>(null)
@@ -94,26 +96,73 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         selected.value = manga
         chapters.value = emptyList()
         error.value = null
+        sourceLanguages.value = emptyList()
+        chapterStatus.value = "Loading complete chapter list…"
         detailJob = task {
             loading.value = true
             try {
+                val language = app.settings.flow.first().language
                 dao.putManga(manga)
-                val cached = dao.chapters(manga.id).map { it.release() }
+                val snapshot = dao.feed(manga.id, language)
+                val cachedRows = dao.chapters(manga.id)
+                val snapshotIds =
+                    snapshot?.let {
+                        val ids = org.json.JSONArray(it.releaseIds)
+                        (0 until ids.length()).map { i -> ids.getString(i) }.toSet()
+                    }
+                val completedDownloads =
+                    dao.observeDownloads()
+                        .first()
+                        .filter { it.mangaId == manga.id && it.state == "Complete" }
+                        .associate { it.releaseId to it.total }
+                val localChapters =
+                    cachedRows
+                        .map { it.release() }
+                        .filter { language == "*" || it.language == language }
+                val cached =
+                    retainDownloadedChapters(
+                        cachedRows
+                            .filter { snapshotIds == null || it.id in snapshotIds }
+                            .map { it.release() }
+                            .filter { language == "*" || it.language == language },
+                        localChapters,
+                        completedDownloads,
+                    )
                 chapters.value = cached
-                // Cached chapters make direct reading usable without a connection.
-                if (immediately && cached.any { it.language == settings.value.language }) {
-                    startReading()
-                    return@task
-                }
+                // Only resume a known complete snapshot early; a new start waits for
+                // the full feed so a partial legacy cache cannot choose a late chapter.
+                val resumed =
+                    immediately &&
+                        snapshot != null &&
+                        cached.isNotEmpty() &&
+                        dao.shelf(manga.id)?.lastRelease != null
+                if (resumed) startReading()
                 try {
-                    val fresh = app.source.chapters(manga.id, settings.value.language)
-                    dao.putChapters(fresh)
-                    chapters.value = fresh.map { it.release() }
+                    val fresh = app.source.chapters(manga.id, language)
+                    dao.saveFeed(manga.id, language, fresh)
+                    chapters.value =
+                        retainDownloadedChapters(
+                            fresh.map { it.release() },
+                            localChapters,
+                            completedDownloads,
+                        )
+                    chapterStatus.value =
+                        "${fresh.size} releases returned by MangaDex · Updated now"
                 } catch (e: IOException) {
+                    chapterStatus.value =
+                        if (snapshot != null) "Saved chapter list · Refresh failed"
+                        else "Refresh failed · Cached list may be incomplete"
                     if (cached.isEmpty()) throw e
                     notice.value = "Using saved chapters. ${connectionMessage(e)}"
                 }
-                if (immediately) startReading()
+                if (immediately && !resumed) startReading()
+                // Metadata language hints can be stale; never treat them as proof that
+                // a readable chapter exists. Failure here must not discard a good feed.
+                try {
+                    sourceLanguages.value = app.source.languages(manga.id)
+                } catch (e: IOException) {
+                    /* Chapter list remains usable. */
+                }
             } finally {
                 loading.value = false
             }
@@ -138,6 +187,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                 settings.value.smart,
                 pref?.groupId ?: "",
                 pref?.strict ?: false,
+                settings.value.showUnavailable,
             ),
             current,
         )
@@ -185,14 +235,18 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
 
     fun setting(key: String, value: Boolean) = task { app.settings.set(key, value) }
 
-    fun language(value: String) = task { app.settings.language(value) }
+    fun language(value: String) = task {
+        app.settings.language(value)
+        settings.first { it.language == value }
+        selected.value?.let { open(it) }
+    }
 
     fun startReading(fromBeginning: Boolean = false) {
         val available = selectedChapters()
         val last = shelf.value.find { it.mangaId == selected.value?.id }?.lastRelease
         val completed = progress.value.filter { it.completed }.map { it.chapterKey }.toSet()
         val next =
-            if (fromBeginning) available.firstOrNull()
+            if (fromBeginning) available.firstOrNull { !it.unavailable || it.local }
             else ChapterPolicy.start(available, last, completed, settings.value.reread)
         if (next == null) {
             notice.value =
@@ -204,9 +258,12 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun read(chapter: Release, restart: Boolean = false) {
-        if (chapter.externalUrl != null || chapter.pages == 0) {
+        if (!chapter.readable) {
             notice.value =
-                "This chapter is hosted externally. Open its source link from the chapter row."
+                if (chapter.unavailable)
+                    "MangaDex marks this chapter unavailable. Its pages cannot be fetched."
+                else
+                    "This chapter has no MangaDex pages. Open its external link from the chapter row if available."
             return
         }
         pageJob?.cancel()
@@ -354,7 +411,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
             available
                 .dropWhile { it.id != chapter.id }
                 .drop(1)
-                .firstOrNull { it.key != chapter.key }
+                .firstOrNull { it.key != chapter.key && (!it.unavailable || it.local) }
         if (next != null) read(next)
         else {
             closeReader()
@@ -369,8 +426,8 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun download(chapter: Release) = task {
-        if (chapter.externalUrl != null || chapter.pages == 0) {
-            notice.value = "External chapters cannot be downloaded here."
+        if (!chapter.readable) {
+            notice.value = "Only available chapters hosted on MangaDex can be downloaded."
             return@task
         }
         enqueueDownload(app, chapter, settings.value)

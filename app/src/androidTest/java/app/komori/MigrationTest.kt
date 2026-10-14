@@ -80,6 +80,7 @@ class MigrationTest {
                     LibraryDatabase::class.java,
                     "reader-mode-test",
                 )
+                .addMigrations(app.komori.data.FEED_MIGRATION)
                 .build()
         try {
             val pref = kotlinx.coroutines.runBlocking { db.dao().titlePreferences("manga") }
@@ -97,11 +98,40 @@ class MigrationTest {
         helper
             .runMigrationsAndValidate(
                 "full-upgrade-test",
-                3,
+                4,
                 true,
                 app.komori.data.SCROLL_MIGRATION,
                 app.komori.data.READER_MODE_MIGRATION,
+                app.komori.data.FEED_MIGRATION,
             )
             .close()
+    }
+
+    @Test
+    fun chapterSnapshotUpgradePreservesPreferencesAndDownloads() {
+        helper.createDatabase("snapshot-test", 3).apply {
+            execSQL(
+                "INSERT INTO downloads (releaseId, mangaId, label, total, done, state, error, dataSaver) VALUES ('download', 'manga', 'Ch 1', 48, 48, 'Complete', '', 1)"
+            )
+            execSQL(
+                "INSERT INTO chapter_preferences (mangaId, groupId, strict, readerMode) VALUES ('manga', 'group', 1, 'rtl')"
+            )
+            close()
+        }
+        helper
+            .runMigrationsAndValidate("snapshot-test", 4, true, app.komori.data.FEED_MIGRATION)
+            .use { db ->
+                db.query("SELECT readerMode FROM chapter_preferences WHERE mangaId = 'manga'").use {
+                    assertTrue(it.moveToFirst())
+                    assertEquals("rtl", it.getString(0))
+                }
+                db.query("SELECT done FROM downloads WHERE releaseId = 'download'").use {
+                    assertTrue(it.moveToFirst())
+                    assertEquals(48, it.getInt(0))
+                }
+                db.execSQL(
+                    "INSERT INTO chapter_feeds (mangaId, language, releaseIds, fetchedAt) VALUES ('manga', 'en', '[]', 123)"
+                )
+            }
     }
 }

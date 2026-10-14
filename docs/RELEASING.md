@@ -39,3 +39,17 @@ Then run `./gradlew testDebugUnitTest lintRelease assembleRelease`.
 ## Attribution
 
 Commits use the repository owner's configured Git identity. No generated co-author trailers are added. The app credits MangaDex and scanlation groups as required by its source integration.
+
+## JVM keytool automation
+
+`scripts/sign_release.py` uses the JDK's `keytool` to validate the release identity before every local build. Gradle's Android signing configuration signs the APK; `keytool` manages the keystore, rather than signing APK files itself. CI now also validates the keystore and alias with `keytool` before assembling, then verifies the produced APK with `apksigner`.
+
+```sh
+export JAVA_HOME=/path/to/jdk-17-or-newer
+python3 scripts/sign_release.py check
+python3 scripts/sign_release.py build --version-code 105 --version-name 0.4.0-alpha.1
+```
+
+Choose a version code greater than the latest published code for subsequent builds. The script defaults to the existing `~/.config/komori/signing/` directory, keeps passwords in environment variables rather than command-line arguments, and never prints credentials.
+
+For a brand-new signing identity only, `python3 scripts/sign_release.py init --signing-dir /secure/path` creates an RSA JKS key and private credentials file. It refuses to overwrite either existing file. **Do not initialize a replacement key for Komori updates**: reuse the existing release identity so installed apps can update without losing data. Back up both files securely.

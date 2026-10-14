@@ -35,6 +35,11 @@ jobs:
           echo "VERSION_NAME=${TAG#v}" >> "$GITHUB_ENV"
           echo "VERSION_CODE=$((100 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
           echo "SIGNING_STORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+      - name: Validate release identity with JVM keytool
+        env:
+          SIGNING_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: keytool -list -keystore "$SIGNING_STORE_FILE" -alias "$SIGNING_KEY_ALIAS" -storepass:env SIGNING_STORE_PASSWORD > /dev/null
       - name: Test and build signed release
         env:
           SIGNING_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}

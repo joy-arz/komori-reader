@@ -26,7 +26,7 @@ MangaDex and scanlation groups are credited in the application. This is an indep
 
 ## Install
 
-Download [komori-0.3.0-alpha.1.apk](https://github.com/joy-arz/komori-reader/releases/download/v0.3.0-alpha.1/komori-0.3.0-alpha.1.apk), or open [GitHub Releases](https://github.com/joy-arz/komori-reader/releases) and expand **Assets**. Choose the `.apk` file, not the source-code archives. This repository is private, so access requires an authorized GitHub account. Alpha releases are signed with the same private release key, allowing future updates without uninstalling.
+Download [komori-0.4.0-alpha.1.apk](https://github.com/joy-arz/komori-reader/releases/download/v0.4.0-alpha.1/komori-0.4.0-alpha.1.apk), or open [GitHub Releases](https://github.com/joy-arz/komori-reader/releases) and expand **Assets**. Choose the `.apk` file, not the source-code archives. This repository is private, so access requires an authorized GitHub account. Alpha releases are signed with the same private release key, allowing future updates without uninstalling.
 
 ## Build
 
@@ -64,3 +64,8 @@ Signing secrets are already configured in repository Actions secrets. No signing
 See [the implementation plan](docs/PLAN.md) and [validation notes](docs/VALIDATION.md).
 
 The [Komikku reference review](docs/KOMIKKU_REVIEW.md) documents the feature comparison, implemented reader improvements, and remaining priorities.
+
+
+Chapter lists now show source-returned counts, unavailable entries and active filters. Choose Language on a title to check another translation or all languages. Start reading uses ascending chapter numbers independently of the list's newest-first display option. Smart Chapters keeps the current scanlation where possible; unread/downloaded filters only affect the visible list.
+
+Local signing is automated through JVM `keytool` validation and Gradle: see [releasing instructions](docs/RELEASING.md).

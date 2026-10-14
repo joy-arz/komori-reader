@@ -77,3 +77,10 @@ Physical low-end-phone benchmarks remain outstanding. This milestone does not ad
 ### Published artifact verification
 
 GitHub release run `38537752359` and main checks run `38537748871` completed successfully. Downloaded the actual `v0.3.0-alpha.1` release asset: 1,902,085 bytes, SHA-256 checksum matched, APK v2 signature verified. It installed in place over the previous signed release as version code 104. The saved library and completed 48-page download remained available; the installed release opened the new mode sheet and RTL left-edge navigation advanced from page 1 to 2. Final debug screenshot review also confirmed that zoomed artwork stays clipped and the immersive floating control restores the toolbar. Contributors remained `joy-arz` only.
+
+## Chapter feeds and signing — 0.4.0-alpha.1
+
+- Reproduced One Punch-Man's empty English feed in the app and directly against MangaDex. The source returned 0 English, 40 Indonesian and 1,924 total unique releases across four pages on October 14. Its title description identifies a takedown; metadata language hints still include English.
+- Added regression coverage for chapter-first numeric ordering with missing volumes, scanlation continuity, unavailable alternatives, all-language selection, ambiguous extras, more than 500 releases, incomplete pagination, and preservation of completed downloads after a source refresh.
+- Five API 30 instrumentation tests passed before final download-preservation polish, including Room 1 → 4 / 3 → 4 migration and preserved download counts and RTL preferences.
+- JVM keytool validated the existing release identity. A temporary signing directory passed automated key generation, credential file permission checks, and refusal to overwrite an existing identity. Production signing keys were not replaced.
