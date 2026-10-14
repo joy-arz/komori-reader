@@ -42,3 +42,17 @@ The screenshot in `docs/images/library.png` was captured from the published APK.
 ## Performance limits
 
 Emulator smoke testing does not establish low-end-device performance. The physical 2 GB phone benchmark, extreme tall-image stress test and sustained battery measurements remain release-hardening tasks. See PLAN.md for proposed budgets.
+
+## Continuous reader — 0.2.0-alpha.1
+
+- All 12 chapter-policy unit tests pass. Debug and signed release lint: zero errors (15 advisory warnings, predominantly dependency versions).
+- Room 1 → 2 instrumentation migration test passes on Android API 30. Existing page number and completion survive and the new normalized scroll field defaults to zero.
+- Signed APK installed over alpha.1 (same release key): existing saved title, history and downloaded 48-page chapter remained available.
+- On the API 30 / 2 GB emulator, switched Paged → Webtoon and scrolled across source page boundaries, including region-strip boundaries, without blank gaps after loading.
+- Disabled both emulator Wi-Fi and mobile data, force-stopped and relaunched the app, and opened Continue reading: the same vertical position was restored offline. Scrolled forward to further downloaded pages successfully.
+- Switched back to Paged, advanced a page, and returned to Webtoon at that page. No app crash entries were present in the emulator crash buffer.
+- Screenshot review prompted explicit jade foreground colors for primary containers and dark-theme buttons, replacing Material's fallback purple.
+
+Continuous scrolling currently spans one chapter. The end button marks it finished and opens the next available chapter. Reader mode is global; webtoon zoom, cross-chapter endless scrolling and physical low-end benchmarks remain future work. Scroll saves are debounced by 200 ms, so an abrupt process kill during an active gesture may lose the most recent movement.
+
+Run the migration test with `./gradlew connectedDebugAndroidTest` on a connected emulator/device. Debug builds use the `.debug` application-ID suffix to keep test installations separate from the user's release library.

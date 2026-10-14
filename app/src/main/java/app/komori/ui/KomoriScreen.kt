@@ -42,6 +42,7 @@ private val Day =
         primary = Color(0xFF1F6256),
         onPrimary = Color.White,
         primaryContainer = Color(0xFFD8ECE1),
+        onPrimaryContainer = Color(0xFF244535),
         secondary = Color(0xFF56665D),
         secondaryContainer = Color(0xFFE0EBE2),
         onSecondaryContainer = Color(0xFF244535),
@@ -53,7 +54,9 @@ private val Day =
 private val Night =
     darkColorScheme(
         primary = Color(0xFF9CD5BD),
+        onPrimary = Color(0xFF163A2F),
         primaryContainer = Color(0xFF224C40),
+        onPrimaryContainer = Color(0xFFC2E1D0),
         secondaryContainer = Color(0xFF2D473B),
         onSecondaryContainer = Color(0xFFC2E1D0),
         surfaceContainer = Color(0xFF1B251E),
