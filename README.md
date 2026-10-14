@@ -15,6 +15,8 @@ A quiet, lightweight Android manga reader. Built with Kotlin and Compose, with M
 - Persistent chapter downloads, Wi-Fi constraint, retries, pause/resume, original/data-saving images and offline access.
 - Light and dark themes. Android 8.0+; no account, ads or analytics.
 
+MangaDex must be reachable on your network. If a network redirects or blocks it, the app reports a connection error and keeps certificate verification enabled.
+
 MangaDex and scanlation groups are credited in the application. This is an independent client, not an official MangaDex app. Source availability and policy can change.
 
 ## Install

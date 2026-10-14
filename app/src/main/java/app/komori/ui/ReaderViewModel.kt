@@ -59,7 +59,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                error.value = e.message ?: "Something went wrong. Please retry."
+                error.value = connectionMessage(e)
             }
         }
 
@@ -108,7 +108,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                     chapters.value = fresh.map { it.release() }
                 } catch (e: IOException) {
                     if (cached.isEmpty()) throw e
-                    notice.value = "Using saved chapters. ${e.message}"
+                    notice.value = "Using saved chapters. ${connectionMessage(e)}"
                 }
                 if (immediately) startReading()
             } finally {
@@ -208,7 +208,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    readerError.value = e.message ?: "Could not open chapter"
+                    readerError.value = connectionMessage(e)
                 }
             }
     }
@@ -291,7 +291,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    readerError.value = e.message ?: "Could not load page"
+                    readerError.value = connectionMessage(e)
                 }
             }
     }

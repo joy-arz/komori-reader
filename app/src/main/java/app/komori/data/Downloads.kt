@@ -129,7 +129,7 @@ class ChapterDownloadWorker(context: Context, params: WorkerParameters) :
                     app.dao.putDownload(
                         record.copy(
                             state = if (runAttemptCount < 3) "Retrying" else "Failed",
-                            error = e.message ?: "Download failed",
+                            error = connectionMessage(e),
                         )
                     )
                     if (runAttemptCount < 3) Result.retry() else Result.failure()
