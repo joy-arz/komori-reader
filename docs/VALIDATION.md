@@ -82,5 +82,12 @@ GitHub release run `38537752359` and main checks run `38537748871` completed suc
 
 - Reproduced One Punch-Man's empty English feed in the app and directly against MangaDex. The source returned 0 English, 40 Indonesian and 1,924 total unique releases across four pages on October 14. Its title description identifies a takedown; metadata language hints still include English.
 - Added regression coverage for chapter-first numeric ordering with missing volumes, scanlation continuity, unavailable alternatives, all-language selection, ambiguous extras, more than 500 releases, incomplete pagination, and preservation of completed downloads after a source refresh.
-- Five API 30 instrumentation tests passed before final download-preservation polish, including Room 1 → 4 / 3 → 4 migration and preserved download counts and RTL preferences.
+- Five API 30 instrumentation tests passed on the final build, including Room 1 → 4 / 3 → 4 migration and preserved download counts and RTL preferences.
 - JVM keytool validated the existing release identity. A temporary signing directory passed automated key generation, credential file permission checks, and refusal to overwrite an existing identity. Production signing keys were not replaced.
+
+
+### Published 0.4 artifact verification
+
+Main run `38608459984` and release run `38608662909` succeeded. All 26 JVM tests passed; release CI validated the existing keystore with JVM keytool, built and signed the APK, and verified its signature. The downloaded GitHub asset was 1,918,473 bytes; its SHA-256 checksum matched and APK v2 signature verified. It installed over 0.3 as version code 105, retaining the library and completed 48-page download.
+
+On the final debug app, changing One Punch-Man from English to Indonesian loaded all 40 source releases, with 33 Smart Chapter entries. Newest-first displayed chapter 301 first, while Start reading correctly opened the earliest available chapter 92. On the published APK, selecting the 48-page Momotato release through the Downloaded filter successfully displayed its image with Wi-Fi and mobile data disabled. Networking was restored afterward. The general reading queue can select a different scanlation than the downloaded one; the Downloaded filter explicitly exposes local releases for offline use. No low-end physical-device performance guarantee is implied by emulator checks.
