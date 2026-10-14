@@ -17,6 +17,8 @@ data class Settings(
     val wifi: Boolean = true,
     val dark: Boolean = false,
     val webtoon: Boolean = false,
+    val rtl: Boolean = false,
+    val keepScreenOn: Boolean = false,
 )
 
 class SettingsStore(private val context: Context) {
@@ -32,6 +34,8 @@ class SettingsStore(private val context: Context) {
                 p[booleanPreferencesKey("wifi")] ?: true,
                 p[booleanPreferencesKey("dark")] ?: false,
                 p[booleanPreferencesKey("webtoon")] ?: false,
+                p[booleanPreferencesKey("rtl")] ?: false,
+                p[booleanPreferencesKey("keepScreenOn")] ?: false,
             )
         }
 

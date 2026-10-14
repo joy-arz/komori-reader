@@ -33,7 +33,12 @@ private data class ScrollImage(val file: File, val width: Int, val height: Int) 
 /** Only visible strips create decoders; no full chapter or tall page bitmap is allocated. */
 @OptIn(FlowPreview::class)
 @Composable
-fun WebtoonReader(vm: ReaderViewModel, chapter: Release, modifier: Modifier = Modifier) {
+fun WebtoonReader(
+    vm: ReaderViewModel,
+    chapter: Release,
+    modifier: Modifier = Modifier,
+    onTap: () -> Unit = {},
+) {
     val initialPage = remember { vm.readerPage.value }
     val initialFraction = remember { vm.readerScroll.value }
     val images = remember { mutableStateMapOf<Int, ScrollImage>() }
@@ -144,7 +149,7 @@ fun WebtoonReader(vm: ReaderViewModel, chapter: Release, modifier: Modifier = Mo
                                     key(retry) {
                                         AndroidView(
                                             factory = { context ->
-                                                SubsamplingScaleImageView(context).apply {
+                                                ReaderImageView(context).apply {
                                                     setZoomEnabled(false)
                                                     setPanEnabled(false)
                                                     setMinimumScaleType(
@@ -175,6 +180,7 @@ fun WebtoonReader(vm: ReaderViewModel, chapter: Release, modifier: Modifier = Mo
                                                     )
                                                 }
                                             },
+                                            update = { it.onReaderTap = { onTap() } },
                                             modifier = Modifier.fillMaxSize(),
                                             onReset = null,
                                             onRelease = { it.recycle() },

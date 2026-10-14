@@ -61,6 +61,7 @@ data class TitlePreferences(
     @PrimaryKey val mangaId: String,
     val groupId: String = "",
     val strict: Boolean = false,
+    @ColumnInfo(defaultValue = "''") val readerMode: String = "",
 )
 
 @Dao
@@ -92,6 +93,9 @@ interface LibraryDao {
 
     @Query("SELECT * FROM downloads WHERE releaseId = :id")
     suspend fun download(id: String): Download?
+
+    @Query("SELECT * FROM chapter_preferences WHERE mangaId = :id")
+    suspend fun titlePreferences(id: String): TitlePreferences?
 
     @Upsert suspend fun putManga(manga: Manga)
 
@@ -125,7 +129,7 @@ interface LibraryDao {
             Creator::class,
             TitlePreferences::class,
         ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class LibraryDatabase : RoomDatabase() {
@@ -166,5 +170,14 @@ val SCROLL_MIGRATION =
     object : androidx.room.migration.Migration(1, 2) {
         override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
             db.execSQL("ALTER TABLE progress ADD COLUMN scroll REAL NOT NULL DEFAULT 0")
+        }
+    }
+
+val READER_MODE_MIGRATION =
+    object : androidx.room.migration.Migration(2, 3) {
+        override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+            db.execSQL(
+                "ALTER TABLE chapter_preferences ADD COLUMN readerMode TEXT NOT NULL DEFAULT ''"
+            )
         }
     }

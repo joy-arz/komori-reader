@@ -22,8 +22,8 @@ Review of the initial design: a separate empty home/dashboard adds navigation wi
 ## Milestone 2: reader quality
 
 - [x] Continuous webtoon scrolling within chapters, bounded 1024-source-pixel strips and normalized vertical position persistence.
-- Left-to-right/right-to-left gesture paging, configurable tap zones, immersive controls.
-- Per-title reader mode and language overrides.
+- [x] Left-to-right/right-to-left edge taps and gesture paging; immersive controls. Configurable tap-zone layouts remain planned.
+- [x] Per-title reader mode with app-default fallback. Per-title language remains planned.
 - [x] Normalized vertical position per release in webtoon mode; zoom/pan position in paged mode remains planned.
 - Rereading sessions separate from lifetime completion records.
 - Explicit start-from-beginning and caught-up states, distinct from publication completion.

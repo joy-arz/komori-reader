@@ -163,8 +163,24 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         else dao.putCreator(creator)
     }
 
-    fun group(id: String, strict: Boolean = false) = task {
-        selected.value?.let { dao.putTitlePreferences(TitlePreferences(it.id, id, strict)) }
+    fun group(id: String, strict: Boolean = false) {
+        val mangaId = selected.value?.id ?: return
+        task {
+            mutation.withLock {
+                val old = dao.titlePreferences(mangaId) ?: TitlePreferences(mangaId)
+                dao.putTitlePreferences(old.copy(groupId = id, strict = strict))
+            }
+        }
+    }
+
+    fun titleReaderMode(mode: String) {
+        val mangaId = reader.value?.mangaId ?: return
+        task {
+            mutation.withLock {
+                val old = dao.titlePreferences(mangaId) ?: TitlePreferences(mangaId)
+                dao.putTitlePreferences(old.copy(readerMode = mode))
+            }
+        }
     }
 
     fun setting(key: String, value: Boolean) = task { app.settings.set(key, value) }
@@ -218,7 +234,6 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                         else 0f
                     savePage(chapter, readerPage.value, scroll = readerScroll.value)
                     readerReady.value = true
-                    if (!settings.value.webtoon) loadPage(chapter, readerPage.value)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
