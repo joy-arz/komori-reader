@@ -56,3 +56,9 @@ Emulator smoke testing does not establish low-end-device performance. The physic
 Continuous scrolling currently spans one chapter. The end button marks it finished and opens the next available chapter. Reader mode is global; webtoon zoom, cross-chapter endless scrolling and physical low-end benchmarks remain future work. Scroll saves are debounced by 200 ms, so an abrupt process kill during an active gesture may lose the most recent movement.
 
 Run the migration test with `./gradlew connectedDebugAndroidTest` on a connected emulator/device. Debug builds use the `.debug` application-ID suffix to keep test installations separate from the user's release library.
+
+Additional scroll smoke check: traversed the downloaded chapter to page 48/48 with repeated flings, then used Finish & continue to open chapter 2 from MangaDex. A single `dumpsys meminfo` snapshot at the end of chapter 1 reported approximately 53 MiB total PSS; this is an emulator observation, not a peak-memory measurement or physical-device benchmark.
+
+### Alpha.2 rotation correction
+
+The alpha.1 release workflow was cancelled before publication after review found that Compose's saved flattened list index could outlive the in-memory page dimensions. Alpha.2 instead restores from source-page coordinates. Verified portrait → landscape → portrait in the debug app on chapter 2, page 2: the same panel position remained at the viewport top, with no crash. Both reader modes use the corrected jade text contrast.

@@ -6,7 +6,7 @@ import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -37,7 +37,8 @@ fun WebtoonReader(vm: ReaderViewModel, chapter: Release, modifier: Modifier = Mo
     val initialPage = remember { vm.readerPage.value }
     val initialFraction = remember { vm.readerScroll.value }
     val images = remember { mutableStateMapOf<Int, ScrollImage>() }
-    val list = rememberLazyListState(initialPage)
+    // Restore from source-page coordinates, not saved flattened strip indices.
+    val list = remember { LazyListState(initialPage) }
     var restored by remember { mutableStateOf(false) }
     BoxWithConstraints(modifier.fillMaxWidth()) {
         val widthPixels = with(LocalDensity.current) { maxWidth.toPx() }
