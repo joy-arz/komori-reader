@@ -12,6 +12,8 @@ class ReaderImageView(context: Context) : SubsamplingScaleImageView(context) {
     var onReaderSwipe: ((Float) -> Unit)? = null
     private var multiplePointers = false
     private var startedAtMinimum = false
+    private var startX = 0f
+    private var startY = 0f
     private val gestures =
         GestureDetector(
             context,
@@ -22,22 +24,6 @@ class ReaderImageView(context: Context) : SubsamplingScaleImageView(context) {
                     if (!multiplePointers) onReaderTap(e.x / width.coerceAtLeast(1))
                     return true
                 }
-
-                override fun onFling(
-                    first: MotionEvent?,
-                    last: MotionEvent,
-                    vx: Float,
-                    vy: Float,
-                ): Boolean {
-                    if (first == null || multiplePointers || !startedAtMinimum) return false
-                    val dx = last.x - first.x
-                    val dy = last.y - first.y
-                    if (abs(dx) > width * 0.15f && abs(dx) > abs(dy) * 1.5f) {
-                        onReaderSwipe?.invoke(dx)
-                        return onReaderSwipe != null
-                    }
-                    return false
-                }
             },
         )
 
@@ -45,9 +31,27 @@ class ReaderImageView(context: Context) : SubsamplingScaleImageView(context) {
         if (event.actionMasked == MotionEvent.ACTION_DOWN) {
             multiplePointers = false
             startedAtMinimum = isReady && scale <= minScale * 1.02f
+            startX = event.x
+            startY = event.y
         }
         if (event.pointerCount > 1) multiplePointers = true
         gestures.onTouchEvent(event)
-        return super.onTouchEvent(event)
+        val handled = super.onTouchEvent(event)
+        // The image view normally releases its parent at a pan boundary. A paged
+        // reader must retain this gesture until UP, even when the image cannot pan.
+        if (onReaderSwipe != null && startedAtMinimum && !multiplePointers) {
+            if (event.actionMasked == MotionEvent.ACTION_UP) {
+                val dx = event.x - startX
+                val dy = event.y - startY
+                if (abs(dx) > width * 0.15f && abs(dx) > abs(dy) * 1.5f) onReaderSwipe?.invoke(dx)
+            }
+            if (
+                event.actionMasked != MotionEvent.ACTION_UP &&
+                    event.actionMasked != MotionEvent.ACTION_CANCEL
+            ) {
+                parent?.requestDisallowInterceptTouchEvent(true)
+            }
+        }
+        return handled
     }
 }

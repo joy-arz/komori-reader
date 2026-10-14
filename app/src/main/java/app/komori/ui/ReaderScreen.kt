@@ -8,12 +8,15 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
@@ -131,7 +134,7 @@ fun ReaderScreen(vm: ReaderViewModel, chapter: Release) {
                                     }
                                     image.onReaderSwipe = { navigate(mode.swipeDelta(it)) }
                                 },
-                                modifier = Modifier.fillMaxSize(),
+                                modifier = Modifier.fillMaxSize().clipToBounds(),
                                 onReset = null,
                                 onRelease = { it.recycle() },
                             )
@@ -208,8 +211,17 @@ fun ReaderScreen(vm: ReaderViewModel, chapter: Release) {
             }
     }
     if (options)
-        ModalBottomSheet(onDismissRequest = { options = false }) {
-            Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 24.dp)) {
+        ModalBottomSheet(
+            onDismissRequest = { options = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        ) {
+            Column(
+                Modifier.fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .navigationBarsPadding()
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = 24.dp)
+            ) {
                 Text("Reading mode", style = MaterialTheme.typography.headlineSmall)
                 Text(
                     "Saved for this title. Other titles keep their own settings.",

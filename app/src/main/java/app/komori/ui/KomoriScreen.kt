@@ -91,7 +91,11 @@ fun KomoriScreen(vm: ReaderViewModel) {
         Surface(Modifier.fillMaxSize()) {
             if (reader != null)
                 key(reader!!.id) {
-                    MaterialTheme(colorScheme = Night) { ReaderScreen(vm, reader!!) }
+                    MaterialTheme(colorScheme = Night) {
+                        Surface(color = Color.Black, contentColor = Night.onSurface) {
+                            ReaderScreen(vm, reader!!)
+                        }
+                    }
                 }
             else {
                 BackHandler(selected != null) { vm.back() }

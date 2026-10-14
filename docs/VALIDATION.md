@@ -53,7 +53,7 @@ Emulator smoke testing does not establish low-end-device performance. The physic
 - Switched back to Paged, advanced a page, and returned to Webtoon at that page. No app crash entries were present in the emulator crash buffer.
 - Screenshot review prompted explicit jade foreground colors for primary containers and dark-theme buttons, replacing Material's fallback purple.
 
-Continuous scrolling currently spans one chapter. The end button marks it finished and opens the next available chapter. Reader mode is global; webtoon zoom, cross-chapter endless scrolling and physical low-end benchmarks remain future work. Scroll saves are debounced by 200 ms, so an abrupt process kill during an active gesture may lose the most recent movement.
+Continuous scrolling currently spans one chapter. The end button marks it finished and opens the next available chapter. That build used a global reader mode; webtoon zoom, cross-chapter endless scrolling and physical low-end benchmarks remain future work. Scroll saves are debounced by 200 ms, so an abrupt process kill during an active gesture may lose the most recent movement.
 
 Run the migration test with `./gradlew connectedDebugAndroidTest` on a connected emulator/device. Debug builds use the `.debug` application-ID suffix to keep test installations separate from the user's release library.
 
@@ -62,3 +62,14 @@ Additional scroll smoke check: traversed the downloaded chapter to page 48/48 wi
 ### Alpha.2 rotation correction
 
 The alpha.1 release workflow was cancelled before publication after review found that Compose's saved flattened list index could outlive the in-memory page dimensions. Alpha.2 instead restores from source-page coordinates. Verified portrait → landscape → portrait in the debug app on chapter 2, page 2: the same panel position remained at the viewport top, with no crash. Both reader modes use the corrected jade text contrast.
+
+## Reader controls — 0.3.0-alpha.1
+
+- All 16 JVM tests pass, including mode defaults, per-title overrides and RTL/LTR direction mapping. Debug lint has no errors.
+- Four API 30 instrumentation tests pass: Room 1 → 2, 2 → 3 and 1 → 3 upgrades, plus a real tiled-view gesture test that turns at fit scale and does not turn during a zoomed pan.
+- Emulator UI checks exercised RTL swipes, LTR edge navigation, center-tap immersive mode, Back to restore controls, and a force-stop/relaunch that preserved the per-title LTR choice and page 5.
+- A double-tap zoom followed by a horizontal pan retained page 4/36. Screenshot inspection identified artwork drawing outside the viewport; the paged AndroidView now clips to its bounds.
+- Reader toolbar text has explicit dark-theme contrast. The mode sheet opens fully, scrolls on smaller displays, and exposes all four choices and Done.
+- Per-title mode updates preserve scanlation settings; the database migration preserves saved scroll positions and preferred groups.
+
+Physical low-end-phone benchmarks remain outstanding. This milestone does not add cross-chapter endless scrolling or webtoon pinch zoom.
