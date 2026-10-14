@@ -89,7 +89,8 @@ fun KomoriScreen(vm: ReaderViewModel) {
     }
     MaterialTheme(colorScheme = if (settings.dark) Night else Day) {
         Surface(Modifier.fillMaxSize()) {
-            if (reader != null) Reader(vm, reader!!)
+            if (reader != null)
+                key(reader!!.id) { MaterialTheme(colorScheme = Night) { Reader(vm, reader!!) } }
             else {
                 BackHandler(selected != null) { vm.back() }
                 Scaffold(
@@ -227,6 +228,50 @@ private fun Library(vm: ReaderViewModel, discover: () -> Unit, browseCreator: (C
     var filter by rememberSaveable { mutableStateOf("Saved") }
     var query by rememberSaveable { mutableStateOf("") }
     Column {
+        val recent = shelf.firstOrNull { it.lastRelease != null }
+        val book = manga.find { it.id == recent?.mangaId }
+        if (book != null && query.isEmpty() && filter == "Saved") {
+            Card(
+                onClick = { vm.open(book, true) },
+                modifier = Modifier.fillMaxWidth().padding(20.dp, 0.dp, 20.dp, 16.dp),
+                colors =
+                    CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    ),
+                shape = RoundedCornerShape(24.dp),
+            ) {
+                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    AsyncImage(
+                        book.cover,
+                        null,
+                        Modifier.size(52.dp, 76.dp).clip(RoundedCornerShape(8.dp)),
+                        contentScale = ContentScale.Crop,
+                    )
+                    Column(Modifier.weight(1f).padding(horizontal = 16.dp)) {
+                        Text(
+                            "Continue reading",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Text(
+                            book.title,
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            "Pick up where you left off",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    Icon(
+                        KomoriIcons.PlayArrow,
+                        "Continue reading",
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+        }
         OutlinedTextField(
             query,
             { query = it },
@@ -807,6 +852,15 @@ private fun SettingsScreen(vm: ReaderViewModel, settings: Settings) {
         item { Text("Reading", style = MaterialTheme.typography.titleLarge) }
         item {
             Toggle(
+                "Continuous webtoon scrolling",
+                "Read pages in one vertical strip; remembers your position",
+                settings.webtoon,
+            ) {
+                vm.setting("webtoon", it)
+            }
+        }
+        item {
+            Toggle(
                 "Resume your page",
                 "Off starts the current chapter from page one",
                 settings.resume,
@@ -903,6 +957,8 @@ private fun Reader(vm: ReaderViewModel, chapter: Release) {
     val count by vm.pageCount.collectAsStateWithLifecycle()
     val file by vm.readerFile.collectAsStateWithLifecycle()
     val error by vm.readerError.collectAsStateWithLifecycle()
+    val settings by vm.settings.collectAsStateWithLifecycle()
+    val ready by vm.readerReady.collectAsStateWithLifecycle()
     BackHandler { vm.closeReader() }
     Column(Modifier.fillMaxSize().background(Color.Black).safeDrawingPadding()) {
         Row(
@@ -927,60 +983,90 @@ private fun Reader(vm: ReaderViewModel, chapter: Release) {
             }
             Text("${page + 1} / $count", color = Color.White, modifier = Modifier.padding(8.dp))
         }
-        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-            if (error != null)
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(24.dp),
-                ) {
-                    Text(error!!, color = Color.White)
-                    Button(onClick = { vm.page(page) }) { Text("Retry") }
-                }
-            else if (file == null) CircularProgressIndicator()
-            else
-                key(file!!.path) {
-                    AndroidView(
-                        factory = { context ->
-                            SubsamplingScaleImageView(context).apply {
-                                setMinimumScaleType(
-                                    SubsamplingScaleImageView.SCALE_TYPE_CENTER_INSIDE
-                                )
-                                setMaxScale(5f)
-                                setImage(ImageSource.uri(Uri.fromFile(file)))
-                                setOnImageEventListener(
-                                    object :
-                                        SubsamplingScaleImageView.DefaultOnImageEventListener() {
-                                        override fun onImageLoadError(e: Exception) {
-                                            vm.readerError.value =
-                                                "Could not decode this page. Retry or use another release."
-                                        }
-                                    }
-                                )
-                            }
-                        },
-                        modifier = Modifier.fillMaxSize(),
-                        onReset = null,
-                        onRelease = { it.recycle() },
-                    )
-                }
-        }
-        Text(
-            "Pinch to zoom · Drag to explore the page",
-            color = Color.LightGray,
-            style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier.align(Alignment.CenterHorizontally).padding(8.dp),
-        )
         Row(
-            Modifier.fillMaxWidth().padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.Center,
         ) {
-            OutlinedButton(onClick = { vm.page(page - 1) }, enabled = page > 0) { Text("Previous") }
-            if (page + 1 < count) Button(onClick = { vm.page(page + 1) }) { Text("Next page") }
-            else
-                Button(onClick = { vm.finishChapter() }, enabled = file != null) {
-                    Text("Finish chapter")
-                }
+            FilterChip(
+                settings.webtoon,
+                { vm.setting("webtoon", true) },
+                label = { Text("Webtoon") },
+            )
+            Spacer(Modifier.width(8.dp))
+            FilterChip(
+                !settings.webtoon,
+                {
+                    vm.setting("webtoon", false)
+                    vm.page(page)
+                },
+                label = { Text("Paged") },
+            )
         }
+        if (settings.webtoon && ready) {
+            WebtoonReader(vm, chapter, Modifier.weight(1f))
+        } else
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                if (error != null)
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(24.dp),
+                    ) {
+                        Text(error!!, color = Color.White)
+                        Button(onClick = { vm.page(page) }) { Text("Retry") }
+                    }
+                else if (file == null) CircularProgressIndicator()
+                else
+                    key(file!!.path) {
+                        AndroidView(
+                            factory = { context ->
+                                SubsamplingScaleImageView(context).apply {
+                                    setMinimumScaleType(
+                                        SubsamplingScaleImageView.SCALE_TYPE_CENTER_INSIDE
+                                    )
+                                    setMaxScale(5f)
+                                    setImage(ImageSource.uri(Uri.fromFile(file)))
+                                    setOnImageEventListener(
+                                        object :
+                                            SubsamplingScaleImageView.DefaultOnImageEventListener() {
+                                            override fun onImageLoadError(e: Exception) {
+                                                vm.readerError.value =
+                                                    "Could not decode this page. Retry or use another release."
+                                            }
+                                        }
+                                    )
+                                }
+                            },
+                            modifier = Modifier.fillMaxSize(),
+                            onReset = null,
+                            onRelease = { it.recycle() },
+                        )
+                    }
+            }
+        if (!settings.webtoon)
+            Text(
+                "Pinch to zoom · Drag to explore the page",
+                color = Color.LightGray,
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.align(Alignment.CenterHorizontally).padding(8.dp),
+            )
+        if (!settings.webtoon)
+            Row(
+                Modifier.fillMaxWidth().padding(12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedButton(
+                    onClick = { vm.page(page - 1) },
+                    enabled = page > 0,
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF9CD5BD)),
+                ) {
+                    Text("Previous")
+                }
+                if (page + 1 < count) Button(onClick = { vm.page(page + 1) }) { Text("Next page") }
+                else
+                    Button(onClick = { vm.finishChapter() }, enabled = file != null) {
+                        Text("Finish chapter")
+                    }
+            }
     }
 }

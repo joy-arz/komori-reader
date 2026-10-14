@@ -16,6 +16,7 @@ data class Settings(
     val saver: Boolean = true,
     val wifi: Boolean = true,
     val dark: Boolean = false,
+    val webtoon: Boolean = false,
 )
 
 class SettingsStore(private val context: Context) {
@@ -30,6 +31,7 @@ class SettingsStore(private val context: Context) {
                 p[booleanPreferencesKey("saver")] ?: true,
                 p[booleanPreferencesKey("wifi")] ?: true,
                 p[booleanPreferencesKey("dark")] ?: false,
+                p[booleanPreferencesKey("webtoon")] ?: false,
             )
         }
 

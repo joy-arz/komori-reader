@@ -21,10 +21,10 @@ Review of the initial design: a separate empty home/dashboard adds navigation wi
 
 ## Milestone 2: reader quality
 
-- Continuous webtoon scrolling with bounded tiles and viewport persistence.
+- [x] Continuous webtoon scrolling within chapters, bounded 1024-source-pixel strips and normalized vertical position persistence.
 - Left-to-right/right-to-left gesture paging, configurable tap zones, immersive controls.
 - Per-title reader mode and language overrides.
-- Exact normalized viewport position, independent for each release.
+- [x] Normalized vertical position per release in webtoon mode; zoom/pan position in paged mode remains planned.
 - Rereading sessions separate from lifetime completion records.
 - Explicit start-from-beginning and caught-up states, distinct from publication completion.
 - Persisted per-chapter release overrides and visible alternate release picker.
@@ -73,3 +73,17 @@ Physical 2 GB device; downloaded chapter opens in under 1 second; usable local l
 - https://developer.android.com/topic/performance/graphics/load-bitmap
 - https://developer.android.com/develop/background-work/background-tasks/persistent
 - https://developer.android.com/develop/background-work/background-tasks/uidt
+
+## Reader refinement, October 2026
+
+The shelf keeps the existing jade/paper/charcoal tokens and system sans typography. A single compact cover-and-title card makes resuming the most recent story prominent; the cover grid remains the main visual content. No decorative dashboard or additional font dependency. Reader controls use the dark palette for readable contrast regardless of the shelf theme.
+
+```
+Library                        Reader
+[cover | Continue reading]     [Back | chapter | page/count]
+[Search your shelf       ]     [ Webtoon | Paged ]
+[Saved Liked History ... ]     [ continuous image strips ]
+[cover]  [cover]               [ finish & continue       ]
+```
+
+Review: avoid filling a small phone with large promotional cards. Keep the resume card compact and omit it during search or other shelf filters. Scrolling uses lazy region-decoded strips rather than full tall image bitmaps. Dimensions stay lightweight in memory; strips reacquire disk files when revisited after cache eviction. Downloads remain the first source of page files. Scrolling position is normalized against source-image height so restoration survives screen-width changes. Mode is currently global; per-title preferences remain future work.

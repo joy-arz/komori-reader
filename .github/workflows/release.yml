@@ -55,7 +55,8 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          args=(--verify-tag --title "Komori ${VERSION_NAME}" --generate-notes)
+          printf '## Install on Android\n\nDownload **komori-%s.apk** from Assets below (not the source-code ZIP). Android 8.0 or newer. Install over your existing Komori app to preserve your library.\n\n' "$VERSION_NAME" > "$RUNNER_TEMP/release-notes.md"
+          args=(--verify-tag --title "Komori ${VERSION_NAME}" --notes-file "$RUNNER_TEMP/release-notes.md" --generate-notes)
           if [[ "$VERSION_NAME" == *-* ]]; then args+=(--prerelease); fi
           gh release create "$TAG" dist/* "${args[@]}"
       - uses: actions/upload-artifact@v4

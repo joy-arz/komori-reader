@@ -13,7 +13,8 @@ A quiet, lightweight Android manga reader. Built with Kotlin and Compose, with M
 - Local author/artist follows and browsing their works.
 - Smart Chapters: language filtering, conservative duplicate grouping, preferred scanlation and strict/fallback selection.
 - Direct reading from cover play buttons, page resume, restart-current-chapter preference and optional rereading when caught up.
-- Tiled, zoomable page reader designed to avoid decoding entire oversized images into RAM.
+- Continuous webtoon scrolling with saved position within a page, bounded image strips, offline support and a Paged/Webtoon switch.
+- Tiled, zoomable paged reader for traditional manga.
 - Persistent chapter downloads, Wi-Fi constraint, retries, pause/resume, original/data-saving images and offline access.
 - Light and dark themes. Android 8.0+; no account, ads or analytics.
 
@@ -23,7 +24,7 @@ MangaDex and scanlation groups are credited in the application. This is an indep
 
 ## Install
 
-Download the APK from [GitHub Releases](https://github.com/joy-arz/komori-reader/releases). This repository is private, so access requires an authorized GitHub account. Alpha releases are signed with the same private release key, allowing future updates without uninstalling.
+Download [komori-0.2.0-alpha.1.apk](https://github.com/joy-arz/komori-reader/releases/download/v0.2.0-alpha.1/komori-0.2.0-alpha.1.apk), or open [GitHub Releases](https://github.com/joy-arz/komori-reader/releases) and expand **Assets**. Choose the `.apk` file, not the source-code archives. This repository is private, so access requires an authorized GitHub account. Alpha releases are signed with the same private release key, allowing future updates without uninstalling.
 
 ## Build
 
@@ -50,8 +51,8 @@ Signing secrets are already configured in repository Actions secrets. No signing
 
 ## Current limits
 
-- Reading position is saved at page granularity, not the zoom/pan position within a page.
-- Continuous webtoon scrolling and right-to-left gesture paging are still planned; this alpha uses explicit Previous/Next controls and tiled zoom/pan.
+- Webtoon mode saves the vertical position within each source page. Paged mode saves the page, not its zoom/pan viewport.
+- Webtoon scrolling is continuous within a chapter; use Finish & continue at the end. Cross-chapter endless scrolling, immersive controls and right-to-left gesture paging remain planned.
 - Creator follows are local. Automatic creator/title update feeds and MangaDex account sync are not implemented.
 - Smart Chapters uses deterministic selection, not translation-quality scoring. Unnumbered releases and different volumes stay separate; volume metadata inconsistencies may leave duplicates visible.
 - Download work is interruptible and Android may delay it. There is no promise of uninterrupted large background transfers; work checkpoints each page and retries.

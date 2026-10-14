@@ -37,6 +37,9 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     val notice = MutableStateFlow<String?>(null)
     val reader = MutableStateFlow<Release?>(null)
     val readerPage = MutableStateFlow(0)
+    val readerScroll = MutableStateFlow(0f)
+    val readerReady = MutableStateFlow(false)
+    private val imageFetch = Mutex()
     val readerFile = MutableStateFlow<File?>(null)
     val readerError = MutableStateFlow<String?>(null)
     val pageCount = MutableStateFlow(0)
@@ -191,6 +194,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
             return
         }
         pageJob?.cancel()
+        readerReady.value = false
         reader.value = chapter
         readerFile.value = null
         readerError.value = null
@@ -203,8 +207,18 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                         if (restart || !settings.value.resume || previous?.completed == true) 0
                         else previous?.page ?: 0
                     readerPage.value = page.coerceIn(0, (chapter.pages - 1).coerceAtLeast(0))
-                    savePage(chapter, readerPage.value)
-                    loadPage(chapter, readerPage.value)
+                    readerScroll.value =
+                        if (
+                            page == previous?.page &&
+                                !restart &&
+                                settings.value.resume &&
+                                !previous.completed
+                        )
+                            previous.scroll
+                        else 0f
+                    savePage(chapter, readerPage.value, scroll = readerScroll.value)
+                    readerReady.value = true
+                    if (!settings.value.webtoon) loadPage(chapter, readerPage.value)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -213,76 +227,97 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
             }
     }
 
-    private suspend fun savePage(chapter: Release, page: Int, completed: Boolean = false) {
+    private suspend fun savePage(
+        chapter: Release,
+        page: Int,
+        completed: Boolean = false,
+        scroll: Float = 0f,
+    ) {
         mutation.withLock {
-            dao.putProgress(Progress(chapter.id, chapter.mangaId, chapter.key, page, completed))
+            dao.putProgress(
+                Progress(chapter.id, chapter.mangaId, chapter.key, page, completed, scroll)
+            )
             val old = dao.shelf(chapter.mangaId) ?: Shelf(chapter.mangaId)
             dao.putShelf(old.copy(lastRelease = chapter.id, touched = System.currentTimeMillis()))
         }
     }
 
-    private suspend fun loadPage(chapter: Release, page: Int) =
-        withContext(Dispatchers.IO) {
-            readerFile.value = null
-            readerError.value = null
-            val downloaded = pageFile(app, chapter.id, page)
-            if (downloaded.exists()) {
-                readerFile.value = downloaded
-                return@withContext
-            }
-            val cacheDir = File(app.cacheDir, "reader").apply { mkdirs() }
-            val target = File(cacheDir, "${chapter.id}-$page-${settings.value.saver}.img")
-            if (target.exists()) {
-                target.setLastModified(System.currentTimeMillis())
-                readerFile.value = target
-                return@withContext
-            }
-            val manifestKey = "${chapter.id}-${settings.value.saver}"
-            val pageUrls =
-                pageManifests[manifestKey]
-                    ?: app.source.pages(chapter.id, settings.value.saver).also {
-                        pageManifests[manifestKey] = it
-                    }
-            pageCount.value = pageUrls.size
-            val url =
-                pageUrls.getOrNull(page)
-                    ?: throw IOException("Page is no longer available. Reopen the chapter.")
-            val temporary = File.createTempFile("page-", ".part", cacheDir)
-            try {
-                app.source.client.newCall(Request.Builder().url(url).build()).execute().use {
-                    response ->
-                    if (!response.isSuccessful) {
-                        pageManifests.remove(manifestKey)
-                        throw IOException("Page request failed (${response.code}). Tap Retry.")
-                    }
-                    val body = response.body ?: throw IOException("Empty page")
-                    temporary.outputStream().use { out -> body.byteStream().use { it.copyTo(out) } }
+    suspend fun pageFileFor(chapter: Release, page: Int): File =
+        imageFetch.withLock {
+            withContext(Dispatchers.IO) {
+                val downloaded = pageFile(app, chapter.id, page)
+                if (downloaded.exists()) {
+                    return@withContext downloaded
                 }
-                coroutineContext.ensureActive()
-                if (!temporary.renameTo(target)) throw IOException("Could not cache page")
-                // Keep the current file; trim oldest pages to a bounded 128 MB cache.
-                var total = cacheDir.listFiles()?.sumOf { it.length() } ?: 0L
-                cacheDir
-                    .listFiles()
-                    ?.filter { it != target && it.extension == "img" }
-                    ?.sortedBy { it.lastModified() }
-                    ?.forEach {
-                        if (total > 128L * 1024 * 1024) {
-                            total -= it.length()
-                            it.delete()
+                val cacheDir = File(app.cacheDir, "reader").apply { mkdirs() }
+                val target = File(cacheDir, "${chapter.id}-$page-${settings.value.saver}.img")
+                if (target.exists()) {
+                    target.setLastModified(System.currentTimeMillis())
+                    return@withContext target
+                }
+                val manifestKey = "${chapter.id}-${settings.value.saver}"
+                val pageUrls =
+                    pageManifests[manifestKey]
+                        ?: app.source.pages(chapter.id, settings.value.saver).also {
+                            pageManifests[manifestKey] = it
+                        }
+                pageCount.value = pageUrls.size
+                val url =
+                    pageUrls.getOrNull(page)
+                        ?: throw IOException("Page is no longer available. Reopen the chapter.")
+                val temporary = File.createTempFile("page-", ".part", cacheDir)
+                try {
+                    app.source.client.newCall(Request.Builder().url(url).build()).execute().use {
+                        response ->
+                        if (!response.isSuccessful) {
+                            pageManifests.remove(manifestKey)
+                            throw IOException("Page request failed (${response.code}). Tap Retry.")
+                        }
+                        val body = response.body ?: throw IOException("Empty page")
+                        temporary.outputStream().use { out ->
+                            body.byteStream().use { it.copyTo(out) }
                         }
                     }
-                readerFile.value = target
-            } finally {
-                temporary.delete()
+                    coroutineContext.ensureActive()
+                    if (!temporary.renameTo(target)) throw IOException("Could not cache page")
+                    // Keep the current file; trim oldest pages to a bounded 128 MB cache.
+                    var total = cacheDir.listFiles()?.sumOf { it.length() } ?: 0L
+                    cacheDir
+                        .listFiles()
+                        ?.filter { it != target && it.extension == "img" }
+                        ?.sortedBy { it.lastModified() }
+                        ?.forEach {
+                            if (total > 128L * 1024 * 1024) {
+                                total -= it.length()
+                                it.delete()
+                            }
+                        }
+                    target
+                } finally {
+                    temporary.delete()
+                }
             }
         }
+
+    private suspend fun loadPage(chapter: Release, page: Int) {
+        readerFile.value = null
+        readerError.value = null
+        readerFile.value = pageFileFor(chapter, page)
+    }
+
+    fun scrollPosition(chapter: Release, page: Int, fraction: Float) {
+        if (reader.value?.id != chapter.id) return
+        readerPage.value = page
+        readerScroll.value = fraction.coerceIn(0f, 1f)
+        task { savePage(chapter, page, scroll = fraction.coerceIn(0f, 1f)) }
+    }
 
     fun page(index: Int) {
         val chapter = reader.value ?: return
         if (index !in 0 until pageCount.value) return
         pageJob?.cancel()
         readerPage.value = index
+        readerScroll.value = 0f
         pageJob =
             viewModelScope.launch {
                 try {

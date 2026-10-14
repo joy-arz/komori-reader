@@ -38,6 +38,7 @@ data class Progress(
     val chapterKey: String,
     val page: Int = 0,
     val completed: Boolean = false,
+    @ColumnInfo(defaultValue = "0") val scroll: Float = 0f,
 )
 
 @Entity(tableName = "downloads")
@@ -124,7 +125,7 @@ interface LibraryDao {
             Creator::class,
             TitlePreferences::class,
         ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 abstract class LibraryDatabase : RoomDatabase() {
@@ -160,3 +161,10 @@ fun releaseFromJson(o: JSONObject): Release {
         a.nullable("externalUrl"),
     )
 }
+
+val SCROLL_MIGRATION =
+    object : androidx.room.migration.Migration(1, 2) {
+        override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE progress ADD COLUMN scroll REAL NOT NULL DEFAULT 0")
+        }
+    }
