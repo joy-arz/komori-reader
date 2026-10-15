@@ -12,7 +12,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = providers.environmentVariable("VERSION_CODE").orNull?.toInt() ?: 1
-        versionName = providers.environmentVariable("VERSION_NAME").orNull ?: "0.4.0-alpha.1"
+        versionName = providers.environmentVariable("VERSION_NAME").orNull ?: "0.5.0-alpha.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     signingConfigs {
@@ -56,6 +56,7 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.10.1")
     implementation("androidx.datastore:datastore-preferences:1.1.7")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("org.jsoup:jsoup:1.18.3")
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("com.davemorrissey.labs:subsampling-scale-image-view:3.10.0")
     androidTestImplementation("androidx.room:room-testing:2.7.1")

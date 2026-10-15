@@ -6,10 +6,12 @@ import android.app.Activity
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -88,6 +90,7 @@ fun KomoriScreen(vm: ReaderViewModel) {
         }
     }
     MaterialTheme(colorScheme = if (settings.dark) Night else Day) {
+        UpdateDialog()
         Surface(Modifier.fillMaxSize()) {
             if (reader != null)
                 key(reader!!.id) {
@@ -236,7 +239,7 @@ private fun Library(vm: ReaderViewModel, discover: () -> Unit, browseCreator: (C
     Column {
         val recent = shelf.firstOrNull { it.lastRelease != null }
         val book = manga.find { it.id == recent?.mangaId }
-        if (book != null && query.isEmpty() && filter == "Saved") {
+        if (book != null && settings.showContinue && query.isEmpty() && filter == "Saved") {
             Card(
                 onClick = { vm.open(book, true) },
                 modifier = Modifier.fillMaxWidth().padding(20.dp, 0.dp, 20.dp, 16.dp),
@@ -270,11 +273,7 @@ private fun Library(vm: ReaderViewModel, discover: () -> Unit, browseCreator: (C
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
-                    Icon(
-                        KomoriIcons.PlayArrow,
-                        "Continue reading",
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
+                    TextButton(onClick = { vm.setting("showContinue", false) }) { Text("Dismiss") }
                 }
             }
         }
@@ -340,7 +339,7 @@ private fun Library(vm: ReaderViewModel, discover: () -> Unit, browseCreator: (C
                     KomoriIcons.MenuBook,
                     "A little space for your next story",
                     "Save a title from Discover, or start reading to build your history.",
-                    "Explore MangaDex",
+                    "Explore sources",
                     discover,
                 )
             else
@@ -358,9 +357,29 @@ private fun Library(vm: ReaderViewModel, discover: () -> Unit, browseCreator: (C
 private fun Discover(vm: ReaderViewModel) {
     val results by vm.results.collectAsStateWithLifecycle()
     val loading by vm.loading.collectAsStateWithLifecycle()
-    var query by rememberSaveable { mutableStateOf("") }
+    val settings by vm.settings.collectAsStateWithLifecycle()
+    val activeSource by vm.activeSource.collectAsStateWithLifecycle()
+    val library by vm.library.collectAsStateWithLifecycle()
+    val shelf by vm.shelf.collectAsStateWithLifecycle()
+    val filter by vm.browseFilter.collectAsStateWithLifecycle()
+    val tags by vm.tags.collectAsStateWithLifecycle()
+    var showFilters by remember { mutableStateOf(false) }
+    var query by rememberSaveable(activeSource) { mutableStateOf("") }
+    if (showFilters) SourceFilters(vm, activeSource, filter, tags) { showFilters = false }
     LaunchedEffect(Unit) { if (results.isEmpty() && !loading) vm.search("", null) }
     Column {
+        ScrollableTabRow(
+            selectedTabIndex = sourceOrder(settings.sources).indexOf(activeSource).coerceAtLeast(0),
+            edgePadding = 12.dp,
+        ) {
+            sourceOrder(settings.sources).forEach { key ->
+                Tab(
+                    selected = activeSource == key,
+                    onClick = { vm.chooseSource(key) },
+                    text = { Text(sourceNames.getValue(key)) },
+                )
+            }
+        }
         Row(
             Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -374,15 +393,27 @@ private fun Discover(vm: ReaderViewModel) {
                 shape = RoundedCornerShape(18.dp),
             )
             IconButton(onClick = { vm.search(query, null) }) {
-                Icon(KomoriIcons.Search, "Search MangaDex")
+                Icon(KomoriIcons.Search, "Search source")
             }
         }
-        Text(
-            "MangaDex",
-            Modifier.padding(start = 20.dp, bottom = 12.dp),
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary,
-        )
+        Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                if (activeSource == "comix") "Integration pending · source access blocked"
+                else
+                    "${filter.sort.ifEmpty { vm.app.source.sorts(activeSource).firstOrNull().orEmpty() }} · ${filter.tags.size} tags",
+                Modifier.weight(1f),
+                style = MaterialTheme.typography.labelSmall,
+            )
+            TextButton(
+                enabled = activeSource != "comix",
+                onClick = {
+                    showFilters = true
+                    vm.loadTags()
+                },
+            ) {
+                Text("Filters")
+            }
+        }
         if (results.isEmpty() && !loading)
             EmptyState(
                 KomoriIcons.Search,
@@ -396,6 +427,12 @@ private fun Discover(vm: ReaderViewModel) {
                 results,
                 onOpen = { vm.open(it) },
                 onRead = { vm.open(it, true) },
+                subtitle = { title ->
+                    if (shelf.any { it.mangaId == title.id && it.saved }) "In your library"
+                    else if (duplicateTitles(title, library, shelf).isNotEmpty())
+                        "Possible duplicate in library"
+                    else ""
+                },
                 footer = {
                     if (vm.canLoadMore && results.isNotEmpty())
                         TextButton(
@@ -475,6 +512,32 @@ private fun Details(vm: ReaderViewModel, manga: Manga, browseCreator: (Creator) 
     val settings by vm.settings.collectAsStateWithLifecycle()
     val progress by vm.progress.collectAsStateWithLifecycle()
     val downloads by vm.downloads.collectAsStateWithLifecycle()
+    val library by vm.library.collectAsStateWithLifecycle()
+    val duplicates = duplicateTitles(manga, library, shelf)
+    var confirmDuplicate by remember(manga.id) { mutableStateOf(false) }
+    if (confirmDuplicate)
+        AlertDialog(
+            onDismissRequest = { confirmDuplicate = false },
+            title = { Text("Already in your library?") },
+            text = {
+                Text(
+                    "A matching title is saved from ${duplicates.joinToString { sourceName(it.id) }}. Keep both if these are different editions or translations."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        vm.toggle(manga)
+                        confirmDuplicate = false
+                    }
+                ) {
+                    Text("Add anyway")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDuplicate = false }) { Text("Cancel") }
+            },
+        )
     val entry = shelf.find { it.mangaId == manga.id }
     val pref = preferences.find { it.mangaId == manga.id }
     val selected = remember(raw, preferences, settings, shelf) { vm.selectedChapters() }
@@ -533,7 +596,7 @@ private fun Details(vm: ReaderViewModel, manga: Manga, browseCreator: (Creator) 
                         color = MaterialTheme.colorScheme.primary,
                         style = MaterialTheme.typography.labelLarge,
                     )
-                    Text("MangaDex", style = MaterialTheme.typography.bodySmall)
+                    Text(sourceName(manga.id), style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
@@ -541,14 +604,19 @@ private fun Details(vm: ReaderViewModel, manga: Manga, browseCreator: (Creator) 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
                     onClick = { vm.startReading() },
-                    enabled = selected.any { !it.unavailable || it.local } && !loading,
+                    enabled = selected.any { it.readable } && !loading,
                     modifier = Modifier.weight(1f),
                 ) {
                     Icon(KomoriIcons.PlayArrow, null)
                     Spacer(Modifier.width(6.dp))
                     Text(if (entry?.lastRelease != null) "Continue" else "Start reading")
                 }
-                FilledTonalIconButton(onClick = { vm.toggle(manga) }) {
+                FilledTonalIconButton(
+                    onClick = {
+                        if (entry?.saved != true && duplicates.isNotEmpty()) confirmDuplicate = true
+                        else vm.toggle(manga)
+                    }
+                ) {
                     Icon(
                         if (entry?.saved == true) KomoriIcons.BookmarkAdded
                         else KomoriIcons.BookmarkAdd,
@@ -714,8 +782,8 @@ private fun Details(vm: ReaderViewModel, manga: Manga, browseCreator: (Creator) 
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
         }
         item {
-            TextButton(onClick = { uri.openUri("https://mangadex.org/title/${manga.id}") }) {
-                Text("View on MangaDex")
+            TextButton(onClick = { uri.openUri(sourcePageUrl(manga.id)) }) {
+                Text("View on ${sourceName(manga.id)}")
             }
             Text(
                 "Chapters credited to the scanlation groups shown above.",
@@ -864,14 +932,8 @@ private fun Downloads(vm: ReaderViewModel) {
                             else if (download.state != "Complete")
                                 TextButton(onClick = { vm.pause(download) }) { Text("Pause") }
                             if (download.state == "Complete")
-                                TextButton(
-                                    onClick = {
-                                        manga
-                                            .find { it.id == download.mangaId }
-                                            ?.let { vm.open(it) }
-                                    }
-                                ) {
-                                    Text("Open title")
+                                TextButton(onClick = { vm.readOffline(download) }) {
+                                    Text("Read offline")
                                 }
                             TextButton(onClick = { deleting = download }) { Text("Delete") }
                         }
@@ -929,6 +991,36 @@ private fun SettingsScreen(vm: ReaderViewModel, settings: Settings) {
                 style = MaterialTheme.typography.headlineSmall,
             )
             Spacer(Modifier.height(12.dp))
+        }
+        item {
+            Text("Sources", style = MaterialTheme.typography.titleLarge)
+            Text(
+                "Top source opens first in Discover. MangaDex library entries stay available.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            sourceOrder(settings.sources).forEachIndexed { index, key ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(sourceNames.getValue(key), Modifier.weight(1f))
+                    TextButton(enabled = index > 0, onClick = { vm.moveSource(key, -1) }) {
+                        Text("Up")
+                    }
+                    TextButton(
+                        enabled = index < sourceNames.size - 1,
+                        onClick = { vm.moveSource(key, 1) },
+                    ) {
+                        Text("Down")
+                    }
+                }
+            }
+        }
+        item {
+            Toggle(
+                "Continue reading banner",
+                "Show the most recently read title in Library",
+                settings.showContinue,
+            ) {
+                vm.setting("showContinue", it)
+            }
         }
         item { Text("Reading", style = MaterialTheme.typography.titleLarge) }
         item {
@@ -1045,13 +1137,21 @@ private fun SettingsScreen(vm: ReaderViewModel, settings: Settings) {
         }
         item {
             HorizontalDivider()
+            UpdateSettings()
+            Toggle(
+                "Download updates on Wi-Fi",
+                "Automatically download verified updates on unmetered connections. Android confirms installation.",
+                settings.autoUpdateDownload,
+            ) {
+                vm.setting("autoUpdateDownload", it)
+            }
             Text(
                 "Komori ${BuildConfig.VERSION_NAME}",
                 Modifier.padding(top = 16.dp),
                 style = MaterialTheme.typography.titleMedium,
             )
             Text(
-                "An independent, ad-free reader. Manga and chapter metadata are provided by MangaDex. Translations belong to their credited scanlation groups. Library, likes, creator follows and reading progress are stored on this device.",
+                "An independent, ad-free reader. Manga and chapter metadata are provided by the selected source. Translations belong to their credited scanlation groups. Library, likes, creator follows and reading progress are stored on this device.",
                 Modifier.padding(top = 8.dp),
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -1115,5 +1215,82 @@ private fun LanguagePicker(
             }
         },
         confirmButton = { TextButton(onClick = dismiss) { Text("Close") } },
+    )
+}
+
+@Composable
+private fun SourceFilters(
+    vm: ReaderViewModel,
+    source: String,
+    filter: BrowseFilter,
+    tags: List<SourceTag>,
+    close: () -> Unit,
+) {
+    var sort by remember {
+        mutableStateOf(filter.sort.ifEmpty { vm.app.source.sorts(source).firstOrNull().orEmpty() })
+    }
+    var chosen by remember { mutableStateOf(filter.tags) }
+    var tagQuery by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = close,
+        title = { Text("Browse filters") },
+        text = {
+            Column {
+                Row(
+                    Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    vm.app.source.sorts(source).forEach { value ->
+                        FilterChip(sort == value, { sort = value }, label = { Text(value) })
+                    }
+                }
+                if (source == "demonic")
+                    Text(
+                        "Sort and tags apply to browsing. Title search is separate.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                OutlinedTextField(
+                    tagQuery,
+                    { tagQuery = it },
+                    label = { Text("Find a tag") },
+                    singleLine = true,
+                )
+                LazyColumn(Modifier.heightIn(max = 280.dp)) {
+                    items(tags.filter { it.name.contains(tagQuery, true) }, key = { it.id }) { tag
+                        ->
+                        Row(
+                            Modifier.fillMaxWidth().clickable {
+                                chosen = if (tag.id in chosen) chosen - tag.id else chosen + tag.id
+                            },
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Checkbox(tag.id in chosen, null)
+                            Text(tag.name)
+                        }
+                    }
+                    if (tags.isEmpty()) item { Text("Tags unavailable or still loading.") }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    vm.applyFilter(BrowseFilter(sort, chosen))
+                    close()
+                }
+            ) {
+                Text("Apply")
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = {
+                    vm.applyFilter(BrowseFilter())
+                    close()
+                }
+            ) {
+                Text("Reset")
+            }
+        },
     )
 }

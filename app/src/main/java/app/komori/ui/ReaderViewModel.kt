@@ -13,7 +13,6 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import okhttp3.Request
 
 class ReaderViewModel(application: Application) : AndroidViewModel(application) {
     val app = application as KomoriApp
@@ -30,6 +29,10 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         dao.observeTitlePreferences().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val settings = app.settings.flow.stateIn(viewModelScope, SharingStarted.Eagerly, Settings())
     val results = MutableStateFlow<List<Manga>>(emptyList())
+    val activeSource = MutableStateFlow("")
+    val browseFilter = MutableStateFlow(BrowseFilter())
+    val tags = MutableStateFlow<List<SourceTag>>(emptyList())
+    private var tagsJob: Job? = null
     val selected = MutableStateFlow<Manga?>(null)
     val chapters = MutableStateFlow<List<Release>>(emptyList())
     val chapterStatus = MutableStateFlow("")
@@ -49,7 +52,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         private set
 
     private var query = ""
-    private var nextOffset = 0
+    private var nextOffset = 1
     private var creatorFilter: Creator? = null
     private var searchJob: Job? = null
     private var detailJob: Job? = null
@@ -76,18 +79,78 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
             try {
                 if (!more) {
                     results.value = emptyList()
-                    nextOffset = 0
+                    nextOffset = 1
                     query = text
                     creatorFilter = creator
                 }
-                val found = app.source.search(query, nextOffset, creatorFilter)
-                nextOffset += found.size
+                if (creatorFilter != null) {
+                    activeSource.value = "mangadex"
+                    browseFilter.value = BrowseFilter()
+                }
+                if (activeSource.value.isEmpty())
+                    activeSource.value = sourceOrder(app.settings.flow.first().sources).first()
+                val foundPage =
+                    app.source.browse(
+                        activeSource.value,
+                        query,
+                        nextOffset,
+                        browseFilter.value,
+                        creatorFilter,
+                    )
+                val found = foundPage.titles
+                nextOffset += 1
                 results.value =
                     ((if (more) results.value else emptyList()) + found).distinctBy { it.id }
-                canLoadMore = found.size == 30
+                canLoadMore = foundPage.hasMore
             } finally {
                 loading.value = false
             }
+        }
+    }
+
+    fun chooseSource(key: String) {
+        activeSource.value = key
+        browseFilter.value = BrowseFilter()
+        tags.value = emptyList()
+        tagsJob?.cancel()
+        search("", null)
+    }
+
+    fun loadTags() {
+        tagsJob?.cancel()
+        val key = activeSource.value
+        tagsJob = task { tags.value = app.source.tags(key) }
+    }
+
+    fun applyFilter(filter: BrowseFilter) {
+        browseFilter.value = filter
+        search()
+    }
+
+    fun moveSource(key: String, delta: Int) = task {
+        val order = sourceOrder(app.settings.flow.first().sources).toMutableList()
+        val index = order.indexOf(key)
+        val target = (index + delta).coerceIn(0, order.lastIndex)
+        order.removeAt(index)
+        order.add(target, key)
+        app.settings.sources(order.joinToString(","))
+    }
+
+    fun readOffline(download: Download) {
+        detailJob?.cancel()
+        detailJob = task {
+            val book = dao.manga(download.mangaId) ?: return@task
+            val rows = dao.chapters(book.id).map { it.release() }
+            val complete =
+                dao.observeDownloads()
+                    .first()
+                    .filter { it.state == "Complete" }
+                    .associate { it.releaseId to it.total }
+            selected.value = book
+            chapters.value = retainDownloadedChapters(emptyList(), rows, complete)
+            val release = chapters.value.find { it.id == download.releaseId } ?: return@task
+            chapterStatus.value = "Saved chapter list · Offline"
+            read(release)
         }
     }
 
@@ -101,7 +164,9 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         detailJob = task {
             loading.value = true
             try {
-                val language = app.settings.flow.first().language
+                val language =
+                    if (sourceKey(manga.id) == "mangadex") app.settings.flow.first().language
+                    else "en"
                 dao.putManga(manga)
                 val snapshot = dao.feed(manga.id, language)
                 val cachedRows = dao.chapters(manga.id)
@@ -147,7 +212,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                             completedDownloads,
                         )
                     chapterStatus.value =
-                        "${fresh.size} releases returned by MangaDex · Updated now"
+                        "${fresh.size} releases returned by ${sourceName(manga.id)} · Updated now"
                 } catch (e: IOException) {
                     chapterStatus.value =
                         if (snapshot != null) "Saved chapter list · Refresh failed"
@@ -160,6 +225,9 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                 // a readable chapter exists. Failure here must not discard a good feed.
                 try {
                     sourceLanguages.value = app.source.languages(manga.id)
+                    val details = app.source.details(manga)
+                    dao.putManga(details)
+                    selected.value = details
                 } catch (e: IOException) {
                     /* Chapter list remains usable. */
                 }
@@ -183,7 +251,8 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         return ChapterPolicy.select(
             chapters.value,
             ChapterPreferences(
-                settings.value.language,
+                if (sourceKey(selected.value?.id.orEmpty()) == "mangadex") settings.value.language
+                else "en",
                 settings.value.smart,
                 pref?.groupId ?: "",
                 pref?.strict ?: false,
@@ -246,7 +315,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         val last = shelf.value.find { it.mangaId == selected.value?.id }?.lastRelease
         val completed = progress.value.filter { it.completed }.map { it.chapterKey }.toSet()
         val next =
-            if (fromBeginning) available.firstOrNull { !it.unavailable || it.local }
+            if (fromBeginning) available.firstOrNull { it.readable }
             else ChapterPolicy.start(available, last, completed, settings.value.reread)
         if (next == null) {
             notice.value =
@@ -275,11 +344,19 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         pageJob =
             viewModelScope.launch {
                 try {
+                    val resolved =
+                        if (chapter.pages < 0) {
+                            val urls = app.source.pages(chapter.id, settings.value.saver)
+                            pageManifests["${chapter.id}-${settings.value.saver}"] = urls
+                            chapter.copy(pages = urls.size)
+                        } else chapter
+                    reader.value = resolved
+                    pageCount.value = resolved.pages
                     val previous = dao.progress(chapter.id)
                     val page =
                         if (restart || !settings.value.resume || previous?.completed == true) 0
                         else previous?.page ?: 0
-                    readerPage.value = page.coerceIn(0, (chapter.pages - 1).coerceAtLeast(0))
+                    readerPage.value = page.coerceIn(0, (resolved.pages - 1).coerceAtLeast(0))
                     readerScroll.value =
                         if (
                             page == previous?.page &&
@@ -339,17 +416,21 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                         ?: throw IOException("Page is no longer available. Reopen the chapter.")
                 val temporary = File.createTempFile("page-", ".part", cacheDir)
                 try {
-                    app.source.client.newCall(Request.Builder().url(url).build()).execute().use {
-                        response ->
-                        if (!response.isSuccessful) {
-                            pageManifests.remove(manifestKey)
-                            throw IOException("Page request failed (${response.code}). Tap Retry.")
+                    app.source.client
+                        .newCall(app.source.imageRequest(url, chapter.id))
+                        .execute()
+                        .use { response ->
+                            if (!response.isSuccessful) {
+                                pageManifests.remove(manifestKey)
+                                throw IOException(
+                                    "Page request failed (${response.code}). Tap Retry."
+                                )
+                            }
+                            val body = response.body ?: throw IOException("Empty page")
+                            temporary.outputStream().use { out ->
+                                body.byteStream().use { it.copyTo(out) }
+                            }
                         }
-                        val body = response.body ?: throw IOException("Empty page")
-                        temporary.outputStream().use { out ->
-                            body.byteStream().use { it.copyTo(out) }
-                        }
-                    }
                     coroutineContext.ensureActive()
                     if (!temporary.renameTo(target)) throw IOException("Could not cache page")
                     // Keep the current file; trim oldest pages to a bounded 128 MB cache.
@@ -411,7 +492,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
             available
                 .dropWhile { it.id != chapter.id }
                 .drop(1)
-                .firstOrNull { it.key != chapter.key && (!it.unavailable || it.local) }
+                .firstOrNull { it.key != chapter.key && it.readable }
         if (next != null) read(next)
         else {
             closeReader()
@@ -427,7 +508,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
 
     fun download(chapter: Release) = task {
         if (!chapter.readable) {
-            notice.value = "Only available chapters hosted on MangaDex can be downloaded."
+            notice.value = "This release does not provide downloadable pages."
             return@task
         }
         enqueueDownload(app, chapter, settings.value)

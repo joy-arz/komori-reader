@@ -53,3 +53,9 @@ python3 scripts/sign_release.py build --version-code 105 --version-name 0.4.0-al
 Choose a version code greater than the latest published code for subsequent builds. The script defaults to the existing `~/.config/komori/signing/` directory, keeps passwords in environment variables rather than command-line arguments, and never prints credentials.
 
 For a brand-new signing identity only, `python3 scripts/sign_release.py init --signing-dir /secure/path` creates an RSA JKS key and private credentials file. It refuses to overwrite either existing file. **Do not initialize a replacement key for Komori updates**: reuse the existing release identity so installed apps can update without losing data. Back up both files securely.
+
+## In-app update metadata
+
+The tag workflow emits `update.json` alongside the signed APK and checksum. It contains the release tag's version name, CI version code, package name, fixed repository APK URL, byte count and SHA-256 digest. Publish all three assets together. Never reuse a version code or change the signing identity. The updater includes prereleases because this project currently distributes alphas; it does not rely on GitHub's stable-only `/latest` endpoint.
+
+The repository must remain public for unauthenticated in-app checks. Android installation is user-confirmed and requires the per-app unknown-source installation permission. No root, silent installation, or GitHub credential is used.

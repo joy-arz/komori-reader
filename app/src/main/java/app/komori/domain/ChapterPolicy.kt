@@ -17,7 +17,7 @@ data class Release(
     val local: Boolean = false,
 ) {
     val readable: Boolean
-        get() = local || (!unavailable && externalUrl == null && pages > 0)
+        get() = local || (!unavailable && externalUrl == null && pages != 0)
 
     val label: String
         get() =
@@ -106,7 +106,7 @@ object ChapterPolicy {
         completedKeys: Set<String>,
         reread: Boolean,
     ): Release? {
-        val ordered = readingOrder(releases).filter { !it.unavailable || it.local }
+        val ordered = readingOrder(releases).filter { it.readable }
         val current = ordered.find { it.id == currentId }
         if (current != null && current.key !in completedKeys) return current
         if (current != null) {

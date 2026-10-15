@@ -56,3 +56,9 @@ On October 14, 2026, the One Punch-Man manga (`d8a959f7-648e-4c8d-8f23-f1f3f8e12
 Next useful Komikku-inspired work remains local backup/restore, categories and batch library actions, followed by scheduled library updates with Wi-Fi/battery constraints. Tracking accounts, multiple source extensions and synchronization need a separate design; this build does not claim feature parity.
 
 Additional library preferences were checked against [Komikku LibraryPreferences](https://github.com/komikku-app/komikku/blob/master/domain/src/main/java/tachiyomi/domain/library/service/LibraryPreferences.kt). Komori's completed downloads remain available when a later source feed omits or marks their chapters unavailable. The Downloaded view exposes every locally completed release for the chosen language, even when Smart Chapters or a group preference would otherwise select another release. This does not attempt to fetch removed pages; it uses files already stored on the device.
+
+## October 15 follow-up
+
+Added an independently implemented possible-duplicate warning when saving a title with the same normalized name as an existing saved entry. Names are Unicode-normalized, case-insensitive and punctuation-insensitive; alternate titles and translations are not automatically matched or merged. Browse cards show library/duplicate status. Source identity is explicit in title details and configurable upper browse tabs.
+
+Added source-specific sort/tag controls, a dismissible Library resume card, direct downloaded-chapter opening and public GitHub update checking. DemonicScans has live adapter coverage. WeebCentral's request/HTML contract was checked against its source extension and fixture-tested, but live requests are blocked from the test network. Comix needs a protected dynamic-reader integration and remains visibly pending. Existing MangaDex entries retain their original IDs.

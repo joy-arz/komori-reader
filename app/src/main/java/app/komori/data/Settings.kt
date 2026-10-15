@@ -22,6 +22,9 @@ data class Settings(
     val showUnavailable: Boolean = true,
     val newestFirst: Boolean = false,
     val libraryAlphabetical: Boolean = false,
+    val autoUpdateDownload: Boolean = true,
+    val showContinue: Boolean = true,
+    val sources: String = "demonic,weeb,comix,mangadex",
 )
 
 class SettingsStore(private val context: Context) {
@@ -42,11 +45,18 @@ class SettingsStore(private val context: Context) {
                 p[booleanPreferencesKey("showUnavailable")] ?: true,
                 p[booleanPreferencesKey("newestFirst")] ?: false,
                 p[booleanPreferencesKey("libraryAlphabetical")] ?: false,
+                p[booleanPreferencesKey("autoUpdateDownload")] ?: true,
+                p[booleanPreferencesKey("showContinue")] ?: true,
+                p[stringPreferencesKey("sources")] ?: "demonic,weeb,comix,mangadex",
             )
         }
 
     suspend fun set(key: String, value: Boolean) {
         context.settingsStore.edit { it[booleanPreferencesKey(key)] = value }
+    }
+
+    suspend fun sources(value: String) {
+        context.settingsStore.edit { it[stringPreferencesKey("sources")] = value }
     }
 
     suspend fun language(value: String) {

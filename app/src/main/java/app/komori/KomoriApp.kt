@@ -17,7 +17,7 @@ class KomoriApp : Application(), ImageLoaderFactory {
         get() = database.dao()
 
     val settings by lazy { SettingsStore(this) }
-    val source by lazy { MangaDex(MangaDex.client()) }
+    val source by lazy { Sources(MangaDex.client()) }
 
     override fun newImageLoader() =
         ImageLoader.Builder(this)

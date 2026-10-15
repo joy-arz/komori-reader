@@ -103,7 +103,9 @@ fun ReaderScreen(vm: ReaderViewModel, chapter: Release) {
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             Text(error!!)
-                            Button(onClick = { vm.page(page) }) { Text("Retry") }
+                            Button(onClick = { if (ready) vm.page(page) else vm.read(chapter) }) {
+                                Text("Retry")
+                            }
                         }
                     else if (file == null) CircularProgressIndicator()
                     else

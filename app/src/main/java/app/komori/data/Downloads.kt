@@ -33,7 +33,7 @@ suspend fun enqueueDownload(
                 chapter.id,
                 chapter.mangaId,
                 chapter.label,
-                chapter.pages,
+                chapter.pages.coerceAtLeast(0),
                 dataSaver = settings.saver,
             )
     )
@@ -93,7 +93,7 @@ class ChapterDownloadWorker(context: Context, params: WorkerParameters) :
                             val temporary = File(directory, "$index.part")
                             try {
                                 app.source.client
-                                    .newCall(Request.Builder().url(url).build())
+                                    .newCall(app.source.imageRequest(url, id))
                                     .execute()
                                     .use { response ->
                                         if (!response.isSuccessful)

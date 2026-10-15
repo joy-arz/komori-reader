@@ -67,7 +67,27 @@ class MangaDex(val client: OkHttpClient, private val baseUrl: String = "https://
             }
         }
 
-    override suspend fun search(query: String, offset: Int, creator: Creator?): List<Manga> {
+    override suspend fun search(query: String, offset: Int, creator: Creator?): List<Manga> =
+        browse(query, offset, creator, BrowseFilter())
+
+    suspend fun tags(): List<SourceTag> =
+        json("manga/tag")
+            .getJSONArray("data")
+            .objects()
+            .map {
+                SourceTag(
+                    it.getString("id"),
+                    it.getJSONObject("attributes").getJSONObject("name").getString("en"),
+                )
+            }
+            .sortedBy { it.name }
+
+    suspend fun browse(
+        query: String,
+        offset: Int,
+        creator: Creator?,
+        filter: BrowseFilter,
+    ): List<Manga> {
         val params =
             mutableListOf(
                 "limit" to "30",
@@ -77,8 +97,13 @@ class MangaDex(val client: OkHttpClient, private val baseUrl: String = "https://
                 "includes[]" to "artist",
                 "contentRating[]" to "safe",
                 "contentRating[]" to "suggestive",
-                "order[followedCount]" to "desc",
+                "order[${when(filter.sort) { "Rating" -> "rating"
+ "Latest updates" -> "latestUploadedChapter"
+ "Title" -> "title"
+ else -> "followedCount" }}]" to
+                    if (filter.sort == "Title") "asc" else "desc",
             )
+        filter.tags.forEach { params += "includedTags[]" to it }
         if (query.isNotBlank()) params += "title" to query
         creator?.let { params += (if (it.role == "artist") "artists[]" else "authors[]") to it.id }
         return json("manga", params).getJSONArray("data").objects().map { o ->

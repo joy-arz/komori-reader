@@ -8,6 +8,13 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import app.komori.ui.KomoriScreen
 
 class MainActivity : ComponentActivity() {
+    override fun onStart() {
+        super.onStart()
+        androidx.lifecycle
+            .ViewModelProvider(this)[app.komori.ui.UpdateViewModel::class.java]
+            .check()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()

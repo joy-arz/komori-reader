@@ -1,6 +1,6 @@
 # Komori
 
-A quiet, lightweight Android manga reader. Built with Kotlin and Compose, with MangaDex as its first source.
+A quiet, lightweight Android manga reader. Built with Kotlin and Compose, with native online and offline reading.
 
 **Status: early alpha.** The first end-to-end reading milestone is implemented. This is not yet the complete product in the roadmap.
 
@@ -8,7 +8,12 @@ A quiet, lightweight Android manga reader. Built with Kotlin and Compose, with M
 
 ## Available now
 
-- MangaDex search and paginated discovery, with safe/suggestive catalog filtering.
+- Reorderable source tabs: DemonicScans first, WeebCentral second, Comix third, then MangaDex. Comix is an explicitly pending integration; WeebCentral is experimental and live access is currently blocked on the validation network.
+- Native DemonicScans reading and downloads; views/new/title browsing and genre selection. Its title search is separate from genre browsing.
+- MangaDex search, popularity/rating/update/title sorting and tag filters, with safe/suggestive catalog filtering.
+- Possible-duplicate warnings for normalized matching titles already saved from another source; no automatic merging.
+- Dismissible Continue reading banner (restore it in Settings), and direct Read offline from Downloads.
+- GitHub release checks on launch/foreground, automatic APK download on unmetered networks, manual checking/downloading, verified same-key upgrades through Android's installer.
 - Personal library, likes, reading statuses and history stored locally with Room.
 - Local author/artist follows and browsing their works.
 - Smart Chapters: language filtering, conservative duplicate grouping, preferred scanlation and strict/fallback selection.
@@ -26,7 +31,7 @@ MangaDex and scanlation groups are credited in the application. This is an indep
 
 ## Install
 
-Download [komori-0.4.0-alpha.1.apk](https://github.com/joy-arz/komori-reader/releases/download/v0.4.0-alpha.1/komori-0.4.0-alpha.1.apk), or open [GitHub Releases](https://github.com/joy-arz/komori-reader/releases) and expand **Assets**. Choose the `.apk` file, not the source-code archives. This repository is private, so access requires an authorized GitHub account. Alpha releases are signed with the same private release key, allowing future updates without uninstalling.
+Download [komori-0.5.0-alpha.1.apk](https://github.com/joy-arz/komori-reader/releases/download/v0.5.0-alpha.1/komori-0.5.0-alpha.1.apk), or open [GitHub Releases](https://github.com/joy-arz/komori-reader/releases) and expand **Assets**. Choose the `.apk` file, not the source-code archives. Alpha releases are signed with the same private release key, allowing future updates without uninstalling.
 
 ## Build
 
@@ -42,7 +47,7 @@ Release builds use R8 and resource shrinking. An unsigned local release can be b
 
 ## Automated releases
 
-Every push to `main` and pull request runs unit tests, lint and a debug APK build. A version tag such as `v0.1.0-alpha.2` automatically tests, builds, signs and publishes a release APK plus SHA-256 checksum. Tags containing a suffix are published as prereleases.
+Every push to `main` and pull request runs unit tests, lint and a debug APK build. A version tag such as `v0.1.0-alpha.2` automatically tests, builds, signs and publishes a release APK plus SHA-256 checksum and updater metadata (`update.json`). Tags containing a suffix are published as prereleases.
 
 ```sh
 git tag v0.1.0-alpha.2
@@ -69,3 +74,13 @@ The [Komikku reference review](docs/KOMIKKU_REVIEW.md) documents the feature com
 Chapter lists now show source-returned counts, unavailable entries and active filters. Choose Language on a title to check another translation or all languages. Start reading uses ascending chapter numbers independently of the list's newest-first display option. Smart Chapters keeps the current scanlation where possible; unread/downloaded filters only affect the visible list.
 
 Local signing is automated through JVM `keytool` validation and Gradle: see [releasing instructions](docs/RELEASING.md).
+
+## App updates
+
+Install version 0.5 manually once if coming from an older build. Subsequent launches check public GitHub releases, including alpha releases, with a 30-second foreground debounce. Failed update checks do not block reading. Automatic downloads default to unmetered connections; change this in Settings or choose a manual download on mobile data. Android requires permission to install from Komori and confirmation in its installer; this is not a silent system installation. The updater verifies the checksum, package, increasing version code, and existing signing certificate before installation. No GitHub token is stored in the app.
+
+## Source limitations
+
+MangaDex external-only chapters cannot supply pages to the native reader. Start reading skips those entries and chooses the first readable chapter. Their separately labeled external links remain available. DemonicScans and WeebCentral pages use the native paged/webtoon reader and the same download storage, not embedded website readers. Completed downloads can be opened directly without a source refresh. MangaDex IDs and existing library/download data are retained.
+
+Source websites may block requests or change their HTML. WeebCentral's parser and request routing have fixture coverage but live reading has not been verified on the current network. Comix currently returns an access challenge and its dynamic reader integration is not implemented. No protection bypass is included. Unsupported sources are not represented as working readers.
