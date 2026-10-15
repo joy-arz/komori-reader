@@ -111,13 +111,14 @@ class ChapterDownloadWorker(context: Context, params: WorkerParameters) :
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
+                    val needsAction = requiresSourceAction(e)
                     app.dao.putDownload(
                         record.copy(
-                            state = if (runAttemptCount < 3) "Retrying" else "Failed",
+                            state = if (needsAction) "Verification required" else if (runAttemptCount < 3) "Retrying" else "Failed",
                             error = connectionMessage(e),
                         )
                     )
-                    if (runAttemptCount < 3) Result.retry() else Result.failure()
+                    if (!needsAction && runAttemptCount < 3) Result.retry() else Result.failure()
                 }
             }
         }

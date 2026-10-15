@@ -17,6 +17,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.komori.data.connectionMessage
+import app.komori.data.requiresSourceAction
+import app.komori.data.sourceKey
 import app.komori.domain.Release
 import com.davemorrissey.labs.subscaleview.ImageSource
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
@@ -49,17 +51,17 @@ fun WebtoonReader(
     val images = remember { mutableStateMapOf<String, ScrollImage>() }
     val list = remember { LazyListState(initialPage) }
     var restored by remember { mutableStateOf(false) }
-    var nextError by remember { mutableStateOf<String?>(null) }
+    var nextError by remember { mutableStateOf<Exception?>(null) }
     var nextLoading by remember { mutableStateOf(false) }
     var nextAttempt by remember { mutableIntStateOf(0) }
     val tail = window.last()
     val next = vm.nextChapter(tail)
     val nextCountdown =
         key(tail.id) {
-            imageRetryCountdown(nextError != null, settings.retrySeconds) { nextAttempt++ }
+            imageRetryCountdown(nextError != null && !requiresSourceAction(nextError), settings.retrySeconds) { nextAttempt++ }
         }
 
-    LaunchedEffect(tail.id, settings.continuousChapters, nextAttempt) {
+    LaunchedEffect(tail.id, next?.id, settings.continuousChapters, nextAttempt) {
         nextError = null
         if (!settings.continuousChapters || next == null) return@LaunchedEffect
         snapshotFlow {
@@ -78,7 +80,7 @@ fun WebtoonReader(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            nextError = connectionMessage(e)
+            nextError = e
         } finally {
             nextLoading = false
         }
@@ -158,10 +160,10 @@ fun WebtoonReader(
                     val image = images[imageKey]
                     if (image == null)
                         item(key = "$imageKey|0") {
-                            var failure by remember { mutableStateOf<String?>(null) }
+                            var failure by remember { mutableStateOf<Exception?>(null) }
                             var attempt by remember { mutableIntStateOf(0) }
                             val countdown =
-                                imageRetryCountdown(failure != null, settings.retrySeconds) {
+                                imageRetryCountdown(failure != null && !requiresSourceAction(failure), settings.retrySeconds) {
                                     attempt++
                                 }
                             LaunchedEffect(attempt) {
@@ -184,7 +186,7 @@ fun WebtoonReader(
                                 } catch (e: CancellationException) {
                                     throw e
                                 } catch (e: Exception) {
-                                    failure = connectionMessage(e)
+                                    failure = e
                                 }
                             }
                             Column(
@@ -196,7 +198,8 @@ fun WebtoonReader(
                                 if (failure == null)
                                     CircularProgressIndicator(Modifier.padding(16.dp))
                                 else {
-                                    Text(failure!!, color = Color.White)
+                                    Text(connectionMessage(failure!!), color = Color.White)
+                                    if (requiresSourceAction(failure)) VerifySourceButton(vm, sourceKey(release.mangaId))
                                     if (countdown > 0)
                                         Text(
                                             "Retrying this page in ${countdown}s",
@@ -303,8 +306,9 @@ fun WebtoonReader(
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     if (settings.continuousChapters && next != null) {
-                        Text(nextError ?: "Loading ${next.label}…", color = Color.LightGray)
+                        Text(nextError?.let(::connectionMessage) ?: "Loading ${next.label}…", color = Color.LightGray)
                         if (nextLoading) CircularProgressIndicator(Modifier.padding(12.dp))
+                        if (requiresSourceAction(nextError)) VerifySourceButton(vm, sourceKey(next.mangaId))
                         if (nextError != null) {
                             if (nextCountdown > 0)
                                 Text("Retrying in ${nextCountdown}s", color = Color.LightGray)

@@ -36,12 +36,13 @@ fun ReaderScreen(vm: ReaderViewModel, chapter: Release) {
     val count by vm.pageCount.collectAsStateWithLifecycle()
     val file by vm.readerFile.collectAsStateWithLifecycle()
     val error by vm.readerError.collectAsStateWithLifecycle()
+    val retryAllowed by vm.readerRetryAllowed.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
     val preferences by vm.preferences.collectAsStateWithLifecycle()
     val ready by vm.readerReady.collectAsStateWithLifecycle()
     val retryCountdown =
         key(chapter.id, page) {
-            imageRetryCountdown(error != null, settings.retrySeconds) { vm.retryPage() }
+            imageRetryCountdown(error != null && retryAllowed, settings.retrySeconds) { vm.retryPage() }
         }
     val override = preferences.find { it.mangaId == chapter.mangaId }?.readerMode.orEmpty()
     val mode = ReadingMode.resolve(override, settings.webtoon, settings.rtl)
@@ -107,6 +108,7 @@ fun ReaderScreen(vm: ReaderViewModel, chapter: Release) {
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             Text(error!!)
+                            if (!retryAllowed) VerifySourceButton(vm, app.komori.data.sourceKey(chapter.mangaId))
                             if (retryCountdown > 0) Text("Retrying this page in ${retryCountdown}s")
                             Button(onClick = { vm.retryPage() }) { Text("Retry") }
                         }

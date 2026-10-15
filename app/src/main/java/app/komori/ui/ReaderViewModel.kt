@@ -49,6 +49,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     private val imageFetch = Mutex()
     val readerFile = MutableStateFlow<File?>(null)
     val readerError = MutableStateFlow<String?>(null)
+    val readerRetryAllowed = MutableStateFlow(true)
     val pageCount = MutableStateFlow(0)
     var canLoadMore = true
         private set
@@ -57,6 +58,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     private var offlineLanguage: String? = null
     private var nextOffset = 1
     private var creatorFilter: Creator? = null
+    val activeCreator = MutableStateFlow<Creator?>(null)
     private var searchJob: Job? = null
     private var detailJob: Job? = null
     private var pageJob: Job? = null
@@ -84,11 +86,19 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                     results.value = emptyList()
                     nextOffset = 1
                     query = text
+                    if (creator != null && creator.id != creatorFilter?.id)
+                        browseFilter.value = browseFilter.value.copy(facetPath = "", tags = emptySet())
                     creatorFilter = creator
+                    activeCreator.value = creator
                 }
                 if (creatorFilter != null) {
-                    activeSource.value = "mangadex"
-                    browseFilter.value = BrowseFilter()
+                    val creatorSource = sourceKey(creatorFilter!!.id)
+                    if (activeSource.value != creatorSource) {
+                        browseFilter.value = BrowseFilter()
+                        tagsJob?.cancel()
+                        tags.value = emptyList()
+                    }
+                    activeSource.value = creatorSource
                 }
                 if (activeSource.value.isEmpty())
                     activeSource.value = sourceOrder(app.settings.flow.first().sources).first()
@@ -109,6 +119,41 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                 loading.value = false
             }
         }
+    }
+
+    fun submitSearch(text: String) {
+        browseFilter.value = browseFilter.value.copy(facetPath = "")
+        search(text, null)
+    }
+
+    fun setSearchType(type: String) {
+        require(type in listOf("Title", "Tag", "Author"))
+        creatorFilter = null
+        activeCreator.value = null
+        browseFilter.value = browseFilter.value.copy(searchType = type, facetPath = "", tags = emptySet())
+    }
+
+    fun clearFacet() {
+        browseFilter.value = browseFilter.value.copy(facetPath = "")
+        search("", null)
+    }
+
+    fun retrySource(key: String) {
+        val release = reader.value
+        val title = selected.value
+        if (release != null && sourceKey(release.mangaId) == key) read(release)
+        else if (title != null && sourceKey(title.id) == key) open(title)
+        else if (activeSource.value == key) search()
+        else chooseSource(key)
+    }
+
+    fun browseTag(manga: Manga, tag: SourceTag) {
+        back()
+        activeSource.value = sourceKey(manga.id)
+        tagsJob?.cancel()
+        tags.value = emptyList()
+        browseFilter.value = BrowseFilter(facetPath = tag.id)
+        search("", null)
     }
 
     fun chooseSource(key: String) {
@@ -172,7 +217,10 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                 val language =
                     if (sourceKey(manga.id) == "mangadex") app.settings.flow.first().language
                     else "en"
-                dao.putManga(manga)
+                val stored = dao.manga(manga.id)
+                val baseManga = stored ?: manga
+                selected.value = baseManga
+                dao.putManga(baseManga)
                 val snapshot = dao.feed(manga.id, language)
                 val cachedRows = dao.chapters(manga.id)
                 val snapshotIds =
@@ -230,11 +278,11 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                 // a readable chapter exists. Failure here must not discard a good feed.
                 try {
                     sourceLanguages.value = app.source.languages(manga.id)
-                    val details = app.source.details(manga)
+                    val details = app.source.details(baseManga)
                     dao.putManga(details)
                     selected.value = details
                 } catch (e: IOException) {
-                    /* Chapter list remains usable. */
+                    notice.value = "Metadata refresh failed. ${connectionMessage(e)}"
                 }
             } finally {
                 loading.value = false
@@ -351,6 +399,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         reader.value = chapter
         readerFile.value = null
         readerError.value = null
+        readerRetryAllowed.value = true
         pageCount.value = chapter.pages
         pageJob =
             viewModelScope.launch {
@@ -377,6 +426,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
+                    readerRetryAllowed.value = !requiresSourceAction(e)
                     readerError.value = connectionMessage(e)
                 }
             }
@@ -419,6 +469,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
             pageCount.value = chapter.pages
             readerFile.value = null
             readerError.value = null
+            readerRetryAllowed.value = true
         }
         readerPage.value = page
         readerScroll.value = fraction.coerceIn(0f, 1f)
@@ -505,7 +556,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun resumeAll() = task {
-        for (download in downloads.value.filter { it.state in listOf("Paused", "Failed") }) resume(
+        for (download in downloads.value.filter { it.state in listOf("Paused", "Failed", "Verification required") }) resume(
                 download
             )
             .join()
@@ -596,6 +647,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     private suspend fun loadPage(chapter: Release, page: Int) {
         readerFile.value = null
         readerError.value = null
+        readerRetryAllowed.value = true
         readerFile.value = pageFileFor(chapter, page)
     }
 
@@ -622,6 +674,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
+                    readerRetryAllowed.value = !requiresSourceAction(e)
                     readerError.value = connectionMessage(e)
                 }
             }

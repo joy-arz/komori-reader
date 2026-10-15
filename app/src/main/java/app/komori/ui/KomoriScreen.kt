@@ -3,6 +3,11 @@
 package app.komori.ui
 
 import android.app.Activity
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import app.komori.SourceVerificationActivity
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -73,6 +78,7 @@ private val Night =
 fun KomoriScreen(vm: ReaderViewModel) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val selected by vm.selected.collectAsStateWithLifecycle()
+    val activeSource by vm.activeSource.collectAsStateWithLifecycle()
     val reader by vm.reader.collectAsStateWithLifecycle()
     val readerSession by vm.readerSession.collectAsStateWithLifecycle()
     val error by vm.error.collectAsStateWithLifecycle()
@@ -118,7 +124,7 @@ fun KomoriScreen(vm: ReaderViewModel) {
                                 Text(
                                     if (selected != null) "Title details"
                                     else
-                                        listOf("Your library", "Discover", "Downloads", "Settings")[
+                                        listOf("Your library", "Discover", "Authors", "Downloads", "Settings")[
                                             tab],
                                     fontWeight = FontWeight.SemiBold,
                                 )
@@ -146,6 +152,7 @@ fun KomoriScreen(vm: ReaderViewModel) {
                                 listOf(
                                         "Library" to KomoriIcons.CollectionsBookmark,
                                         "Discover" to KomoriIcons.Explore,
+                                        "Authors" to KomoriIcons.PersonOutline,
                                         "Downloads" to KomoriIcons.Download,
                                         "Settings" to KomoriIcons.Tune,
                                     )
@@ -173,6 +180,7 @@ fun KomoriScreen(vm: ReaderViewModel) {
                                         modifier = Modifier.weight(1f),
                                         style = MaterialTheme.typography.bodySmall,
                                     )
+                                    VerifySourceButton(vm, selected?.id?.let(::sourceKey) ?: activeSource)
                                     TextButton(onClick = { vm.error.value = null }) {
                                         Text("Dismiss")
                                     }
@@ -180,30 +188,39 @@ fun KomoriScreen(vm: ReaderViewModel) {
                             }
                         }
                         if (selected != null)
-                            Details(vm, selected!!) { creator ->
+                            Details(vm, selected!!, browseTag = { tag ->
+                                vm.browseTag(selected!!, tag)
+                                tab = 1
+                            }) { creator ->
                                 vm.back()
                                 tab = 1
                                 vm.search("", creator)
                             }
                         else
                             when (tab) {
-                                0 ->
-                                    Library(
-                                        vm,
-                                        { tab = 1 },
-                                        { creator ->
-                                            tab = 1
-                                            vm.search("", creator)
-                                        },
-                                    )
+                                0 -> Library(vm, { tab = 1 })
                                 1 -> Discover(vm)
-                                2 -> Downloads(vm)
-                                3 -> SettingsScreen(vm, settings)
+                                2 -> Authors(vm) { creator ->
+                                    tab = 1
+                                    vm.search("", creator)
+                                }
+                                3 -> Downloads(vm)
+                                4 -> SettingsScreen(vm, settings)
                             }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun coverRequest(manga: Manga): coil.request.ImageRequest {
+    val context = LocalContext.current
+    return remember(context, manga.id, manga.cover) {
+        coil.request.ImageRequest.Builder(context).data(manga.cover).apply {
+            sourceOrigins[sourceKey(manga.id)]?.let { addHeader("Referer", "$it/") }
+        }.build()
     }
 }
 
@@ -237,10 +254,9 @@ private fun EmptyState(
 }
 
 @Composable
-private fun Library(vm: ReaderViewModel, discover: () -> Unit, browseCreator: (Creator) -> Unit) {
+private fun Library(vm: ReaderViewModel, discover: () -> Unit) {
     val manga by vm.library.collectAsStateWithLifecycle()
     val shelf by vm.shelf.collectAsStateWithLifecycle()
-    val creators by vm.creators.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
     var filter by rememberSaveable { mutableStateOf("Saved") }
     var query by rememberSaveable { mutableStateOf("") }
@@ -259,7 +275,7 @@ private fun Library(vm: ReaderViewModel, discover: () -> Unit, browseCreator: (C
             ) {
                 Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     AsyncImage(
-                        book.cover,
+                        coverRequest(book),
                         null,
                         Modifier.size(52.dp, 76.dp).clip(RoundedCornerShape(8.dp)),
                         contentScale = ContentScale.Crop,
@@ -298,33 +314,11 @@ private fun Library(vm: ReaderViewModel, discover: () -> Unit, browseCreator: (C
             Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            listOf("Saved", "Liked", "History", "Creators").forEach {
+            listOf("Saved", "Liked", "History").forEach {
                 FilterChip(filter == it, { filter = it }, label = { Text(it) })
             }
         }
-        if (filter == "Creators") {
-            if (creators.isEmpty())
-                EmptyState(
-                    KomoriIcons.PersonOutline,
-                    "Follow the people behind the pages",
-                    "Open a title and follow its author or artist. Your follows stay on this device.",
-                )
-            else
-                LazyColumn {
-                    items(creators.filter { it.name.contains(query, true) }, key = { it.id }) {
-                        creator ->
-                        ListItem(
-                            headlineContent = { Text(creator.name) },
-                            supportingContent = { Text("${creator.role} · Followed locally") },
-                            leadingContent = { Icon(KomoriIcons.PersonOutline, null) },
-                            trailingContent = {
-                                TextButton(onClick = { vm.follow(creator) }) { Text("Unfollow") }
-                            },
-                            modifier = Modifier.clickable { browseCreator(creator) },
-                        )
-                    }
-                }
-        } else {
+        run {
             val entries =
                 shelf.filter {
                     when (filter) {
@@ -362,6 +356,45 @@ private fun Library(vm: ReaderViewModel, discover: () -> Unit, browseCreator: (C
 }
 
 @Composable
+private fun Authors(vm: ReaderViewModel, browseCreator: (Creator) -> Unit) {
+    val creators by vm.creators.collectAsStateWithLifecycle()
+    var query by rememberSaveable { mutableStateOf("") }
+    Column(Modifier.fillMaxSize()) {
+        OutlinedTextField(query, { query = it },
+            Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+            label = { Text("Search followed authors and artists") }, singleLine = true)
+        val visible = creators.filter { it.name.contains(query, true) }
+        if (visible.isEmpty()) EmptyState(KomoriIcons.PersonOutline,
+            if (creators.isEmpty()) "No followed authors yet" else "No matching authors",
+            "Follow an author or artist from title details. Tap a follow to browse works on its source.")
+        else LazyColumn {
+            items(visible, key = { it.id }) { creator ->
+                ListItem(
+                    headlineContent = { Text(creator.name) },
+                    supportingContent = { Text("${sourceName(creator.id)} · ${creator.role} · Local follow") },
+                    leadingContent = { Icon(KomoriIcons.PersonOutline, null) },
+                    trailingContent = { TextButton(onClick = { vm.follow(creator) }) { Text("Unfollow") } },
+                    modifier = Modifier.clickable { browseCreator(creator) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+internal fun VerifySourceButton(vm: ReaderViewModel, source: String) {
+    val context = LocalContext.current
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            result.data?.getStringExtra("source")?.let(vm::retrySource)
+        }
+    }
+    if (source in sourceOrigins) TextButton(onClick = {
+        launcher.launch(Intent(context, SourceVerificationActivity::class.java).putExtra("source", source))
+    }) { Text("Verify source") }
+}
+
+@Composable
 private fun Discover(vm: ReaderViewModel) {
     val results by vm.results.collectAsStateWithLifecycle()
     val loading by vm.loading.collectAsStateWithLifecycle()
@@ -371,10 +404,11 @@ private fun Discover(vm: ReaderViewModel) {
     val shelf by vm.shelf.collectAsStateWithLifecycle()
     val filter by vm.browseFilter.collectAsStateWithLifecycle()
     val tags by vm.tags.collectAsStateWithLifecycle()
+    val activeCreator by vm.activeCreator.collectAsStateWithLifecycle()
     var showFilters by remember { mutableStateOf(false) }
     var query by rememberSaveable(activeSource) { mutableStateOf("") }
     if (showFilters) SourceFilters(vm, activeSource, filter, tags) { showFilters = false }
-    LaunchedEffect(Unit) { if (results.isEmpty() && !loading) vm.search("", null) }
+    LaunchedEffect(Unit) { if (activeSource.isEmpty() && !loading) vm.search("", null) }
     Column {
         ScrollableTabRow(
             selectedTabIndex = sourceOrder(settings.sources).indexOf(activeSource).coerceAtLeast(0),
@@ -388,6 +422,22 @@ private fun Discover(vm: ReaderViewModel) {
                 )
             }
         }
+        if (activeSource in listOf("zap", "nhentai", "imhentai")) {
+            Row(Modifier.padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf("Title", "Tag", "Author").forEach { type ->
+                    FilterChip(filter.searchType == type, {
+                        vm.setSearchType(type)
+                    }, label = { Text(type) })
+                }
+            }
+        }
+        if (activeCreator != null || filter.facetPath.isNotEmpty()) {
+            Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(activeCreator?.name ?: android.net.Uri.decode(filter.facetPath.trim('/').substringAfter('/')),
+                    Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
+                TextButton(onClick = vm::clearFacet) { Text("Clear") }
+            }
+        }
         Row(
             Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -396,24 +446,21 @@ private fun Discover(vm: ReaderViewModel) {
                 query,
                 { query = it },
                 Modifier.weight(1f),
-                placeholder = { Text("Search manga & manhwa") },
+                placeholder = { Text(if (filter.searchType == "Title") "Search titles" else "Exact ${filter.searchType.lowercase()} name") },
                 singleLine = true,
                 shape = RoundedCornerShape(18.dp),
             )
-            IconButton(onClick = { vm.search(query, null) }) {
+            IconButton(onClick = { vm.submitSearch(query) }) {
                 Icon(KomoriIcons.Search, "Search source")
             }
         }
         Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(
-                if (activeSource == "comix") "Integration pending · source access blocked"
-                else
-                    "${filter.sort.ifEmpty { vm.app.source.sorts(activeSource).firstOrNull().orEmpty() }} · ${filter.tags.size} tags",
+                "${filter.sort.ifEmpty { vm.app.source.sorts(activeSource).firstOrNull().orEmpty() }} · ${filter.tags.size} tags",
                 Modifier.weight(1f),
                 style = MaterialTheme.typography.labelSmall,
             )
             TextButton(
-                enabled = activeSource != "comix",
                 onClick = {
                     showFilters = true
                     vm.loadTags()
@@ -421,6 +468,7 @@ private fun Discover(vm: ReaderViewModel) {
             ) {
                 Text("Filters")
             }
+            VerifySourceButton(vm, activeSource)
         }
         if (results.isEmpty() && !loading)
             EmptyState(
@@ -428,7 +476,7 @@ private fun Discover(vm: ReaderViewModel) {
                 "No titles to show",
                 "Try a different search, or check your connection.",
                 "Retry",
-                { vm.search(query, null) },
+                { vm.search() },
             )
         else
             MangaGrid(
@@ -473,7 +521,7 @@ private fun MangaGrid(
             Column {
                 Box {
                     AsyncImage(
-                        title.cover,
+                        coverRequest(title),
                         title.title,
                         Modifier.fillMaxWidth()
                             .aspectRatio(0.7f)
@@ -509,7 +557,7 @@ private fun MangaGrid(
 }
 
 @Composable
-private fun Details(vm: ReaderViewModel, manga: Manga, browseCreator: (Creator) -> Unit) {
+private fun Details(vm: ReaderViewModel, manga: Manga, browseTag: (SourceTag) -> Unit, browseCreator: (Creator) -> Unit) {
     val shelf by vm.shelf.collectAsStateWithLifecycle()
     val followed by vm.creators.collectAsStateWithLifecycle()
     val raw by vm.chapters.collectAsStateWithLifecycle()
@@ -588,7 +636,7 @@ private fun Details(vm: ReaderViewModel, manga: Manga, browseCreator: (Creator) 
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                 AsyncImage(
-                    manga.cover,
+                    coverRequest(manga),
                     null,
                     Modifier.width(112.dp)
                         .height(160.dp)
@@ -656,6 +704,19 @@ private fun Details(vm: ReaderViewModel, manga: Manga, browseCreator: (Creator) 
                 maxLines = 8,
                 overflow = TextOverflow.Ellipsis,
             )
+        }
+        item {
+            val metadataTags = remember(manga.tagsJson) {
+                JSONArray(manga.tagsJson).objects().map { SourceTag(it.getString("id"), it.getString("name")) }
+            }
+            if (metadataTags.isNotEmpty()) {
+                Text("Tags", style = MaterialTheme.typography.titleMedium)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    metadataTags.forEach { tag ->
+                        AssistChip(onClick = { browseTag(tag) }, label = { Text(tag.name) })
+                    }
+                }
+            }
         }
         items(creators, key = { it.id }) { creator ->
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -922,7 +983,7 @@ private fun Downloads(vm: ReaderViewModel) {
                         Text("Pause queue")
                     }
                     TextButton(
-                        enabled = downloads.any { it.state in listOf("Paused", "Failed") },
+                        enabled = downloads.any { it.state in listOf("Paused", "Failed", "Verification required") },
                         onClick = { vm.resumeAll() },
                     ) {
                         Text("Resume / retry all")
@@ -960,8 +1021,10 @@ private fun Downloads(vm: ReaderViewModel) {
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.error,
                             )
+                        if (download.state == "Verification required")
+                            VerifySourceButton(vm, sourceKey(download.mangaId))
                         Row {
-                            if (download.state in listOf("Paused", "Failed"))
+                            if (download.state in listOf("Paused", "Failed", "Verification required"))
                                 TextButton(onClick = { vm.resume(download) }) { Text("Resume") }
                             else if (download.state != "Complete")
                                 TextButton(onClick = { vm.pause(download) }) { Text("Pause") }
@@ -1292,6 +1355,9 @@ private fun SourceFilters(
     var sort by remember {
         mutableStateOf(filter.sort.ifEmpty { vm.app.source.sorts(source).firstOrNull().orEmpty() })
     }
+    val creator by vm.activeCreator.collectAsStateWithLifecycle()
+    val facetBrowse = source in listOf("zap", "nhentai", "imhentai") &&
+        (creator != null || filter.facetPath.isNotEmpty() || filter.searchType != "Title")
     var chosen by remember { mutableStateOf(filter.tags) }
     var tagQuery by remember { mutableStateOf("") }
     AlertDialog(
@@ -1307,15 +1373,22 @@ private fun SourceFilters(
                         FilterChip(sort == value, { sort = value }, label = { Text(value) })
                     }
                 }
+                if (source in listOf("zap", "imhentai"))
+                    Text("Categories filter title searches. Use Tag or Author search for an exact name, or tap metadata on a title.",
+                        style = MaterialTheme.typography.bodySmall)
                 if (source == "demonic")
                     Text(
                         "Sort and tags apply to browsing. Title search is separate.",
                         style = MaterialTheme.typography.bodySmall,
                     )
+                if (facetBrowse) {
+                    Text("Tag and category filters apply to title searches. Metadata browsing uses the exact source name.",
+                        style = MaterialTheme.typography.bodySmall)
+                } else {
                 OutlinedTextField(
                     tagQuery,
                     { tagQuery = it },
-                    label = { Text("Find a tag") },
+                    label = { Text(if (source in listOf("zap", "imhentai")) "Find a category" else "Find a tag") },
                     singleLine = true,
                 )
                 LazyColumn(Modifier.heightIn(max = 280.dp)) {
@@ -1333,12 +1406,13 @@ private fun SourceFilters(
                     }
                     if (tags.isEmpty()) item { Text("Tags unavailable or still loading.") }
                 }
+                }
             }
         },
         confirmButton = {
             TextButton(
                 onClick = {
-                    vm.applyFilter(BrowseFilter(sort, chosen))
+                    vm.applyFilter(filter.copy(sort = sort, tags = if (facetBrowse) emptySet() else chosen))
                     close()
                 }
             ) {
@@ -1450,6 +1524,7 @@ private fun ChapterDownloadControl(
                 }
             }
         "Paused",
+        "Verification required",
         "Failed" ->
             TextButton(onClick = { vm.resume(download) }) {
                 Text(if (download.state == "Failed") "Retry" else "Resume")

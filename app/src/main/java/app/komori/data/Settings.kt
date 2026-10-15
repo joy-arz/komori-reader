@@ -26,7 +26,7 @@ data class Settings(
     val showContinue: Boolean = true,
     val continuousChapters: Boolean = true,
     val retrySeconds: Int = 5,
-    val sources: String = "demonic,weeb,comix,mangadex,zap,imhentai,nhentai",
+    val sources: String = "demonic,weeb,mangadex,zap,imhentai,nhentai",
 )
 
 class SettingsStore(private val context: Context) {
@@ -54,7 +54,7 @@ class SettingsStore(private val context: Context) {
                     if (it in listOf(0, 5, 10, 30)) it else 5
                 },
                 p[stringPreferencesKey("sources")]
-                    ?: "demonic,weeb,comix,mangadex,zap,imhentai,nhentai",
+                    ?: "demonic,weeb,mangadex,zap,imhentai,nhentai",
             )
         }
 

@@ -52,8 +52,7 @@ class MangaDex(val client: OkHttpClient, private val baseUrl: String = "https://
                             )
                             .build()
                     )
-                    .execute()
-                    .use { response ->
+                    .readResponse { response ->
                         if (response.code == 429)
                             throw IOException(
                                 "MangaDex is rate limiting requests. Please wait before retrying."

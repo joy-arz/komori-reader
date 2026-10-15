@@ -8,6 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.*
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 import org.jsoup.Jsoup
@@ -17,7 +18,6 @@ val sourceNames =
     linkedMapOf(
         "demonic" to "DemonicScans",
         "weeb" to "WeebCentral",
-        "comix" to "Comix",
         "mangadex" to "MangaDex",
         "zap" to "HentaiZap",
         "imhentai" to "ImHentai",
@@ -64,7 +64,12 @@ fun duplicateTitles(manga: Manga, library: List<Manga>, shelf: List<Shelf>): Lis
     }
 }
 
-data class BrowseFilter(val sort: String = "", val tags: Set<String> = emptySet())
+data class BrowseFilter(
+    val sort: String = "",
+    val tags: Set<String> = emptySet(),
+    val searchType: String = "Title",
+    val facetPath: String = "",
+)
 
 data class SourceTag(val id: String, val name: String)
 
@@ -88,7 +93,7 @@ class Sources(val client: OkHttpClient) {
             "nhentai" -> nhentai
             else ->
                 throw IOException(
-                    "Comix is not available yet: its protected reader could not be verified. Choose another source."
+                    "This source is no longer available. Choose another source."
                 )
         }
 
@@ -99,7 +104,7 @@ class Sources(val client: OkHttpClient) {
                 listOf("Popularity", "Subscribers", "Latest Updates", "Recently Added", "Alphabet")
             "mangadex" -> listOf("Popularity", "Rating", "Latest updates", "Title")
             "zap", "imhentai" -> listOf("Latest", "Popular", "Top Rated", "Downloaded")
-            "nhentai" -> listOf("Latest")
+            "nhentai" -> listOf("Latest", "Popular today", "Popular this week", "Popular this month", "Popular all time")
             else -> emptyList()
         }
 
@@ -114,7 +119,7 @@ class Sources(val client: OkHttpClient) {
             dex.browse(query, (page - 1) * 30, creator, filter).let {
                 BrowsePage(it, it.size == 30)
             }
-        else web(key).browse(query, page, filter)
+        else web(key).browse(query, page, filter, creator)
 
     suspend fun tags(key: String): List<SourceTag> =
         if (key == "mangadex") dex.tags() else web(key).tags()
@@ -160,11 +165,9 @@ class WebSource(
                     .header("Referer", "$base/")
                     .apply { if (form != null) post(form) }
                     .build()
-            client.newCall(request).execute().use {
+            client.newCall(request).readResponse {
                 if (!it.isSuccessful)
-                    throw IOException(
-                        "${sourceNames[key]} returned HTTP ${it.code}. The source may be unavailable or require browser verification."
-                    )
+                    throw SourceHttpException(it.code, key)
                 val body = it.body ?: throw IOException("Empty source response")
                 val stream = body.source()
                 if (stream.request(4L * 1024 * 1024 + 1))
@@ -175,15 +178,16 @@ class WebSource(
                     doc.title().contains("Just a moment", true) ||
                         doc.selectFirst("#cf-error-details") != null
                 )
-                    throw IOException(
-                        "${sourceNames[key]} requires browser verification. Reading and downloads are unavailable until the source allows access."
-                    )
+                    throw SourceVerificationRequired(key)
                 doc
             }
         }
 
     suspend fun tags(): List<SourceTag> {
-        if (key == "nhentai") return emptyList()
+        if (key == "nhentai")
+            return document("/tags/").select("a[href^=/tag/]").mapNotNull { a ->
+                metadataLink(a, "tag")?.let { SourceTag(it.first, it.second) }
+            }.distinctBy { it.id }
         if (key == "zap" || key == "imhentai") return galleryCategories
         if (key == "weeb")
             return listOf(
@@ -211,15 +215,44 @@ class WebSource(
         }
     }
 
-    suspend fun browse(query: String, page: Int, filter: BrowseFilter): BrowsePage {
+    suspend fun browse(
+        query: String, page: Int, filter: BrowseFilter, creator: Creator? = null,
+    ): BrowsePage {
+        if (key in listOf("zap", "nhentai", "imhentai")) {
+            val facet = when {
+                creator != null -> {
+                    require(sourceKey(creator.id) == key) { "Creator belongs to another source." }
+                    sourcePath(creator.id)
+                }
+                filter.facetPath.isNotEmpty() -> filter.facetPath
+                query.isNotBlank() && filter.searchType != "Title" -> {
+                    val type = if (filter.searchType == "Author") "artist" else "tag"
+                    "$base/".toHttpUrl().newBuilder().addPathSegment(type)
+                        .addPathSegment(query.trim().lowercase(Locale.ROOT).replace(' ', '-'))
+                        .addPathSegment("").build().encodedPath
+                }
+                else -> ""
+            }
+            if (facet.isNotEmpty()) {
+                require(Regex("/(?:artist|author|tag)/[^/?#]+/").matches(facet)) { "Invalid metadata path." }
+                val url = "$base$facet".toHttpUrl().newBuilder()
+                    .addQueryParameter("page", page.toString())
+                addGallerySort(url, filter.sort)
+                val d = document(url.build().toString().removePrefix(base))
+                return BrowsePage(parseBrowse(d), hasNext(d, page))
+            }
+        }
         if (key == "nhentai") {
-            if (filter.tags.isNotEmpty() || filter.sort !in listOf("", "Latest"))
-                throw IOException("Nhentai currently supports title search and latest browsing only.")
-            val url = "$base${if (query.isBlank()) "/" else "/search/"}".toHttpUrl().newBuilder()
+            val terms = (listOf(query) + filter.tags.map { path ->
+                val slug = path.removePrefix("/tag/").trimEnd('/')
+                "tag:" + slug
+            }).filter { it.isNotBlank() }.joinToString(" ")
+            val url = "$base${if (terms.isBlank()) "/" else "/search/"}".toHttpUrl().newBuilder()
                 .addQueryParameter("page", page.toString())
-            if (query.isNotBlank()) url.addQueryParameter("q", query)
+            if (terms.isNotBlank()) url.addQueryParameter("q", terms)
+            addGallerySort(url, filter.sort)
             val d = document(url.build().toString().removePrefix(base))
-            return BrowsePage(parseBrowse(d), d.selectFirst(".pagination a.next[href]") != null)
+            return BrowsePage(parseBrowse(d), hasNext(d, page))
         }
         if (key == "zap" || key == "imhentai") return browseGallery(query, page, filter)
         val doc =
@@ -316,11 +349,17 @@ class WebSource(
     }
 
     suspend fun details(manga: Manga): Manga {
-        val d = document(sourcePath(manga.id))
+        return parseDetails(manga, document(sourcePath(manga.id)))
+    }
+
+    fun parseDetails(manga: Manga, d: Document): Manga {
+        val metadata = galleryMetadata(d)
         if (key == "nhentai") {
             val description = d.selectFirst("meta[name=description]")?.attr("content").orEmpty()
             val tags = d.select("#tags a[href^=/tag/] .name").eachText()
             return manga.copy(
+                creatorsJson = metadata.first,
+                tagsJson = metadata.second,
                 title = d.selectFirst("#info h1.title")?.text()?.ifBlank { manga.title } ?: manga.title,
                 cover = d.selectFirst("#cover img")?.absUrl("src")?.ifBlank { manga.cover } ?: manga.cover,
                 description = listOf(description, tags.takeIf { it.isNotEmpty() }?.joinToString(prefix = "Tags: "))
@@ -330,6 +369,8 @@ class WebSource(
         if (key == "zap" || key == "imhentai") {
             val cover = d.selectFirst(if (key == "zap") ".hz-gallery-cover img" else ".left_cover img")
             return manga.copy(
+                creatorsJson = metadata.first,
+                tagsJson = metadata.second,
                 title = d.selectFirst(if (key == "zap") "#gallery-title" else ".right_details h1")
                     ?.text()?.ifBlank { manga.title } ?: manga.title,
                 description = d.selectFirst("meta[name=description]")?.attr("content")
@@ -343,6 +384,67 @@ class WebSource(
             else d.selectFirst("li:has(strong:contains(Description)) > p")?.text()
         return manga.copy(description = description ?: manga.description)
     }
+
+    private fun metadataLink(a: org.jsoup.nodes.Element, type: String): Pair<String, String>? {
+        val url = a.absUrl("href").toHttpUrlOrNull() ?: return null
+        if (url.host != base.toHttpUrl().host ||
+            !Regex("/$type/[^/?#]+/").matches(url.encodedPath)) return null
+        val label = a.clone().apply { select(".count, .badge").remove() }
+        val name = (a.selectFirst(".name")?.text() ?: label.text())
+            .replace(Regex("\\s+\\(\\d[\\d,.]*\\)$"), "").trim()
+        return if (name.isBlank()) null else url.encodedPath to name
+    }
+
+    private fun galleryMetadata(d: Document): Pair<String, String> {
+        val creators = JSONArray()
+        val tags = JSONArray()
+        val seen = mutableSetOf<String>()
+        val metadata = if (key == "zap") d.clone().apply {
+            select("header, footer, nav, aside, .hz-gallery-results, .hz-popular, .related-galleries, .hz-gallery-related").remove()
+        } else d
+        val selector = when (key) {
+            "nhentai" -> "#tags a[href]"
+            "zap" -> "a[href]"
+            else -> ".right_details a[href]"
+        }
+        metadata.select(selector).forEach { a ->
+            for (type in listOf("artist", "author", "tag")) {
+                val (path, name) = metadataLink(a, type) ?: continue
+                if (!seen.add(path)) continue
+                if (type == "tag") tags.put(JSONObject().put("id", path).put("name", name))
+                else creators.put(JSONObject().put("id", sourceId(key, path))
+                    .put("name", name).put("role", type))
+            }
+        }
+        return creators.toString() to tags.toString()
+    }
+
+    private fun addGallerySort(url: HttpUrl.Builder, sort: String) {
+        if (key == "nhentai") {
+            val value = when (sort) {
+                "Popular today" -> "popular-today"
+                "Popular this week" -> "popular-week"
+                "Popular this month" -> "popular-month"
+                "Popular all time" -> "popular"
+                else -> ""
+            }
+            if (value.isNotEmpty()) url.addQueryParameter("sort", value)
+        } else {
+            val value = when (sort) {
+                "Popular" -> "pp"
+                "Top Rated" -> "tr"
+                "Downloaded" -> "dl"
+                else -> "lt"
+            }
+            url.addQueryParameter(value, "1")
+        }
+    }
+
+    private fun hasNext(d: Document, page: Int): Boolean =
+        d.selectFirst("a[rel=next], .pagination a.next[href]") != null ||
+            d.select(".pagination a[href]").any {
+                it.absUrl("href").toHttpUrlOrNull()?.queryParameter("page")?.toIntOrNull() == page + 1
+            }
 
     suspend fun chapters(id: String): List<Chapter> {
         val path = sourcePath(id)

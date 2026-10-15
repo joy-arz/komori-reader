@@ -123,3 +123,13 @@ On the final debug app, changing One Punch-Man from English to Indonesian loaded
 - Reader retries quarantine the failing local page and replace it after a successful fetch; damaged image headers no longer short-circuit network recovery. Download workers also validate existing page headers before skipping them. Header validation cannot detect every possible corruption; decode errors still expose Retry.
 - Bulk download selection observes chapter/feed and preference changes, reselects at confirmation, and has a scrollable dialog with 48 dp radio rows. Network errors are source-neutral.
 - Added transfer regressions for exact size limits, streamed overflow, interruption checks and cancellation of a throttled real HTTP response. No new physical-device or Android instrumentation run was performed for this patch. Browser verification UI, backup/restore, durable queue ordering and backward chapter loading remain subsequent audit work.
+
+
+## 0.6 source metadata and session recovery — October 15, 2026
+
+- Deterministic JVM suite: 68 tests discovered, 64 passed, four opt-in source smoke tests skipped; no failures or errors. New coverage includes source-scoped metadata, tag/author requests, popularity and later-page retention, source preference removal, cookie isolation and cancellation of an actual pending HTTP call.
+- Eight API 30 Android instrumentation tests passed: five Room migration tests (including original schema → 5 and metadata/follow/progress preservation), the real CookieManager/native bridge test, continuous offline reading, and paged/zoom gestures.
+- Debug lint, release lint and debug assembly passed. Lint warnings remain for dependency updates, existing accessibility/storage items and Android backup configuration; zero lint errors.
+- Emulator UI inspection confirmed the separate Authors destination and its search/empty state, the HentaiZap Title/Tag/Author controls, and entry into Verify source with the real origin, Retry native access and Reset sessions controls. Inspection prompted a baseline padding correction for the verification activity. Manual website challenge completion was not claimed.
+- Direct live HTTP probes to HentaiZap and Nhentai returned HTTP 403 on this network. Fixture/mock-server success does not establish live source compatibility. The shared-cookie mechanism was tested against Android CookieManager with synthetic cookie values, including HttpOnly, path scoping, expiry cleanup and exclusion from unrelated CDN/HTTP requests.
+- Broader findings, implemented fixes and remaining validation limits: [source/session review](SOURCE_SESSION_REVIEW_2026-10-15.md).

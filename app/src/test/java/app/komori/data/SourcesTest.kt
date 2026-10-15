@@ -19,7 +19,7 @@ class SourcesTest {
         assertEquals(path, sourcePath(first))
         assertEquals("mangadex", sourceKey("a-legacy-uuid"))
         assertEquals(
-            listOf("weeb", "demonic", "comix", "mangadex", "zap", "imhentai", "nhentai"),
+            listOf("weeb", "demonic", "mangadex", "zap", "imhentai", "nhentai"),
             sourceOrder("weeb,weeb,unknown"),
         )
     }
@@ -260,8 +260,8 @@ class SourcesTest {
     fun galleryKeysPreserveLegacyOrderAndImageReferers() {
         val keys = listOf("zap", "imhentai", "nhentai")
         assertTrue(keys.all { Regex("[a-z0-9]+").matches(it) })
-        assertEquals(7, sourceNames.size)
-        assertEquals(listOf("demonic", "weeb", "comix", "mangadex") + keys,
+        assertEquals(6, sourceNames.size)
+        assertEquals(listOf("demonic", "weeb", "mangadex") + keys,
             sourceOrder("demonic,weeb,comix,mangadex"))
         val sources = Sources(MangaDex.client())
         for ((key, base) in listOf("zap" to "https://hentaizap.com", "imhentai" to "https://imhentai.xxx")) {
@@ -318,8 +318,7 @@ class SourcesTest {
             assertEquals("/search/", request.requestUrl!!.encodedPath)
             assertEquals("sample & title", request.requestUrl!!.queryParameter("q"))
             assertEquals("2", request.requestUrl!!.queryParameter("page"))
-            assertTrue(source.tags().isEmpty())
-            assertEquals(listOf("Latest"), Sources(MangaDex.client()).sorts("nhentai"))
+            assertTrue(Sources(MangaDex.client()).sorts("nhentai").contains("Popular all time"))
         }
     }
 

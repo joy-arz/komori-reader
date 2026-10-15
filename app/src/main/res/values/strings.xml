@@ -1,0 +1,5 @@
+<resources>
+    <string name="source_verification_intro">Verify %1$s\n%2$s\nComplete verification here, then tap Retry native access. A site may still deny access.</string>
+    <string name="retry_native_access">Retry native access</string>
+    <string name="reset_source_sessions">Reset sessions</string>
+</resources>

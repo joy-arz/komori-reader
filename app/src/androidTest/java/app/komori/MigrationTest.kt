@@ -80,7 +80,7 @@ class MigrationTest {
                     LibraryDatabase::class.java,
                     "reader-mode-test",
                 )
-                .addMigrations(app.komori.data.FEED_MIGRATION)
+                .addMigrations(app.komori.data.FEED_MIGRATION, app.komori.data.METADATA_MIGRATION)
                 .build()
         try {
             val pref = kotlinx.coroutines.runBlocking { db.dao().titlePreferences("manga") }
@@ -98,11 +98,12 @@ class MigrationTest {
         helper
             .runMigrationsAndValidate(
                 "full-upgrade-test",
-                4,
+                5,
                 true,
                 app.komori.data.SCROLL_MIGRATION,
                 app.komori.data.READER_MODE_MIGRATION,
                 app.komori.data.FEED_MIGRATION,
+                app.komori.data.METADATA_MIGRATION,
             )
             .close()
     }
@@ -134,4 +135,30 @@ class MigrationTest {
                 )
             }
     }
+    @Test
+    fun metadataUpgradePreservesLibraryFollowsAndProgress() {
+        helper.createDatabase("metadata-test", 4).apply {
+            execSQL("INSERT INTO manga (id, title, description, cover, creatorsJson, status) VALUES ('manga', 'Saved title', 'Details', 'cover', '[]', '')")
+            execSQL("INSERT INTO creators (id, name, role) VALUES ('creator', 'Followed artist', 'artist')")
+            execSQL("INSERT INTO progress (releaseId, mangaId, chapterKey, page, completed, scroll) VALUES ('release', 'manga', 'key', 7, 0, 0.5)")
+            close()
+        }
+        helper.runMigrationsAndValidate("metadata-test", 5, true, app.komori.data.METADATA_MIGRATION).use { db ->
+            db.query("SELECT title, tagsJson FROM manga WHERE id = 'manga'").use {
+                assertTrue(it.moveToFirst())
+                assertEquals("Saved title", it.getString(0))
+                assertEquals("[]", it.getString(1))
+            }
+            db.query("SELECT name FROM creators WHERE id = 'creator'").use {
+                assertTrue(it.moveToFirst())
+                assertEquals("Followed artist", it.getString(0))
+            }
+            db.query("SELECT page, scroll FROM progress WHERE releaseId = 'release'").use {
+                assertTrue(it.moveToFirst())
+                assertEquals(7, it.getInt(0))
+                assertEquals(0.5f, it.getFloat(1), 0f)
+            }
+        }
+    }
+
 }

@@ -14,6 +14,7 @@ data class Manga(
     val cover: String,
     val creatorsJson: String = "[]",
     val status: String = "",
+    @ColumnInfo(defaultValue = "'[]'") val tagsJson: String = "[]",
 )
 
 @Entity(tableName = "shelf")
@@ -156,7 +157,7 @@ interface LibraryDao {
             Creator::class,
             TitlePreferences::class,
         ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class LibraryDatabase : RoomDatabase() {
@@ -216,5 +217,12 @@ val FEED_MIGRATION =
             db.execSQL(
                 "CREATE TABLE IF NOT EXISTS chapter_feeds (mangaId TEXT NOT NULL, language TEXT NOT NULL, releaseIds TEXT NOT NULL, fetchedAt INTEGER NOT NULL, PRIMARY KEY(mangaId, language))"
             )
+        }
+    }
+
+val METADATA_MIGRATION =
+    object : androidx.room.migration.Migration(4, 5) {
+        override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE manga ADD COLUMN tagsJson TEXT NOT NULL DEFAULT '[]'")
         }
     }

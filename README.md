@@ -8,14 +8,16 @@ A quiet, lightweight Android manga reader. Built with Kotlin and Compose, with n
 
 ## Available now
 
-- Reorderable source tabs: DemonicScans first, WeebCentral second, Comix third, then MangaDex. Comix is an explicitly pending integration; WeebCentral is experimental and live access is currently blocked on the validation network.
+- Reorderable source tabs: DemonicScans, WeebCentral, MangaDex, HentaiZap, ImHentai and Nhentai. Comix is removed; existing source preferences are filtered automatically. WeebCentral remains experimental.
 - Native DemonicScans reading and downloads; views/new/title browsing and genre selection. Its title search is separate from genre browsing.
 - MangaDex search, popularity/rating/update/title sorting and tag filters, with safe/suggestive catalog filtering.
 - Possible-duplicate warnings for normalized matching titles already saved from another source; no automatic merging.
 - Dismissible Continue reading banner (restore it in Settings), and direct Read offline from Downloads.
 - GitHub release checks on launch/foreground, automatic APK download on unmetered networks, manual checking/downloading, verified same-key upgrades through Android's installer.
 - Personal library, likes, reading statuses and history stored locally with Room.
-- Local author/artist follows and browsing their works.
+- Dedicated Authors tab for local author/artist follows and browsing works on the original source. HentaiZap and Nhentai details include authors/artists and tappable tags. Discover offers exact Tag/Author name browsing alongside title search.
+- Source-native popularity sorting: HentaiZap Popular/Top Rated/Downloaded and Nhentai daily/weekly/monthly/all-time popularity. These are source rankings, not locally calculated view counts.
+- User-operated Verify source screen shares source cookies and user agent with native requests and cover loading. HTTP 403 remains distinct from a detected verification challenge; blocked downloads wait for user action instead of repeatedly retrying. Cookies are isolated from unrelated image hosts and excluded from app backup.
 - Smart Chapters: language filtering, conservative duplicate grouping, preferred scanlation and strict/fallback selection.
 - Direct reading from cover play buttons, page resume, restart-current-chapter preference and optional rereading when caught up.
 - Continuous webtoon scrolling across chapters, saved page/scroll position, bounded neighboring-chapter windows and image strips, offline support and a Paged/Webtoon switch.
@@ -32,7 +34,7 @@ MangaDex and scanlation groups are credited in the application. This is an indep
 
 ## Install
 
-Download [komori-0.5.0-alpha.1.apk](https://github.com/joy-arz/komori-reader/releases/download/v0.5.0-alpha.1/komori-0.5.0-alpha.1.apk), or open [GitHub Releases](https://github.com/joy-arz/komori-reader/releases) and expand **Assets**. Choose the `.apk` file, not the source-code archives. Alpha releases are signed with the same private release key, allowing future updates without uninstalling.
+Download [komori-0.6.0-alpha.1.apk](https://github.com/joy-arz/komori-reader/releases/download/v0.6.0-alpha.1/komori-0.6.0-alpha.1.apk), or open [GitHub Releases](https://github.com/joy-arz/komori-reader/releases) and expand **Assets**. Choose the `.apk` file, not the source-code archives. Alpha releases are signed with the same private release key, allowing future updates without uninstalling.
 
 ## Build
 
@@ -67,7 +69,7 @@ Signing secrets are already configured in repository Actions secrets. No signing
 - Collection management, backup/restore, storage-management UI and per-title language overrides are planned.
 - Low-end performance budgets are goals, not yet verified on a physical 2 GB device.
 
-See [the implementation plan](docs/PLAN.md) and [validation notes](docs/VALIDATION.md).
+See [the source/session follow-up review](docs/SOURCE_SESSION_REVIEW_2026-10-15.md), [the implementation plan](docs/PLAN.md) and [validation notes](docs/VALIDATION.md).
 
 The [Komikku reference review](docs/KOMIKKU_REVIEW.md) documents the feature comparison, implemented reader improvements, and remaining priorities.
 
@@ -84,4 +86,4 @@ Install version 0.5 manually once if coming from an older build. Subsequent laun
 
 MangaDex external-only chapters cannot supply pages to the native reader. Start reading skips those entries and chooses the first readable chapter. Their separately labeled external links remain available. DemonicScans and WeebCentral pages use the native paged/webtoon reader and the same download storage, not embedded website readers. Completed downloads can be opened directly without a source refresh. MangaDex IDs and existing library/download data are retained.
 
-Source websites may block requests or change their HTML. WeebCentral's parser and request routing have fixture coverage but live reading has not been verified on the current network. Comix currently returns an access challenge and its dynamic reader integration is not implemented. No protection bypass is included. Unsupported sources are not represented as working readers.
+Source websites may block requests or change their HTML. WeebCentral's parser and request routing have fixture coverage but live reading has not been verified on the current network. Use Verify source for HTTP 403 or a browser-verification prompt, complete verification manually, then Retry native access. Download jobs waiting for verification retain completed pages; resume them from Downloads after verification. Reset sessions clears all source browser cookies/storage without changing library data. Browser verification cannot guarantee that a source will accept native requests. Unsupported sources are not represented as working readers.
