@@ -399,13 +399,14 @@ private fun Discover(vm: ReaderViewModel) {
         Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(
                 if (activeSource == "comix") "Integration pending · source access blocked"
+                else if (activeSource == "nhentai") "Integration pending · reader HTML unverified"
                 else
                     "${filter.sort.ifEmpty { vm.app.source.sorts(activeSource).firstOrNull().orEmpty() }} · ${filter.tags.size} tags",
                 Modifier.weight(1f),
                 style = MaterialTheme.typography.labelSmall,
             )
             TextButton(
-                enabled = activeSource != "comix",
+                enabled = activeSource != "comix" && activeSource != "nhentai",
                 onClick = {
                     showFilters = true
                     vm.loadTags()

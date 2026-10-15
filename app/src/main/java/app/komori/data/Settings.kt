@@ -24,7 +24,7 @@ data class Settings(
     val libraryAlphabetical: Boolean = false,
     val autoUpdateDownload: Boolean = true,
     val showContinue: Boolean = true,
-    val sources: String = "demonic,weeb,comix,mangadex",
+    val sources: String = "demonic,weeb,comix,mangadex,zap,imhentai,nhentai",
 )
 
 class SettingsStore(private val context: Context) {
@@ -47,7 +47,7 @@ class SettingsStore(private val context: Context) {
                 p[booleanPreferencesKey("libraryAlphabetical")] ?: false,
                 p[booleanPreferencesKey("autoUpdateDownload")] ?: true,
                 p[booleanPreferencesKey("showContinue")] ?: true,
-                p[stringPreferencesKey("sources")] ?: "demonic,weeb,comix,mangadex",
+                p[stringPreferencesKey("sources")] ?: "demonic,weeb,comix,mangadex,zap,imhentai,nhentai",
             )
         }
 

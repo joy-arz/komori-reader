@@ -19,6 +19,9 @@ val sourceNames =
         "weeb" to "WeebCentral",
         "comix" to "Comix",
         "mangadex" to "MangaDex",
+        "zap" to "HentaiZap",
+        "imhentai" to "ImHentai",
+        "nhentai" to "Nhentai",
     )
 
 fun sourceKey(id: String) = id.substringBefore(':', "mangadex")
@@ -27,6 +30,9 @@ fun sourcePageUrl(id: String): String =
     when (sourceKey(id)) {
         "demonic" -> "https://demonicscans.org" + sourcePath(id)
         "weeb" -> "https://weebcentral.com" + sourcePath(id)
+        "zap" -> "https://hentaizap.com" + sourcePath(id)
+        "imhentai" -> "https://imhentai.xxx" + sourcePath(id)
+        "nhentai" -> "https://nhentai.net" + sourcePath(id)
         else -> "https://mangadex.org/title/$id"
     }
 
@@ -69,11 +75,19 @@ class Sources(val client: OkHttpClient) {
     private val dex = MangaDex(client)
     private val demonic = WebSource("demonic", "https://demonicscans.org", client)
     private val weeb = WebSource("weeb", "https://weebcentral.com", client)
+    private val zap = WebSource("zap", "https://hentaizap.com", client)
+    private val imhentai = WebSource("imhentai", "https://imhentai.xxx", client)
 
     private fun web(key: String) =
         when (key) {
             "demonic" -> demonic
             "weeb" -> weeb
+            "zap" -> zap
+            "imhentai" -> imhentai
+            "nhentai" ->
+                throw IOException(
+                    "Nhentai integration is pending: gallery and reader HTML could not be verified. Choose another source."
+                )
             else ->
                 throw IOException(
                     "Comix is not available yet: its protected reader could not be verified. Choose another source."
@@ -86,6 +100,7 @@ class Sources(val client: OkHttpClient) {
             "weeb" ->
                 listOf("Popularity", "Subscribers", "Latest Updates", "Recently Added", "Alphabet")
             "mangadex" -> listOf("Popularity", "Rating", "Latest updates", "Title")
+            "zap", "imhentai" -> listOf("Latest", "Popular", "Top Rated", "Downloaded")
             else -> emptyList()
         }
 
@@ -125,6 +140,8 @@ class Sources(val client: OkHttpClient) {
                 when (sourceKey(id)) {
                     "demonic" -> header("Referer", "https://demonicscans.org/")
                     "weeb" -> header("Referer", "https://weebcentral.com/")
+                    "zap" -> header("Referer", "https://hentaizap.com/")
+                    "imhentai" -> header("Referer", "https://imhentai.xxx/")
                 }
             }
             .build()
@@ -162,6 +179,7 @@ class WebSource(
         }
 
     suspend fun tags(): List<SourceTag> {
+        if (key == "zap" || key == "imhentai") return galleryCategories
         if (key == "weeb")
             return listOf(
                     "Action",
@@ -189,6 +207,7 @@ class WebSource(
     }
 
     suspend fun browse(query: String, page: Int, filter: BrowseFilter): BrowsePage {
+        if (key == "zap" || key == "imhentai") return browseGallery(query, page, filter)
         val doc =
             if (key == "demonic") {
                 if (query.isNotBlank()) {
@@ -242,8 +261,9 @@ class WebSource(
         )
     }
 
-    fun parseBrowse(doc: Document): List<Manga> =
-        doc.select(
+    fun parseBrowse(doc: Document): List<Manga> {
+        if (key == "zap" || key == "imhentai") return parseGalleryBrowse(doc)
+        return doc.select(
                 if (key == "demonic") "a[href^=/manga/]:has(img)"
                 else
                     "article section a[href*=/series/]:has(img), article section a[href*=/series/]:has(source)"
@@ -271,9 +291,21 @@ class WebSource(
                     )
             }
             .distinctBy { it.id }
+    }
 
     suspend fun details(manga: Manga): Manga {
         val d = document(sourcePath(manga.id))
+        if (key == "zap" || key == "imhentai") {
+            val cover = d.selectFirst(if (key == "zap") ".hz-gallery-cover img" else ".left_cover img")
+            return manga.copy(
+                title = d.selectFirst(if (key == "zap") "#gallery-title" else ".right_details h1")
+                    ?.text()?.ifBlank { manga.title } ?: manga.title,
+                description = d.selectFirst("meta[name=description]")?.attr("content")
+                    ?.ifBlank { manga.description } ?: manga.description,
+                cover = cover?.let { it.absUrl(if (it.hasAttr("data-src")) "data-src" else "src") }
+                    ?.ifBlank { manga.cover } ?: manga.cover,
+            )
+        }
         val description =
             if (key == "demonic") d.selectFirst(".genres-list ~ .white-font")?.text()
             else d.selectFirst("li:has(strong:contains(Description)) > p")?.text()
@@ -282,6 +314,17 @@ class WebSource(
 
     suspend fun chapters(id: String): List<Chapter> {
         val path = sourcePath(id)
+        if (key == "zap" || key == "imhentai") {
+            val d = document(path)
+            val link = d.selectFirst(if (key == "zap") "a.hz-gallery-read" else ".left_cover > a")
+                ?: throw IOException("No reader link returned by ${sourceNames[key]}.")
+            val reader = link.absUrl("href").toHttpUrl()
+            val prefix = if (key == "zap") "g" else "view"
+            if (reader.host != base.toHttpUrl().host ||
+                !Regex("/$prefix/\\d+/1/").matches(reader.encodedPath))
+                throw IOException("Unverified reader link returned by ${sourceNames[key]}.")
+            return listOf(chapter(sourceId(key, reader.encodedPath), id, "Full gallery", null))
+        }
         val d =
             document(
                 if (key == "demonic") path
@@ -314,6 +357,22 @@ class WebSource(
 
     suspend fun pages(id: String): List<String> {
         val path = sourcePath(id)
+        if (key == "zap") return parsePages(document(path))
+        if (key == "imhentai") {
+            if (!Regex("/view/\\d+/1/").matches(path))
+                throw IOException("Invalid ImHentai reader path.")
+            val first = document(path)
+            val total = first.selectFirst("input#pages")?.attr("value")?.toIntOrNull()
+                ?.takeIf { it in 1..10000 }
+                ?: throw IOException("No valid page count returned by ImHentai.")
+            return (1..total).map { page ->
+                val d = if (page == 1) first else document(path.removeSuffix("1/") + "$page/")
+                if (d.selectFirst("img#gimg.image_$page") == null)
+                    throw IOException("ImHentai did not return reader page $page.")
+                parsePages(d).singleOrNull()
+                    ?: throw IOException("No image returned for ImHentai page $page.")
+            }
+        }
         val d =
             document(
                 if (key == "demonic") path
@@ -326,11 +385,97 @@ class WebSource(
         }
     }
 
-    fun parsePages(d: Document): List<String> =
-        d.select(if (key == "demonic") "img.imgholder[alt]" else "section[x-data~=scroll] > img")
+    fun parsePages(d: Document): List<String> {
+        if (key == "zap") return parseZapPages(d)
+        if (key == "imhentai")
+            return d.select("img#gimg").map { it.absUrl("src") }.filter { it.startsWith("https://") }
+        return d.select(if (key == "demonic") "img.imgholder[alt]" else "section[x-data~=scroll] > img")
             .map { it.absUrl("src") }
             .filter { it.startsWith("https://") }
             .distinct()
+    }
+
+    private val galleryCategories = listOf(
+        SourceTag("m", "Manga"),
+        SourceTag("d", "Doujinshi"),
+        SourceTag("w", "Western"),
+        SourceTag("i", "Image Set"),
+        SourceTag("a", "Artist CG"),
+        SourceTag("g", "Game CG"),
+    )
+
+    private suspend fun browseGallery(query: String, page: Int, filter: BrowseFilter): BrowsePage {
+        val url = if (query.isBlank() && filter.tags.isEmpty() &&
+            (filter.sort.isEmpty() || filter.sort == "Latest")) {
+            "$base/".toHttpUrl().newBuilder().addQueryParameter("page", page.toString())
+        } else {
+            val builder = "$base/search/".toHttpUrl().newBuilder()
+                .addQueryParameter("key", query)
+                .addQueryParameter("page", page.toString())
+            if (key == "zap") builder.addQueryParameter("filter", "yes")
+            val sort = when (filter.sort) {
+                "Popular" -> "pp"
+                "Top Rated" -> "tr"
+                "Downloaded" -> "dl"
+                else -> "lt"
+            }
+            listOf("lt", "pp", "tr", "dl").forEach {
+                builder.addQueryParameter(it, if (it == sort) "1" else "0")
+            }
+            galleryCategories.forEach {
+                builder.addQueryParameter(it.id, if (filter.tags.isEmpty() || it.id in filter.tags) "1" else "0")
+            }
+            listOf("en", "jp", "es", "fr", "kr", "de", "ru").forEach {
+                builder.addQueryParameter(it, "1")
+            }
+            builder
+        }
+        val d = document(url.build().toString().removePrefix(base))
+        val more = if (key == "zap") d.selectFirst("a[rel=next]") != null
+            else d.select(".pagination li:not(.disabled) a[href]").any {
+                it.absUrl("href").toHttpUrl().queryParameter("page")?.toIntOrNull() == page + 1
+            }
+        return BrowsePage(parseGalleryBrowse(d), more)
+    }
+
+    private fun parseGalleryBrowse(d: Document): List<Manga> =
+        d.select(if (key == "zap") ".hz-gallery-results article.hz-gallery-card" else ".galleries .thumb")
+            .mapNotNull { card ->
+                val link = card.selectFirst(if (key == "zap") ".hz-gallery-card__title a" else ".gallery_title a")
+                    ?: return@mapNotNull null
+                val img = card.selectFirst(if (key == "zap") ".hz-gallery-card__cover img" else ".inner_thumb img")
+                    ?: return@mapNotNull null
+                val path = link.absUrl("href").toHttpUrl().encodedPath
+                if (!Regex("/gallery/\\d+/").matches(path) || link.text().isBlank()) return@mapNotNull null
+                Manga(sourceId(key, path), link.text(), "",
+                    img.absUrl(if (img.hasAttr("data-src")) "data-src" else "src"))
+            }.distinctBy { it.id }
+
+    private fun parseZapPages(d: Document): List<String> {
+        val reader = d.selectFirst("#readerApp[data-reader-image-base][data-reader-total]")
+            ?: throw IOException("No page manifest returned by HentaiZap.")
+        if (reader.attr("data-reader-locked") == "1")
+            throw IOException("HentaiZap requires access verification for this gallery.")
+        val total = reader.attr("data-reader-total").toIntOrNull()?.takeIf { it in 1..10000 }
+            ?: throw IOException("No valid page count returned by HentaiZap.")
+        val json = d.selectFirst("script#readerPagesJson[type=application/json]")?.data()
+            ?: throw IOException("No page manifest returned by HentaiZap.")
+        val manifest = try { JSONArray(json).objects().sortedBy { it.getInt("page") } }
+            catch (e: org.json.JSONException) { throw IOException("Invalid HentaiZap page manifest.", e) }
+        if (manifest.size != total || manifest.map { it.optInt("page") } != (1..total).toList())
+            throw IOException("Incomplete HentaiZap page manifest.")
+        val imageBase = reader.absUrl("data-reader-image-base").trimEnd('/')
+        if (!imageBase.startsWith("https://")) throw IOException("Invalid HentaiZap image base.")
+        val pages = manifest.map {
+            val ext = it.optString("ext")
+            if (ext !in listOf("jpg", "jpeg", "png", "webp", "gif", "avif"))
+                throw IOException("Unsupported HentaiZap image extension.")
+            "$imageBase/${it.getInt("page")}.$ext"
+        }
+        if (d.selectFirst("img#readerImg")?.absUrl("src") != pages.first())
+            throw IOException("HentaiZap image and manifest do not match.")
+        return pages
+    }
 
     private fun chapter(id: String, manga: String, title: String, number: String?): Chapter {
         val attributes =

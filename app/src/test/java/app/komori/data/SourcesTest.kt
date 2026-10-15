@@ -18,7 +18,7 @@ class SourcesTest {
         assertEquals(path, sourcePath(first))
         assertEquals("mangadex", sourceKey("a-legacy-uuid"))
         assertEquals(
-            listOf("weeb", "demonic", "comix", "mangadex"),
+            listOf("weeb", "demonic", "comix", "mangadex", "zap", "imhentai", "nhentai"),
             sourceOrder("weeb,weeb,unknown"),
         )
     }
@@ -145,6 +145,143 @@ class SourcesTest {
                 source.chapters(sourceId("weeb", "/series/ID/Title"))
                 fail("Expected access error")
             } catch (_: IOException) {}
+        }
+    }
+
+    private fun fixture(name: String): String =
+        checkNotNull(javaClass.getResource("/sources/$name.html")).readText()
+
+    @Test
+    fun zapUsesGalleryReaderAndCompletePageManifest() = runBlocking {
+        MockWebServer().use { server ->
+            val source = WebSource("zap", server.url("/").toString().trimEnd('/'), MangaDex.client())
+            server.enqueue(MockResponse().setBody(fixture("zap-browse")))
+            val page = source.browse("", 1, BrowseFilter())
+            assertEquals("/?page=1", server.takeRequest().path)
+            assertTrue(page.hasMore)
+            val title = page.titles.single()
+            assertEquals("/gallery/7/", sourcePath(title.id))
+            assertEquals("https://cdn.example.com/zap/thumb.jpg", title.cover)
+            server.enqueue(MockResponse().setBody(fixture("zap-gallery")))
+            val details = source.details(title)
+            assertEquals("/gallery/7/", server.takeRequest().path)
+            assertEquals("Sample gallery description", details.description)
+            assertEquals("https://cdn.example.com/zap/cover.jpg", details.cover)
+            server.enqueue(MockResponse().setBody(fixture("zap-gallery")))
+            val chapter = source.chapters(title.id).single()
+            assertEquals("/gallery/7/", server.takeRequest().path)
+            assertNull(chapter.release().number)
+            assertEquals("Full gallery", chapter.release().label)
+            assertTrue(chapter.release().readable)
+            server.enqueue(MockResponse().setBody(fixture("zap-reader")))
+            assertEquals(listOf("https://cdn.example.com/zap/1.webp", "https://cdn.example.com/zap/2.webp"), source.pages(chapter.id))
+            val request = server.takeRequest()
+            assertEquals("/g/7/1/", request.path)
+            assertEquals(server.url("/").toString(), request.getHeader("Referer"))
+        }
+    }
+
+    @Test
+    fun imhentaiUsesGalleryReaderAndEveryHtmlPage() = runBlocking {
+        MockWebServer().use { server ->
+            val source = WebSource("imhentai", server.url("/").toString().trimEnd('/'), MangaDex.client())
+            server.enqueue(MockResponse().setBody(fixture("imhentai-browse")))
+            val page = source.browse("", 1, BrowseFilter())
+            assertEquals("/?page=1", server.takeRequest().path)
+            assertTrue(page.hasMore)
+            val title = page.titles.single()
+            assertEquals("https://cdn.example.com/im/thumb.jpg", title.cover)
+            server.enqueue(MockResponse().setBody(fixture("imhentai-gallery")))
+            val details = source.details(title)
+            assertEquals("/gallery/8/", server.takeRequest().path)
+            assertEquals("https://cdn.example.com/im/cover.jpg", details.cover)
+            assertEquals("Sample gallery description", details.description)
+            server.enqueue(MockResponse().setBody(fixture("imhentai-gallery")))
+            val chapter = source.chapters(title.id).single()
+            assertEquals("/gallery/8/", server.takeRequest().path)
+            assertNull(chapter.release().number)
+            assertEquals("Full gallery", chapter.release().label)
+            assertTrue(chapter.release().readable)
+            server.enqueue(MockResponse().setBody(fixture("imhentai-reader")))
+            server.enqueue(MockResponse().setBody(fixture("imhentai-reader").replace("image_1", "image_2").replace("/1.webp", "/2.png")))
+            assertEquals(listOf("https://cdn.example.com/im/1.webp", "https://cdn.example.com/im/2.png"), source.pages(chapter.id))
+            assertEquals("/view/8/1/", server.takeRequest().path)
+            assertEquals("/view/8/2/", server.takeRequest().path)
+        }
+    }
+
+    @Test
+    fun gallerySearchKeepsSortAndCategoriesOnLaterPages() = runBlocking {
+        for (key in listOf("zap", "imhentai")) {
+            MockWebServer().use { server ->
+                val source = WebSource(key, server.url("/").toString().trimEnd('/'), MangaDex.client())
+                server.enqueue(MockResponse().setBody(fixture("$key-browse")))
+                source.browse("sample & title", 2, BrowseFilter("Popular", setOf("m")))
+                val request = server.takeRequest()
+                val url = checkNotNull(request.requestUrl)
+                assertEquals("GET", request.method)
+                assertEquals("/search/", url.encodedPath)
+                assertEquals("sample & title", url.queryParameter("key"))
+                assertEquals("2", url.queryParameter("page"))
+                assertEquals("1", url.queryParameter("pp"))
+                assertEquals("0", url.queryParameter("lt"))
+                assertEquals("1", url.queryParameter("m"))
+                assertEquals("0", url.queryParameter("d"))
+                assertEquals("1", url.queryParameter("en"))
+                if (key == "zap") assertEquals("yes", url.queryParameter("filter"))
+            }
+        }
+    }
+
+    @Test
+    fun incompleteGalleryReadersFailInsteadOfSavingPartialPages() = runBlocking {
+        MockWebServer().use { server ->
+            val base = server.url("/").toString().trimEnd('/')
+            server.enqueue(MockResponse().setBody(fixture("zap-reader").replace("data-reader-total=\"2\"", "data-reader-total=\"3\"")))
+            try {
+                WebSource("zap", base, MangaDex.client()).pages(sourceId("zap", "/g/7/1/"))
+                fail("Expected incomplete manifest error")
+            } catch (e: IOException) {
+                assertTrue(e.message.orEmpty().contains("Incomplete"))
+            }
+            server.enqueue(MockResponse().setBody(fixture("imhentai-reader")))
+            server.enqueue(MockResponse().setBody(fixture("imhentai-reader")))
+            try {
+                WebSource("imhentai", base, MangaDex.client()).pages(sourceId("imhentai", "/view/8/1/"))
+                fail("Expected repeated reader page error")
+            } catch (e: IOException) {
+                assertTrue(e.message.orEmpty().contains("page 2"))
+            }
+        }
+    }
+
+    @Test
+    fun galleryKeysPreserveLegacyOrderAndImageReferers() {
+        val keys = listOf("zap", "imhentai", "nhentai")
+        assertTrue(keys.all { Regex("[a-z0-9]+").matches(it) })
+        assertEquals(7, sourceNames.size)
+        assertEquals(listOf("demonic", "weeb", "comix", "mangadex") + keys,
+            sourceOrder("demonic,weeb,comix,mangadex"))
+        val sources = Sources(MangaDex.client())
+        for ((key, base) in listOf("zap" to "https://hentaizap.com", "imhentai" to "https://imhentai.xxx")) {
+            val id = sourceId(key, "/gallery/7/")
+            assertEquals("$base/gallery/7/", sourcePageUrl(id))
+            assertEquals("$base/", sources.imageRequest("https://cdn.example.com/1.webp", id).header("Referer"))
+        }
+    }
+
+    @Test
+    fun nhentaiStaysPendingWithoutVerifiedReaderHtml() = runBlocking {
+        MockWebServer().use { server ->
+            val sources = Sources(MangaDex.client())
+            try {
+                sources.browse("nhentai", "", 1, BrowseFilter(), null)
+                fail("Expected pending source error")
+            } catch (e: IOException) {
+                assertTrue(e.message.orEmpty().contains("pending"))
+                assertTrue(e.message.orEmpty().contains("HTML"))
+            }
+            assertEquals(0, server.requestCount)
         }
     }
 }

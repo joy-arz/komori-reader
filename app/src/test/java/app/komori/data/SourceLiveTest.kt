@@ -35,4 +35,43 @@ class SourceLiveTest {
         assertTrue(chapters.size > 400)
         assertTrue(source.pages(first.id).isNotEmpty())
     }
+
+    @Test
+    fun zapBrowseSearchChaptersAndPages() = runBlocking {
+        assumeTrue(System.getenv("KOMORI_SOURCE_SMOKE") == "1")
+        gallerySmoke("zap", "https://hentaizap.com")
+    }
+
+    @Test
+    fun imhentaiBrowseSearchChaptersAndPages() = runBlocking {
+        assumeTrue(System.getenv("KOMORI_SOURCE_SMOKE") == "1")
+        gallerySmoke("imhentai", "https://imhentai.xxx")
+    }
+
+    @Test
+    fun nhentaiRemainsExplicitlyPending() = runBlocking {
+        assumeTrue(System.getenv("KOMORI_SOURCE_SMOKE") == "1")
+        try {
+            Sources(MangaDex.client()).browse("nhentai", "", 1, BrowseFilter(), null)
+            fail("Expected pending integration")
+        } catch (e: java.io.IOException) {
+            assertTrue(e.message.orEmpty().contains("pending"))
+        }
+    }
+
+    private suspend fun gallerySmoke(key: String, base: String) {
+        val source = WebSource(key, base, MangaDex.client())
+        val page = source.browse("", 1, BrowseFilter())
+        assertTrue(page.titles.isNotEmpty())
+        val second = source.browse("", 2, BrowseFilter())
+        assertTrue(second.titles.isNotEmpty())
+        assertNotEquals(page.titles.map { it.id }, second.titles.map { it.id })
+        val title = page.titles.first()
+        assertTrue(source.details(title).description.isNotBlank())
+        val search = source.browse(title.title, 1, BrowseFilter())
+        assertTrue(search.titles.any { it.id == title.id })
+        val chapters = source.chapters(title.id)
+        assertEquals(1, chapters.size)
+        assertTrue(source.pages(chapters.single().id).isNotEmpty())
+    }
 }
