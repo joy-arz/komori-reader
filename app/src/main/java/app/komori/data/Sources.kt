@@ -77,6 +77,7 @@ class Sources(val client: OkHttpClient) {
     private val weeb = WebSource("weeb", "https://weebcentral.com", client)
     private val zap = WebSource("zap", "https://hentaizap.com", client)
     private val imhentai = WebSource("imhentai", "https://imhentai.xxx", client)
+    private val nhentai = WebSource("nhentai", "https://nhentai.net", client)
 
     private fun web(key: String) =
         when (key) {
@@ -84,10 +85,7 @@ class Sources(val client: OkHttpClient) {
             "weeb" -> weeb
             "zap" -> zap
             "imhentai" -> imhentai
-            "nhentai" ->
-                throw IOException(
-                    "Nhentai integration is pending: gallery and reader HTML could not be verified. Choose another source."
-                )
+            "nhentai" -> nhentai
             else ->
                 throw IOException(
                     "Comix is not available yet: its protected reader could not be verified. Choose another source."
@@ -101,6 +99,7 @@ class Sources(val client: OkHttpClient) {
                 listOf("Popularity", "Subscribers", "Latest Updates", "Recently Added", "Alphabet")
             "mangadex" -> listOf("Popularity", "Rating", "Latest updates", "Title")
             "zap", "imhentai" -> listOf("Latest", "Popular", "Top Rated", "Downloaded")
+            "nhentai" -> listOf("Latest")
             else -> emptyList()
         }
 
@@ -142,6 +141,7 @@ class Sources(val client: OkHttpClient) {
                     "weeb" -> header("Referer", "https://weebcentral.com/")
                     "zap" -> header("Referer", "https://hentaizap.com/")
                     "imhentai" -> header("Referer", "https://imhentai.xxx/")
+                    "nhentai" -> header("Referer", "https://nhentai.net/")
                 }
             }
             .build()
@@ -179,6 +179,7 @@ class WebSource(
         }
 
     suspend fun tags(): List<SourceTag> {
+        if (key == "nhentai") return emptyList()
         if (key == "zap" || key == "imhentai") return galleryCategories
         if (key == "weeb")
             return listOf(
@@ -207,6 +208,15 @@ class WebSource(
     }
 
     suspend fun browse(query: String, page: Int, filter: BrowseFilter): BrowsePage {
+        if (key == "nhentai") {
+            if (filter.tags.isNotEmpty() || filter.sort !in listOf("", "Latest"))
+                throw IOException("Nhentai currently supports title search and latest browsing only.")
+            val url = "$base${if (query.isBlank()) "/" else "/search/"}".toHttpUrl().newBuilder()
+                .addQueryParameter("page", page.toString())
+            if (query.isNotBlank()) url.addQueryParameter("q", query)
+            val d = document(url.build().toString().removePrefix(base))
+            return BrowsePage(parseBrowse(d), d.selectFirst(".pagination a.next[href]") != null)
+        }
         if (key == "zap" || key == "imhentai") return browseGallery(query, page, filter)
         val doc =
             if (key == "demonic") {
@@ -262,6 +272,14 @@ class WebSource(
     }
 
     fun parseBrowse(doc: Document): List<Manga> {
+        if (key == "nhentai")
+            return doc.select(".gallery > a.cover[href]").mapNotNull { link ->
+                val path = link.absUrl("href").toHttpUrl().encodedPath
+                val title = link.selectFirst(".caption")?.text().orEmpty()
+                val cover = link.selectFirst("img")?.absUrl("src").orEmpty()
+                if (!Regex("/g/\\d+/").matches(path) || title.isBlank() || !cover.startsWith("https://")) null
+                else Manga(sourceId(key, path), title, "", cover)
+            }.distinctBy { it.id }
         if (key == "zap" || key == "imhentai") return parseGalleryBrowse(doc)
         return doc.select(
                 if (key == "demonic") "a[href^=/manga/]:has(img)"
@@ -295,6 +313,16 @@ class WebSource(
 
     suspend fun details(manga: Manga): Manga {
         val d = document(sourcePath(manga.id))
+        if (key == "nhentai") {
+            val description = d.selectFirst("meta[name=description]")?.attr("content").orEmpty()
+            val tags = d.select("#tags a[href^=/tag/] .name").eachText()
+            return manga.copy(
+                title = d.selectFirst("#info h1.title")?.text()?.ifBlank { manga.title } ?: manga.title,
+                cover = d.selectFirst("#cover img")?.absUrl("src")?.ifBlank { manga.cover } ?: manga.cover,
+                description = listOf(description, tags.takeIf { it.isNotEmpty() }?.joinToString(prefix = "Tags: "))
+                    .filterNotNull().filter { it.isNotBlank() }.joinToString("\n\n").ifBlank { manga.description },
+            )
+        }
         if (key == "zap" || key == "imhentai") {
             val cover = d.selectFirst(if (key == "zap") ".hz-gallery-cover img" else ".left_cover img")
             return manga.copy(
@@ -314,6 +342,15 @@ class WebSource(
 
     suspend fun chapters(id: String): List<Chapter> {
         val path = sourcePath(id)
+        if (key == "nhentai") {
+            if (!Regex("/g/\\d+/").matches(path)) throw IOException("Invalid Nhentai gallery path.")
+            val link = document(path).selectFirst("#cover > a[href]")
+                ?: throw IOException("No reader link returned by Nhentai.")
+            val reader = link.absUrl("href").toHttpUrl()
+            if (reader.host != base.toHttpUrl().host || reader.encodedPath != "${path}1/")
+                throw IOException("Unverified reader link returned by Nhentai.")
+            return listOf(chapter(sourceId(key, reader.encodedPath), id, "Full gallery", null))
+        }
         if (key == "zap" || key == "imhentai") {
             val d = document(path)
             val link = d.selectFirst(if (key == "zap") "a.hz-gallery-read" else ".left_cover > a")
@@ -357,6 +394,10 @@ class WebSource(
 
     suspend fun pages(id: String): List<String> {
         val path = sourcePath(id)
+        if (key == "nhentai") {
+            if (!Regex("/g/\\d+/1/").matches(path)) throw IOException("Invalid Nhentai reader path.")
+            return parsePages(document(path))
+        }
         if (key == "zap") return parsePages(document(path))
         if (key == "imhentai") {
             if (!Regex("/view/\\d+/1/").matches(path))
@@ -386,6 +427,7 @@ class WebSource(
     }
 
     fun parsePages(d: Document): List<String> {
+        if (key == "nhentai") return parseNhentaiPages(d)
         if (key == "zap") return parseZapPages(d)
         if (key == "imhentai")
             return d.select("img#gimg").map { it.absUrl("src") }.filter { it.startsWith("https://") }
@@ -478,6 +520,43 @@ class WebSource(
         if (d.selectFirst("img#readerImg")?.absUrl("src") != pages.first())
             throw IOException("HentaiZap image and manifest do not match.")
         return pages
+    }
+
+    private fun parseNhentaiPages(d: Document): List<String> {
+        val back = d.selectFirst(".reader-bar a.go-back[href]")?.absUrl("href")
+            ?: throw IOException("No gallery identity returned by Nhentai.")
+        val galleryId = Regex("/g/(\\d+)/").matchEntire(back.toHttpUrl().encodedPath)?.groupValues?.get(1)
+            ?: throw IOException("Invalid Nhentai gallery identity.")
+        val data = d.select("script[type=application/json][data-sveltekit-fetched][data-url]")
+            .firstOrNull { it.attr("data-url") == "/api/v2/galleries/$galleryId" }?.data()
+            ?: throw IOException("No page manifest returned by Nhentai.")
+        try {
+            val response = JSONObject(data)
+            if (response.optInt("status") != 200) throw IOException("Nhentai page manifest is unavailable.")
+            val gallery = JSONObject(response.getString("body"))
+            if (gallery.optString("id") != galleryId) throw IOException("Nhentai gallery identity does not match.")
+            val total = gallery.optInt("num_pages").takeIf { it in 1..10000 }
+                ?: throw IOException("No valid page count returned by Nhentai.")
+            val manifest = gallery.getJSONArray("pages").objects().sortedBy { it.getInt("number") }
+            if (manifest.size != total || manifest.map { it.getInt("number") } != (1..total).toList())
+                throw IOException("Incomplete Nhentai page manifest.")
+            val image = d.selectFirst("#image-container img")?.absUrl("src")
+                ?.takeIf { it.startsWith("https://") }?.toHttpUrl()
+                ?: throw IOException("No reader image returned by Nhentai.")
+            if (image.encodedPath != "/" + manifest.first().getString("path"))
+                throw IOException("Nhentai image and manifest do not match.")
+            val media = gallery.getString("media_id")
+            if (!Regex("\\d+").matches(media)) throw IOException("Invalid Nhentai media identity.")
+            return manifest.map {
+                val path = it.getString("path")
+                val number = it.getInt("number")
+                if (!Regex("galleries/$media/$number\\.[A-Za-z0-9.]+").matches(path))
+                    throw IOException("Invalid Nhentai page path.")
+                image.newBuilder().encodedPath("/$path").query(null).fragment(null).build().toString()
+            }
+        } catch (e: org.json.JSONException) {
+            throw IOException("Invalid Nhentai page manifest.", e)
+        }
     }
 
     private fun chapter(id: String, manga: String, title: String, number: String?): Chapter {

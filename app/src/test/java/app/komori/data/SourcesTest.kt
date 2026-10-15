@@ -7,6 +7,7 @@ import okhttp3.mockwebserver.MockWebServer
 import org.jsoup.Jsoup
 import org.junit.Assert.*
 import org.junit.Test
+import org.json.JSONObject
 
 class SourcesTest {
     @Test
@@ -271,17 +272,87 @@ class SourcesTest {
     }
 
     @Test
-    fun nhentaiStaysPendingWithoutVerifiedReaderHtml() = runBlocking {
+    fun nhentaiUsesGalleryReaderAndEmbeddedApiManifest() = runBlocking {
         MockWebServer().use { server ->
-            val sources = Sources(MangaDex.client())
+            val source = WebSource("nhentai", server.url("/").toString().trimEnd('/'), MangaDex.client())
+            server.enqueue(MockResponse().setBody(fixture("nhentai-browse")))
+            val page = source.browse("", 1, BrowseFilter())
+            assertEquals("/?page=1", server.takeRequest().path)
+            assertTrue(page.hasMore)
+            val title = page.titles.single()
+            assertEquals("/g/9/", sourcePath(title.id))
+            assertEquals("Sample gallery", title.title)
+            assertEquals("https://thumbs.example.com/galleries/90/thumb.webp", title.cover)
+            server.enqueue(MockResponse().setBody(fixture("nhentai-gallery")))
+            val details = source.details(title)
+            assertEquals("/g/9/", server.takeRequest().path)
+            assertEquals("[Artist] Sample gallery", details.title)
+            assertEquals("Sample gallery description\n\nTags: colour", details.description)
+            assertEquals("https://thumbs.example.com/galleries/90/cover.webp.webp", details.cover)
+            server.enqueue(MockResponse().setBody(fixture("nhentai-gallery")))
+            val chapter = source.chapters(title.id).single()
+            assertEquals("/g/9/", server.takeRequest().path)
+            assertNull(chapter.release().number)
+            assertEquals("Full gallery", chapter.release().label)
+            assertTrue(chapter.release().readable)
+            server.enqueue(MockResponse().setBody(fixture("nhentai-reader")))
+            assertEquals(listOf("https://images.example.com/galleries/90/1.webp", "https://images.example.com/galleries/90/2.webp.webp"), source.pages(chapter.id))
+            val request = server.takeRequest()
+            assertEquals("/g/9/1/", request.path)
+            assertEquals(server.url("/").toString(), request.getHeader("Referer"))
+            assertEquals(4, server.requestCount)
+            assertEquals("https://nhentai.net/g/9/", sourcePageUrl(title.id))
+            assertEquals("https://nhentai.net/", Sources(MangaDex.client())
+                .imageRequest("https://images.example.com/galleries/90/1.webp", chapter.id).header("Referer"))
+        }
+    }
+
+    @Test
+    fun nhentaiSearchUsesVerifiedQueryField() = runBlocking {
+        MockWebServer().use { server ->
+            val source = WebSource("nhentai", server.url("/").toString().trimEnd('/'), MangaDex.client())
+            server.enqueue(MockResponse().setBody(fixture("nhentai-browse")))
+            source.browse("sample & title", 2, BrowseFilter("Latest"))
+            val request = server.takeRequest()
+            assertEquals("GET", request.method)
+            assertEquals("/search/", request.requestUrl!!.encodedPath)
+            assertEquals("sample & title", request.requestUrl!!.queryParameter("q"))
+            assertEquals("2", request.requestUrl!!.queryParameter("page"))
+            assertTrue(source.tags().isEmpty())
+            assertEquals(listOf("Latest"), Sources(MangaDex.client()).sorts("nhentai"))
+        }
+    }
+
+    @Test
+    fun nhentaiRejectsIncompleteAndMismatchedManifests() {
+        val source = WebSource("nhentai", "https://example.com", MangaDex.client())
+        val valid = fixture("nhentai-reader")
+        val escaped = JSONObject(checkNotNull(Jsoup.parse(valid)
+            .selectFirst("script[data-url=/api/v2/galleries/9]")).data())
+        val payload = JSONObject(escaped.getString("body"))
+        val invalid = listOf(
+            "Incomplete" to JSONObject(escaped.toString()).put("body", JSONObject(payload.toString()).put("num_pages", 3).toString()),
+            "identity does not match" to JSONObject(escaped.toString()).put("body", JSONObject(payload.toString()).put("id", 10).toString()),
+            "Invalid Nhentai page path" to JSONObject(escaped.toString()).put("body", JSONObject(payload.toString()).put("media_id", "91").toString()),
+            "unavailable" to JSONObject(escaped.toString()).put("status", 403),
+        )
+        for ((message, manifest) in invalid) {
+            val d = Jsoup.parse(valid, "https://example.com/g/9/1/")
+            d.selectFirst("script[data-url=/api/v2/galleries/9]")!!.html(manifest.toString())
             try {
-                sources.browse("nhentai", "", 1, BrowseFilter(), null)
-                fail("Expected pending source error")
+                source.parsePages(d)
+                fail("Expected invalid manifest error")
             } catch (e: IOException) {
-                assertTrue(e.message.orEmpty().contains("pending"))
-                assertTrue(e.message.orEmpty().contains("HTML"))
+                assertTrue(e.message.orEmpty().contains(message))
             }
-            assertEquals(0, server.requestCount)
+        }
+        val missing = Jsoup.parse(valid, "https://example.com/g/9/1/")
+        missing.select("script[data-url=/api/v2/galleries/9]").remove()
+        try {
+            source.parsePages(missing)
+            fail("Expected missing manifest error")
+        } catch (e: IOException) {
+            assertTrue(e.message.orEmpty().contains("No page manifest"))
         }
     }
 }

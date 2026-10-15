@@ -49,14 +49,9 @@ class SourceLiveTest {
     }
 
     @Test
-    fun nhentaiRemainsExplicitlyPending() = runBlocking {
+    fun nhentaiBrowseSearchChaptersAndPages() = runBlocking {
         assumeTrue(System.getenv("KOMORI_SOURCE_SMOKE") == "1")
-        try {
-            Sources(MangaDex.client()).browse("nhentai", "", 1, BrowseFilter(), null)
-            fail("Expected pending integration")
-        } catch (e: java.io.IOException) {
-            assertTrue(e.message.orEmpty().contains("pending"))
-        }
+        gallerySmoke("nhentai", "https://nhentai.net")
     }
 
     private suspend fun gallerySmoke(key: String, base: String) {
