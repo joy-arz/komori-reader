@@ -420,10 +420,13 @@ class WebSource(
                 else -> "lt"
             }
             listOf("lt", "pp", "tr", "dl").forEach {
-                builder.addQueryParameter(it, if (it == sort) "1" else "0")
+                if (it == sort || key == "imhentai")
+                    builder.addQueryParameter(it, if (it == sort) "1" else "0")
             }
             galleryCategories.forEach {
-                builder.addQueryParameter(it.id, if (filter.tags.isEmpty() || it.id in filter.tags) "1" else "0")
+                val selected = filter.tags.isEmpty() || it.id in filter.tags
+                if (selected || key == "imhentai")
+                    builder.addQueryParameter(it.id, if (selected) "1" else "0")
             }
             listOf("en", "jp", "es", "fr", "kr", "de", "ru").forEach {
                 builder.addQueryParameter(it, "1")

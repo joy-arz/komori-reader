@@ -224,9 +224,9 @@ class SourcesTest {
                 assertEquals("sample & title", url.queryParameter("key"))
                 assertEquals("2", url.queryParameter("page"))
                 assertEquals("1", url.queryParameter("pp"))
-                assertEquals("0", url.queryParameter("lt"))
+                assertEquals(if (key == "zap") null else "0", url.queryParameter("lt"))
                 assertEquals("1", url.queryParameter("m"))
-                assertEquals("0", url.queryParameter("d"))
+                assertEquals(if (key == "zap") null else "0", url.queryParameter("d"))
                 assertEquals("1", url.queryParameter("en"))
                 if (key == "zap") assertEquals("yes", url.queryParameter("filter"))
             }
