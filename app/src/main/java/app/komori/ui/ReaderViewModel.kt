@@ -77,6 +77,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         }
 
     fun search(text: String = query, creator: Creator? = creatorFilter, more: Boolean = false) {
+        if (more && (searchJob?.isActive == true || !canLoadMore || results.value.isEmpty())) return
         searchJob?.cancel()
         searchJob = task {
             loading.value = true
@@ -85,6 +86,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                 if (!more) {
                     results.value = emptyList()
                     nextOffset = 1
+                    canLoadMore = true
                     query = text
                     if (creator != null && creator.id != creatorFilter?.id)
                         browseFilter.value = browseFilter.value.copy(facetPath = "", tags = emptySet())
@@ -112,9 +114,10 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                     )
                 val found = foundPage.titles
                 nextOffset += 1
-                results.value =
-                    ((if (more) results.value else emptyList()) + found).distinctBy { it.id }
-                canLoadMore = foundPage.hasMore
+                val previous = if (more) results.value else emptyList()
+                val merged = (previous + found).distinctBy { it.id }
+                canLoadMore = PaginationPolicy.hasNext(foundPage.hasMore, previous.size, merged.size)
+                results.value = merged
             } finally {
                 loading.value = false
             }

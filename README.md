@@ -8,6 +8,8 @@ A quiet, lightweight Android manga reader. Built with Kotlin and Compose, with n
 
 ## Available now
 
+- Source results automatically load the next page near the end; failures keep a manual retry and repeated pages stop automatic loading.
+
 - Reorderable source tabs: DemonicScans, WeebCentral, MangaDex, HentaiZap, ImHentai and Nhentai. Comix is removed; existing source preferences are filtered automatically. WeebCentral remains experimental.
 - Native DemonicScans reading and downloads; views/new/title browsing and genre selection. Its title search is separate from genre browsing.
 - MangaDex search, popularity/rating/update/title sorting and tag filters, with safe/suggestive catalog filtering.
@@ -34,7 +36,7 @@ MangaDex and scanlation groups are credited in the application. This is an indep
 
 ## Install
 
-Download [komori-0.6.0-alpha.1.apk](https://github.com/joy-arz/komori-reader/releases/download/v0.6.0-alpha.1/komori-0.6.0-alpha.1.apk), or open [GitHub Releases](https://github.com/joy-arz/komori-reader/releases) and expand **Assets**. Choose the `.apk` file, not the source-code archives. Alpha releases are signed with the same private release key, allowing future updates without uninstalling.
+Download [komori-0.6.0-alpha.2.apk](https://github.com/joy-arz/komori-reader/releases/download/v0.6.0-alpha.2/komori-0.6.0-alpha.2.apk), or open [GitHub Releases](https://github.com/joy-arz/komori-reader/releases) and expand **Assets**. Choose the `.apk` file, not the source-code archives. Alpha releases are signed with the same private release key, allowing future updates without uninstalling.
 
 ## Build
 
@@ -87,3 +89,5 @@ Install version 0.5 manually once if coming from an older build. Subsequent laun
 MangaDex external-only chapters cannot supply pages to the native reader. Start reading skips those entries and chooses the first readable chapter. Their separately labeled external links remain available. DemonicScans and WeebCentral pages use the native paged/webtoon reader and the same download storage, not embedded website readers. Completed downloads can be opened directly without a source refresh. MangaDex IDs and existing library/download data are retained.
 
 Source websites may block requests or change their HTML. WeebCentral's parser and request routing have fixture coverage but live reading has not been verified on the current network. Use Verify source for HTTP 403 or a browser-verification prompt, complete verification manually, then Retry native access. Download jobs waiting for verification retain completed pages; resume them from Downloads after verification. Reset sessions clears all source browser cookies/storage without changing library data. Browser verification cannot guarantee that a source will accept native requests. Unsupported sources are not represented as working readers.
+
+The complete prioritized backlog is tracked in [TODO](docs/TODO.md).

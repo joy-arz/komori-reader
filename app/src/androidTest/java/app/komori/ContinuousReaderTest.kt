@@ -123,6 +123,7 @@ class ContinuousReaderTest {
                 "Chapter $number should be completed",
                 app.dao.progress("$id-$number")!!.completed,
             )
+            waitUntil { runBlocking { app.dao.shelf(id)?.lastRelease == "$id-4" } }
             assertEquals("$id-4", app.dao.shelf(id)?.lastRelease)
             instrumentation.runOnMainSync {
                 vm.read(chapters.first().release().copy(local = true))

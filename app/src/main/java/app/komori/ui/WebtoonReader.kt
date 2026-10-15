@@ -43,6 +43,9 @@ fun WebtoonReader(
     onTap: () -> Unit = {},
 ) {
     val settings by vm.settings.collectAsStateWithLifecycle()
+    val chapterFeed by vm.chapters.collectAsStateWithLifecycle()
+    val titlePreferences by vm.preferences.collectAsStateWithLifecycle()
+    val shelf by vm.shelf.collectAsStateWithLifecycle()
     val initialChapter = remember { chapter }
     val session = remember { vm.readerSession.value }
     val initialPage = remember { vm.readerPage.value }
@@ -55,7 +58,7 @@ fun WebtoonReader(
     var nextLoading by remember { mutableStateOf(false) }
     var nextAttempt by remember { mutableIntStateOf(0) }
     val tail = window.last()
-    val next = vm.nextChapter(tail)
+    val next = remember(tail, chapterFeed, titlePreferences, shelf, settings) { vm.nextChapter(tail) }
     val nextCountdown =
         key(tail.id) {
             imageRetryCountdown(nextError != null && !requiresSourceAction(nextError), settings.retrySeconds) { nextAttempt++ }
@@ -215,22 +218,22 @@ fun WebtoonReader(
                                 val top = strip * STRIP_HEIGHT
                                 val bottom = minOf(top + STRIP_HEIGHT, image.height)
                                 var availableFile by remember { mutableStateOf<File?>(null) }
-                                var decodeError by remember { mutableStateOf(false) }
+                                var decodeError by remember { mutableStateOf<Exception?>(null) }
                                 var retry by remember { mutableIntStateOf(0) }
                                 val countdown =
-                                    imageRetryCountdown(decodeError, settings.retrySeconds) {
+                                    imageRetryCountdown(decodeError != null && !requiresSourceAction(decodeError), settings.retrySeconds) {
                                         retry++
                                     }
                                 LaunchedEffect(retry) {
                                     availableFile = null
-                                    decodeError = false
+                                    decodeError = null
                                     try {
                                         if (retry > 0) vm.invalidateCachedPage(release, page)
                                         availableFile = vm.pageFileFor(release, page)
                                     } catch (e: CancellationException) {
                                         throw e
-                                    } catch (_: Exception) {
-                                        decodeError = true
+                                    } catch (e: Exception) {
+                                        decodeError = e
                                     }
                                 }
                                 Box(
@@ -254,13 +257,13 @@ fun WebtoonReader(
                                                                 override fun onImageLoadError(
                                                                     e: Exception
                                                                 ) {
-                                                                    decodeError = true
+                                                                    decodeError = e
                                                                 }
 
                                                                 override fun onTileLoadError(
                                                                     e: Exception
                                                                 ) {
-                                                                    decodeError = true
+                                                                    decodeError = e
                                                                 }
                                                             }
                                                         )
@@ -285,15 +288,14 @@ fun WebtoonReader(
                                                 onRelease = { it.recycle() },
                                             )
                                         }
-                                    if (decodeError)
-                                        Button(
-                                            onClick = { retry++ },
-                                            modifier = Modifier.align(Alignment.Center),
-                                        ) {
-                                            Text(
-                                                if (countdown > 0) "Retry image · ${countdown}s"
-                                                else "Retry image"
-                                            )
+                                    if (decodeError != null)
+                                        Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Text(connectionMessage(decodeError!!), color = Color.White)
+                                            if (requiresSourceAction(decodeError))
+                                                VerifySourceButton(vm, sourceKey(release.mangaId))
+                                            else Button(onClick = { retry++ }) {
+                                                Text(if (countdown > 0) "Retry image · ${countdown}s" else "Retry image")
+                                            }
                                         }
                                 }
                             }

@@ -405,6 +405,18 @@ private fun Discover(vm: ReaderViewModel) {
     val filter by vm.browseFilter.collectAsStateWithLifecycle()
     val tags by vm.tags.collectAsStateWithLifecycle()
     val activeCreator by vm.activeCreator.collectAsStateWithLifecycle()
+    val browseError by vm.error.collectAsStateWithLifecycle()
+    val grid = rememberLazyGridState()
+    val nearEnd by remember {
+        derivedStateOf {
+            val info = grid.layoutInfo
+            info.totalItemsCount > 0 && (info.visibleItemsInfo.lastOrNull()?.index ?: -1) >= info.totalItemsCount - 5
+        }
+    }
+    LaunchedEffect(nearEnd, results.size, loading, browseError, activeSource, filter) {
+        if (nearEnd && !loading && browseError == null && results.isNotEmpty()) vm.search(more = true)
+    }
+    LaunchedEffect(activeSource, filter) { grid.scrollToItem(0) }
     var showFilters by remember { mutableStateOf(false) }
     var query by rememberSaveable(activeSource) { mutableStateOf("") }
     if (showFilters) SourceFilters(vm, activeSource, filter, tags) { showFilters = false }
@@ -481,6 +493,7 @@ private fun Discover(vm: ReaderViewModel) {
         else
             MangaGrid(
                 results,
+                gridState = grid,
                 onOpen = { vm.open(it) },
                 onRead = { vm.open(it, true) },
                 subtitle = { title ->
@@ -496,7 +509,7 @@ private fun Discover(vm: ReaderViewModel) {
                             onClick = { vm.search(more = true) },
                             modifier = Modifier.fillMaxWidth(),
                         ) {
-                            Text("Load more titles")
+                            Text(if (loading) "Loading more titles…" else if (browseError != null) "Retry loading titles" else "Load more titles")
                         }
                 },
             )
@@ -510,9 +523,11 @@ private fun MangaGrid(
     onRead: (Manga) -> Unit,
     subtitle: (Manga) -> String = { "" },
     footer: @Composable () -> Unit = {},
+    gridState: LazyGridState = rememberLazyGridState(),
 ) {
     LazyVerticalGrid(
         GridCells.Adaptive(140.dp),
+        state = gridState,
         contentPadding = PaddingValues(20.dp, 4.dp, 20.dp, 24.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalArrangement = Arrangement.spacedBy(22.dp),

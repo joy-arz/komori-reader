@@ -133,3 +133,10 @@ On the final debug app, changing One Punch-Man from English to Indonesian loaded
 - Emulator UI inspection confirmed the separate Authors destination and its search/empty state, the HentaiZap Title/Tag/Author controls, and entry into Verify source with the real origin, Retry native access and Reset sessions controls. Inspection prompted a baseline padding correction for the verification activity. Manual website challenge completion was not claimed.
 - Direct live HTTP probes to HentaiZap and Nhentai returned HTTP 403 on this network. Fixture/mock-server success does not establish live source compatibility. The shared-cookie mechanism was tested against Android CookieManager with synthetic cookie values, including HttpOnly, path scoping, expiry cleanup and exclusion from unrelated CDN/HTTP requests.
 - Broader findings, implemented fixes and remaining validation limits: [source/session review](SOURCE_SESSION_REVIEW_2026-10-15.md).
+
+## 0.6.0-alpha.2 automatic loading — October 16, 2026
+
+- Source grids request another page near the end, preserving current query/source/filters. The ViewModel prevents overlapping pagination, retains results on failure and stops when a source returns no new IDs. Four pagination regressions cover advancing results, repeated results, an empty first page and the source end marker.
+- Webtoon next-chapter selection observes refreshed feeds and preferences. Strip reload errors now preserve exception types, suppress automated retries for verification/access failures and expose Verify source. Forward continuous reading remains controlled by the existing setting; paged reading advances on user navigation, not a timer.
+- Local JVM run: 72 total, 68 passed and four opt-in live-source tests skipped. Debug APK and instrumentation APK assembled. Local lint was initially interrupted while freeing emulator memory; the subsequent complete check passed.
+- All audit recommendations are recorded in docs/TODO.md. This patch does not claim the entire backlog is implemented.
