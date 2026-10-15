@@ -24,6 +24,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -31,6 +33,8 @@ import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.komori.BuildConfig
 import app.komori.data.*
+import app.komori.domain.DownloadChoice
+import app.komori.domain.DownloadPolicy
 import coil.compose.AsyncImage
 import org.json.JSONArray
 
@@ -67,6 +71,7 @@ fun KomoriScreen(vm: ReaderViewModel) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val selected by vm.selected.collectAsStateWithLifecycle()
     val reader by vm.reader.collectAsStateWithLifecycle()
+    val readerSession by vm.readerSession.collectAsStateWithLifecycle()
     val error by vm.error.collectAsStateWithLifecycle()
     val notice by vm.notice.collectAsStateWithLifecycle()
     val loading by vm.loading.collectAsStateWithLifecycle()
@@ -93,7 +98,7 @@ fun KomoriScreen(vm: ReaderViewModel) {
         UpdateDialog()
         Surface(Modifier.fillMaxSize()) {
             if (reader != null)
-                key(reader!!.id) {
+                key(readerSession) {
                     MaterialTheme(colorScheme = Night) {
                         Surface(color = Color.Black, contentColor = Night.onSurface) {
                             ReaderScreen(vm, reader!!)
@@ -541,6 +546,9 @@ private fun Details(vm: ReaderViewModel, manga: Manga, browseCreator: (Creator) 
     val entry = shelf.find { it.mangaId == manga.id }
     val pref = preferences.find { it.mangaId == manga.id }
     val selected = remember(raw, preferences, settings, shelf) { vm.selectedChapters() }
+    var showBulkDownloads by remember { mutableStateOf(false) }
+    val bulkStatus by vm.bulkStatus.collectAsStateWithLifecycle()
+    if (showBulkDownloads) BulkDownloadDialog(vm) { showBulkDownloads = false }
     var showLanguages by remember { mutableStateOf(false) }
     var chapterFilter by remember(manga.id) { mutableStateOf("All") }
     val visibleChapters =
@@ -677,7 +685,7 @@ private fun Details(vm: ReaderViewModel, manga: Manga, browseCreator: (Creator) 
                 }
             }
             Text(
-                "${visibleChapters.size} shown / ${raw.size} available · ${languageName(settings.language)} · ${if (settings.smart) "Smart Chapters" else "All releases"}",
+                "${visibleChapters.size} shown / ${raw.size} available · ${languageName(vm.chapterLanguage())} · ${if (settings.smart) "Smart Chapters" else "All releases"}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -705,18 +713,15 @@ private fun Details(vm: ReaderViewModel, manga: Manga, browseCreator: (Creator) 
                     Text(if (settings.newestFirst) "Newest first ↓" else "Oldest first ↑")
                 }
                 TextButton(
-                    onClick = {
-                        selected
-                            .filter { release ->
-                                release.readable &&
-                                    progress.none { it.chapterKey == release.key && it.completed }
-                            }
-                            .take(5)
-                            .forEach(vm::download)
-                    }
+                    onClick = { showBulkDownloads = true },
+                    enabled = !loading && bulkStatus == null,
                 ) {
-                    Text("Download next 5 unread")
+                    Text("Download chapters")
                 }
+            }
+            bulkStatus?.let {
+                Text(it, style = MaterialTheme.typography.labelMedium)
+                LinearProgressIndicator(Modifier.fillMaxWidth())
             }
         }
         if (visibleChapters.isEmpty())
@@ -770,14 +775,18 @@ private fun Details(vm: ReaderViewModel, manga: Manga, browseCreator: (Creator) 
                         Text("Unavailable on MangaDex", style = MaterialTheme.typography.labelSmall)
                     else if (chapter.externalUrl != null)
                         Text("Open external source", style = MaterialTheme.typography.labelSmall)
+                    if (downloaded != null && downloaded.state != "Complete")
+                        Text(
+                            if (downloaded.total > 0)
+                                "${downloaded.state} · ${downloaded.done}/${downloaded.total} pages"
+                            else downloaded.state,
+                            style = MaterialTheme.typography.labelSmall,
+                            color =
+                                if (downloaded.state == "Failed") MaterialTheme.colorScheme.error
+                                else MaterialTheme.colorScheme.primary,
+                        )
                 }
-                IconButton(onClick = { vm.download(chapter) }, enabled = chapter.readable) {
-                    Icon(
-                        if (downloaded?.state == "Complete") KomoriIcons.OfflinePin
-                        else KomoriIcons.Download,
-                        "Download ${chapter.label}",
-                    )
-                }
+                ChapterDownloadControl(vm, chapter, downloaded)
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
         }
@@ -898,7 +907,29 @@ private fun Downloads(vm: ReaderViewModel) {
             contentPadding = PaddingValues(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            items(downloads, key = { it.releaseId }) { download ->
+            item {
+                val active = downloads.count { it.state in DownloadPolicy.activeStates }
+                val complete = downloads.count { it.state == "Complete" }
+                Text(
+                    "$active in queue · $complete ready offline",
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Row {
+                    TextButton(enabled = active > 0, onClick = { vm.pauseAll() }) {
+                        Text("Pause queue")
+                    }
+                    TextButton(
+                        enabled = downloads.any { it.state in listOf("Paused", "Failed") },
+                        onClick = { vm.resumeAll() },
+                    ) {
+                        Text("Resume / retry all")
+                    }
+                }
+            }
+            items(
+                downloads.sortedBy { if (it.state == "Complete") 1 else 0 },
+                key = { it.releaseId },
+            ) { download ->
                 ElevatedCard {
                     Column(Modifier.padding(16.dp)) {
                         Text(
@@ -1000,7 +1031,10 @@ private fun SettingsScreen(vm: ReaderViewModel, settings: Settings) {
             )
             sourceOrder(settings.sources).forEachIndexed { index, key ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(sourceNames.getValue(key), Modifier.weight(1f))
+                    Text(
+                        "${index + 1}. ${sourceNames.getValue(key)}${if(index == 0) " · Default" else ""}",
+                        Modifier.weight(1f),
+                    )
                     TextButton(enabled = index > 0, onClick = { vm.moveSource(key, -1) }) {
                         Text("Up")
                     }
@@ -1022,7 +1056,33 @@ private fun SettingsScreen(vm: ReaderViewModel, settings: Settings) {
                 vm.setting("showContinue", it)
             }
         }
+        item { TextButton(onClick = { vm.resetSourceOrder() }) { Text("Reset source order") } }
         item { Text("Reading", style = MaterialTheme.typography.titleLarge) }
+        item {
+            Toggle(
+                "Continuous chapters",
+                "Scroll into the next webtoon chapter automatically",
+                settings.continuousChapters,
+            ) {
+                vm.setting("continuousChapters", it)
+            }
+        }
+        item {
+            Text("Retry failed reader images", style = MaterialTheme.typography.titleSmall)
+            Text(
+                "Retry the failed image up to three times while it is visible.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf(0, 5, 10, 30).forEach { seconds ->
+                    FilterChip(
+                        settings.retrySeconds == seconds,
+                        { vm.retryInterval(seconds) },
+                        label = { Text(if (seconds == 0) "Off" else "${seconds}s") },
+                    )
+                }
+            }
+        }
         item {
             Toggle(
                 "Default to webtoon scrolling",
@@ -1293,4 +1353,94 @@ private fun SourceFilters(
             }
         },
     )
+}
+
+@Composable
+private fun BulkDownloadDialog(vm: ReaderViewModel, close: () -> Unit) {
+    var choice by remember { mutableStateOf(DownloadChoice.NEXT_5) }
+    val downloads by vm.downloads.collectAsStateWithLifecycle()
+    val progress by vm.progress.collectAsStateWithLifecycle()
+    val candidates = remember(choice, downloads, progress) { vm.downloadCandidates(choice) }
+    AlertDialog(
+        onDismissRequest = close,
+        title = { Text("Download chapters") },
+        text = {
+            Column {
+                Text(
+                    "Uses your language and Smart Chapter preferences. Completed and active downloads are skipped.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                DownloadChoice.entries.forEach { value ->
+                    Row(
+                        Modifier.fillMaxWidth().clickable { choice = value },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(choice == value, null)
+                        Text(value.label)
+                    }
+                }
+                Text(
+                    "${candidates.size} chapters to queue",
+                    style = MaterialTheme.typography.titleSmall,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = candidates.isNotEmpty(),
+                onClick = {
+                    vm.downloadBatch(candidates)
+                    close()
+                },
+            ) {
+                Text("Queue ${candidates.size}")
+            }
+        },
+        dismissButton = { TextButton(onClick = close) { Text("Cancel") } },
+    )
+}
+
+@Composable
+private fun ChapterDownloadControl(
+    vm: ReaderViewModel,
+    chapter: app.komori.domain.Release,
+    download: Download?,
+) {
+    when (download?.state) {
+        "Complete" ->
+            IconButton(onClick = { vm.readOffline(download) }) {
+                Icon(KomoriIcons.OfflinePin, "Read downloaded ${chapter.label}")
+            }
+        "Queued",
+        "Downloading",
+        "Retrying" ->
+            Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                if (download.state == "Downloading" && download.total > 0)
+                    CircularProgressIndicator(
+                        progress = { download.done.toFloat() / download.total },
+                        modifier = Modifier.size(38.dp),
+                        strokeWidth = 2.dp,
+                    )
+                else CircularProgressIndicator(Modifier.size(38.dp), strokeWidth = 2.dp)
+                TextButton(
+                    onClick = { vm.pause(download) },
+                    modifier =
+                        Modifier.semantics {
+                            contentDescription = "Pause download ${chapter.label}"
+                        },
+                    contentPadding = PaddingValues(0.dp),
+                ) {
+                    Text("Ⅱ")
+                }
+            }
+        "Paused",
+        "Failed" ->
+            TextButton(onClick = { vm.resume(download) }) {
+                Text(if (download.state == "Failed") "Retry" else "Resume")
+            }
+        else ->
+            IconButton(onClick = { vm.download(chapter) }, enabled = chapter.readable) {
+                Icon(KomoriIcons.Download, "Download ${chapter.label}")
+            }
+    }
 }

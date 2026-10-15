@@ -39,6 +39,10 @@ fun ReaderScreen(vm: ReaderViewModel, chapter: Release) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val preferences by vm.preferences.collectAsStateWithLifecycle()
     val ready by vm.readerReady.collectAsStateWithLifecycle()
+    val retryCountdown =
+        key(chapter.id, page) {
+            imageRetryCountdown(error != null, settings.retrySeconds) { vm.retryPage() }
+        }
     val override = preferences.find { it.mangaId == chapter.mangaId }?.readerMode.orEmpty()
     val mode = ReadingMode.resolve(override, settings.webtoon, settings.rtl)
     var controls by rememberSaveable { mutableStateOf(true) }
@@ -103,9 +107,8 @@ fun ReaderScreen(vm: ReaderViewModel, chapter: Release) {
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             Text(error!!)
-                            Button(onClick = { if (ready) vm.page(page) else vm.read(chapter) }) {
-                                Text("Retry")
-                            }
+                            if (retryCountdown > 0) Text("Retrying this page in ${retryCountdown}s")
+                            Button(onClick = { vm.retryPage() }) { Text("Retry") }
                         }
                     else if (file == null) CircularProgressIndicator()
                     else

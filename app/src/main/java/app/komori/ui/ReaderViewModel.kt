@@ -41,6 +41,8 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     val error = MutableStateFlow<String?>(null)
     val notice = MutableStateFlow<String?>(null)
     val reader = MutableStateFlow<Release?>(null)
+    val readerSession = MutableStateFlow(0)
+    val bulkStatus = MutableStateFlow<String?>(null)
     val readerPage = MutableStateFlow(0)
     val readerScroll = MutableStateFlow(0f)
     val readerReady = MutableStateFlow(false)
@@ -52,6 +54,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         private set
 
     private var query = ""
+    private var offlineLanguage: String? = null
     private var nextOffset = 1
     private var creatorFilter: Creator? = null
     private var searchJob: Job? = null
@@ -149,12 +152,14 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
             selected.value = book
             chapters.value = retainDownloadedChapters(emptyList(), rows, complete)
             val release = chapters.value.find { it.id == download.releaseId } ?: return@task
+            offlineLanguage = release.language
             chapterStatus.value = "Saved chapter list · Offline"
             read(release)
         }
     }
 
     fun open(manga: Manga, immediately: Boolean = false) {
+        offlineLanguage = null
         detailJob?.cancel()
         selected.value = manga
         chapters.value = emptyList()
@@ -245,14 +250,18 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         error.value = null
     }
 
+    fun chapterLanguage(): String =
+        offlineLanguage
+            ?: if (sourceKey(selected.value?.id.orEmpty()) == "mangadex") settings.value.language
+            else "en"
+
     fun selectedChapters(): List<Release> {
         val pref = preferences.value.find { it.mangaId == selected.value?.id }
         val current = shelf.value.find { it.mangaId == selected.value?.id }?.lastRelease
         return ChapterPolicy.select(
             chapters.value,
             ChapterPreferences(
-                if (sourceKey(selected.value?.id.orEmpty()) == "mangadex") settings.value.language
-                else "en",
+                chapterLanguage(),
                 settings.value.smart,
                 pref?.groupId ?: "",
                 pref?.strict ?: false,
@@ -335,8 +344,10 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                     "This chapter has no MangaDex pages. Open its external link from the chapter row if available."
             return
         }
+        if (offlineLanguage != null) offlineLanguage = chapter.language
         pageJob?.cancel()
         readerReady.value = false
+        readerSession.value += 1
         reader.value = chapter
         readerFile.value = null
         readerError.value = null
@@ -344,12 +355,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         pageJob =
             viewModelScope.launch {
                 try {
-                    val resolved =
-                        if (chapter.pages < 0) {
-                            val urls = app.source.pages(chapter.id, settings.value.saver)
-                            pageManifests["${chapter.id}-${settings.value.saver}"] = urls
-                            chapter.copy(pages = urls.size)
-                        } else chapter
+                    val resolved = resolveChapter(chapter)
                     reader.value = resolved
                     pageCount.value = resolved.pages
                     val previous = dao.progress(chapter.id)
@@ -376,15 +382,141 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
             }
     }
 
+    private fun rememberPages(key: String, urls: List<String>) {
+        pageManifests[key] = urls
+        val active = reader.value?.id
+        pageManifests.keys
+            .filter { it != key && (active == null || !it.startsWith("$active-")) }
+            .take((pageManifests.size - 6).coerceAtLeast(0))
+            .forEach { pageManifests.remove(it) }
+    }
+
+    suspend fun resolveChapter(chapter: Release): Release {
+        if (chapter.pages >= 0) return chapter
+        val key = "${chapter.id}-${settings.value.saver}"
+        val urls =
+            pageManifests[key]
+                ?: app.source.pages(chapter.id, settings.value.saver).also {
+                    rememberPages(key, it)
+                }
+        if (urls.isEmpty()) throw IOException("This chapter has no available pages.")
+        return chapter.copy(pages = urls.size)
+    }
+
+    fun nextChapter(chapter: Release): Release? =
+        selectedChapters()
+            .dropWhile { it.id != chapter.id }
+            .drop(1)
+            .firstOrNull { it.key != chapter.key && it.readable }
+
+    fun scrollChapterPosition(chapter: Release, page: Int, fraction: Float, session: Int) {
+        if (session != readerSession.value) return
+        val previous = reader.value ?: return
+        val oldPage = readerPage.value
+        val completed = ChapterPolicy.completedBetween(selectedChapters(), previous.id, chapter.id)
+        if (previous.id != chapter.id) {
+            reader.value = chapter
+            pageCount.value = chapter.pages
+            readerFile.value = null
+            readerError.value = null
+        }
+        readerPage.value = page
+        readerScroll.value = fraction.coerceIn(0f, 1f)
+        task {
+            for (passed in completed) savePage(
+                passed,
+                if (passed.id == previous.id) oldPage else (passed.pages - 1).coerceAtLeast(0),
+                true,
+            )
+            savePage(chapter, page, scroll = fraction.coerceIn(0f, 1f), preserveCompleted = true)
+        }
+    }
+
+    suspend fun invalidateCachedPage(chapter: Release, page: Int) =
+        withContext(Dispatchers.IO) {
+            File(app.cacheDir, "reader/${chapter.id}-$page-${settings.value.saver}.img").delete()
+            pageManifests.remove("${chapter.id}-${settings.value.saver}")
+            Unit
+        }
+
+    fun retryPage() {
+        val chapter = reader.value ?: return
+        val index = readerPage.value
+        task {
+            invalidateCachedPage(chapter, index)
+            if (reader.value?.id == chapter.id && readerPage.value == index) {
+                if (readerReady.value) page(index) else read(chapter)
+            }
+        }
+    }
+
+    fun resetSourceOrder() = task { app.settings.sources(sourceNames.keys.joinToString(",")) }
+
+    fun retryInterval(seconds: Int) = task { app.settings.retrySeconds(seconds) }
+
+    fun downloadCandidates(choice: DownloadChoice) =
+        DownloadPolicy.select(
+            selectedChapters(),
+            progress.value.filter { it.completed }.map { it.chapterKey }.toSet(),
+            downloads.value.associate { it.releaseId to it.state },
+            choice,
+        )
+
+    fun downloadBatch(releases: List<Release>) {
+        if (bulkStatus.value != null) return
+        bulkStatus.value = "Preparing download queue…"
+        task {
+            try {
+                val options = app.settings.flow.first()
+                var queued = 0
+                for (chapter in releases.distinctBy { it.id }) {
+                    currentCoroutineContext().ensureActive()
+                    val existing = dao.download(chapter.id)
+                    if (
+                        chapter.readable &&
+                            existing?.state !in DownloadPolicy.activeStates + "Complete"
+                    ) {
+                        enqueueDownload(app, chapter, options)
+                        queued++
+                    }
+                    bulkStatus.value = "Queued $queued / ${releases.size} chapters"
+                }
+                notice.value =
+                    "$queued chapters queued. " +
+                        if (options.wifi) "Downloads use an unmetered connection."
+                        else "Downloads use your current connection."
+            } finally {
+                bulkStatus.value = null
+            }
+        }
+    }
+
+    fun pauseAll() = task {
+        for (download in downloads.value.filter { it.state in DownloadPolicy.activeStates }) pause(
+                download
+            )
+            .join()
+    }
+
+    fun resumeAll() = task {
+        for (download in downloads.value.filter { it.state in listOf("Paused", "Failed") }) resume(
+                download
+            )
+            .join()
+    }
+
     private suspend fun savePage(
         chapter: Release,
         page: Int,
         completed: Boolean = false,
         scroll: Float = 0f,
+        preserveCompleted: Boolean = false,
     ) {
         mutation.withLock {
+            val isCompleted =
+                completed || (preserveCompleted && dao.progress(chapter.id)?.completed == true)
             dao.putProgress(
-                Progress(chapter.id, chapter.mangaId, chapter.key, page, completed, scroll)
+                Progress(chapter.id, chapter.mangaId, chapter.key, page, isCompleted, scroll)
             )
             val old = dao.shelf(chapter.mangaId) ?: Shelf(chapter.mangaId)
             dao.putShelf(old.copy(lastRelease = chapter.id, touched = System.currentTimeMillis()))
@@ -408,9 +540,9 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                 val pageUrls =
                     pageManifests[manifestKey]
                         ?: app.source.pages(chapter.id, settings.value.saver).also {
-                            pageManifests[manifestKey] = it
+                            rememberPages(manifestKey, it)
                         }
-                pageCount.value = pageUrls.size
+                if (reader.value?.id == chapter.id) pageCount.value = pageUrls.size
                 val url =
                     pageUrls.getOrNull(page)
                         ?: throw IOException("Page is no longer available. Reopen the chapter.")
@@ -462,7 +594,9 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         if (reader.value?.id != chapter.id) return
         readerPage.value = page
         readerScroll.value = fraction.coerceIn(0f, 1f)
-        task { savePage(chapter, page, scroll = fraction.coerceIn(0f, 1f)) }
+        task {
+            savePage(chapter, page, scroll = fraction.coerceIn(0f, 1f), preserveCompleted = true)
+        }
     }
 
     fun page(index: Int) {

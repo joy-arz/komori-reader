@@ -24,6 +24,8 @@ data class Settings(
     val libraryAlphabetical: Boolean = false,
     val autoUpdateDownload: Boolean = true,
     val showContinue: Boolean = true,
+    val continuousChapters: Boolean = true,
+    val retrySeconds: Int = 5,
     val sources: String = "demonic,weeb,comix,mangadex,zap,imhentai,nhentai",
 )
 
@@ -47,12 +49,22 @@ class SettingsStore(private val context: Context) {
                 p[booleanPreferencesKey("libraryAlphabetical")] ?: false,
                 p[booleanPreferencesKey("autoUpdateDownload")] ?: true,
                 p[booleanPreferencesKey("showContinue")] ?: true,
-                p[stringPreferencesKey("sources")] ?: "demonic,weeb,comix,mangadex,zap,imhentai,nhentai",
+                p[booleanPreferencesKey("continuousChapters")] ?: true,
+                (p[intPreferencesKey("retrySeconds")] ?: 5).let {
+                    if (it in listOf(0, 5, 10, 30)) it else 5
+                },
+                p[stringPreferencesKey("sources")]
+                    ?: "demonic,weeb,comix,mangadex,zap,imhentai,nhentai",
             )
         }
 
     suspend fun set(key: String, value: Boolean) {
         context.settingsStore.edit { it[booleanPreferencesKey(key)] = value }
+    }
+
+    suspend fun retrySeconds(value: Int) {
+        require(value in listOf(0, 5, 10, 30))
+        context.settingsStore.edit { it[intPreferencesKey("retrySeconds")] = value }
     }
 
     suspend fun sources(value: String) {

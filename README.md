@@ -18,11 +18,12 @@ A quiet, lightweight Android manga reader. Built with Kotlin and Compose, with n
 - Local author/artist follows and browsing their works.
 - Smart Chapters: language filtering, conservative duplicate grouping, preferred scanlation and strict/fallback selection.
 - Direct reading from cover play buttons, page resume, restart-current-chapter preference and optional rereading when caught up.
-- Continuous webtoon scrolling with saved position within a page, bounded image strips, offline support and a Paged/Webtoon switch.
+- Continuous webtoon scrolling across chapters, saved page/scroll position, bounded neighboring-chapter windows and image strips, offline support and a Paged/Webtoon switch.
 - Per-title Left-to-right, Right-to-left and Webtoon modes, with app-default fallback.
 - Immersive reading: center/image tap hides controls; a floating page counter brings them back.
 - Direction-aware edge taps and swipes in paged mode, plus tiled pinch/double-tap zoom and optional keep-screen-awake.
-- Persistent chapter downloads, Wi-Fi constraint, retries, pause/resume, original/data-saving images and offline access.
+- Persistent chapter downloads, Wi-Fi constraint, retries, pause/resume, original/data-saving images and offline access. Bulk options include all readable, all unread and next 1/5/10/25 unread; active/completed downloads are skipped.
+- Per-chapter download progress and pause/retry actions, queue-wide pause/resume, and configurable visible-image retries (off/5/10/30 seconds, up to three attempts).
 - Light and dark themes. Android 8.0+; no account, ads or analytics.
 
 MangaDex must be reachable on your network. If a network redirects or blocks it, the app reports a connection error and keeps certificate verification enabled.
@@ -59,7 +60,7 @@ Signing secrets are already configured in repository Actions secrets. No signing
 ## Current limits
 
 - Webtoon mode saves the vertical position within each source page. Paged mode saves the page, not its zoom/pan viewport.
-- Webtoon scrolling is continuous within a chapter; use Finish & continue at the end. Cross-chapter endless scrolling, webtoon pinch zoom and automatic mode detection remain planned.
+- Continuous chapters can be disabled in Settings. Webtoon pinch zoom and automatic mode detection remain planned.
 - Creator follows are local. Automatic creator/title update feeds and MangaDex account sync are not implemented.
 - Smart Chapters uses deterministic selection, not translation-quality scoring. Unnumbered releases and different volumes stay separate; volume metadata inconsistencies may leave duplicates visible.
 - Download work is interruptible and Android may delay it. There is no promise of uninterrupted large background transfers; work checkpoints each page and retries.

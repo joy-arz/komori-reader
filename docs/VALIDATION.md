@@ -99,3 +99,12 @@ On the final debug app, changing One Punch-Man from English to Indonesian loaded
 - Mock-server/fixture regressions cover source IDs, legacy MangaDex routing, duplicate-title matching, page extraction excluding ads, sort/tag POST requests, unknown page counts resolved before reading, WeebCentral full chapter/image endpoints, and access challenges preserving saved feeds.
 - Updater tests cover numeric prerelease sorting, metadata scope/package/version/size validation, and corrupted/truncated APK rejection. Android signer and installer behavior is checked separately on a signed build.
 - WeebCentral live access returns an access error. Comix returns a challenge; its reader is not implemented and its tab states integration is pending. No working native/offline support is claimed for Comix.
+
+### Android and QoL verification
+
+- Synced merged PRs #1/#2 through `07d2e8a` before the general-reader changes.
+- 51 deterministic JVM tests pass; four opt-in live-source tests are skipped in ordinary builds. Debug lint and APK/test APK assembly pass.
+- All six Android instrumentation tests pass on API 30 (2 GB emulator). The new synthetic four-chapter offline test scrolls across chapters without buttons, verifies the reader session stays intact, verifies crossed chapters become completed, and confirms old scroll callbacks cannot undo manual chapter changes.
+- The test found and fixed two regressions before release: the global language filter could hide the next offline chapter, and fast flings could skip completion bookkeeping. The offline queue now uses the opened chapter's language, and forward crossings record every intervening chapter. Backward scrolling preserves completed state.
+- Signed local baseline: existing Yotsuba library/download survived install. Continue reading dismissal survived force-stop/relaunch. DemonicScans Eleceed returned 426 chapters, Start reading opened chapter 1 (7 pages) in native webtoon mode, all seven downloaded successfully, and Read offline rendered after a cold launch with Wi-Fi and mobile data disabled. Screenshots were inspected on the emulator.
+- General UI/source-adapter changes from merged PRs are preserved. No new live verification of those merged source adapters is claimed by this QoL pass.

@@ -62,3 +62,13 @@ Additional library preferences were checked against [Komikku LibraryPreferences]
 Added an independently implemented possible-duplicate warning when saving a title with the same normalized name as an existing saved entry. Names are Unicode-normalized, case-insensitive and punctuation-insensitive; alternate titles and translations are not automatically matched or merged. Browse cards show library/duplicate status. Source identity is explicit in title details and configurable upper browse tabs.
 
 Added source-specific sort/tag controls, a dismissible Library resume card, direct downloaded-chapter opening and public GitHub update checking. DemonicScans has live adapter coverage. WeebCentral's request/HTML contract was checked against its source extension and fixture-tested, but live requests are blocked from the test network. Comix needs a protected dynamic-reader integration and remains visibly pending. Existing MangaDex entries retain their original IDs.
+
+## Reader and download quality-of-life pass
+
+After fast-forwarding merged PRs #1/#2, this pass changes the general reader and download controls. Komikku's [download menu](https://github.com/komikku-app/komikku/blob/master/app/src/main/java/eu/kanade/presentation/components/DownloadDropdownMenu.kt) and [neighboring-chapter webtoon adapter](https://github.com/komikku-app/komikku/blob/master/app/src/main/java/eu/kanade/tachiyomi/ui/reader/viewer/webtoon/WebtoonAdapter.kt) informed the behavior; implementation remains native to this app's Compose/Room architecture.
+
+- Webtoon reading appends the next chapter near the current chapter's end. Reading progress changes only when its pages become visible, rather than when metadata is prefetched. Previous chapters are trimmed to keep a bounded neighboring window, and visible image decoding remains tiled.
+- Bulk downloads offer next 1/5/10/25 unread, all unread, and all readable. Selection respects current language/scanlation rules, skips existing active/completed downloads, and previews the count before queueing.
+- Chapter rows show download progress with pause/resume/retry; Downloads offers queue-wide controls and puts unfinished work first.
+- Failed visible reader images retry at a configurable interval, up to three times, with manual retry always available. Leaving the page cancels its timer.
+- Source settings show numbered positions, identify the default, and support resetting the order. Existing saved source ordering remains supported.

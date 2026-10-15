@@ -100,6 +100,14 @@ object ChapterPolicy {
                 .thenBy { it.id }
         )
 
+    /** Fast flings can cross more than one chapter between progress samples. */
+    fun completedBetween(releases: List<Release>, fromId: String, toId: String): List<Release> {
+        val ordered = readingOrder(releases).filter { it.readable }
+        val from = ordered.indexOfFirst { it.id == fromId }
+        val to = ordered.indexOfFirst { it.id == toId }
+        return if (from >= 0 && to > from) ordered.subList(from, to) else emptyList()
+    }
+
     fun start(
         releases: List<Release>,
         currentId: String?,

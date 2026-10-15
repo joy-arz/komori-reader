@@ -1,0 +1,167 @@
+package app.komori
+
+import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.os.SystemClock
+import android.view.MotionEvent
+import androidx.lifecycle.ViewModelProvider
+import androidx.test.platform.app.InstrumentationRegistry
+import app.komori.data.*
+import app.komori.ui.ReaderViewModel
+import java.util.UUID
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import org.json.JSONArray
+import org.json.JSONObject
+import org.junit.Assert.*
+import org.junit.Test
+
+class ContinuousReaderTest {
+    @Test
+    fun scrollsAcrossFourOfflineChaptersWithoutButtonsAndKeepsProgress() = runBlocking {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val app = instrumentation.targetContext.applicationContext as KomoriApp
+        val id = "continuous-test-${UUID.randomUUID()}"
+        val old = app.settings.flow.first()
+        var activity: MainActivity? = null
+        try {
+            app.settings.set("webtoon", true)
+            app.settings.set("continuousChapters", true)
+            app.settings.set("resume", false)
+            app.dao.putManga(Manga(id, "Continuous reader test", "Synthetic test pages", ""))
+            val chapters =
+                (1..4).map { number ->
+                    val chapterId = "$id-$number"
+                    val json =
+                        JSONObject()
+                            .put("id", chapterId)
+                            .put(
+                                "attributes",
+                                JSONObject()
+                                    .put("chapter", "$number")
+                                    .put("translatedLanguage", "en")
+                                    .put("pages", 1),
+                            )
+                            .put(
+                                "relationships",
+                                JSONArray().put(JSONObject().put("type", "manga").put("id", id)),
+                            )
+                    val bitmap = Bitmap.createBitmap(500, 900, Bitmap.Config.RGB_565)
+                    Canvas(bitmap).apply {
+                        drawColor(
+                            listOf(Color.BLUE, Color.GREEN, Color.YELLOW, Color.CYAN)[number - 1]
+                        )
+                        drawText(
+                            "Chapter $number",
+                            40f,
+                            150f,
+                            Paint().apply {
+                                color = Color.BLACK
+                                textSize = 50f
+                            },
+                        )
+                    }
+                    chapterDirectory(app, chapterId).mkdirs()
+                    pageFile(app, chapterId, 0).outputStream().use {
+                        bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+                    }
+                    bitmap.recycle()
+                    app.dao.putDownload(Download(chapterId, id, "Ch. $number", 1, 1, "Complete"))
+                    Chapter(chapterId, id, json.toString())
+                }
+            app.dao.putChapters(chapters)
+            activity =
+                instrumentation.startActivitySync(
+                    Intent(instrumentation.targetContext, MainActivity::class.java)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                ) as MainActivity
+            lateinit var vm: ReaderViewModel
+            instrumentation.runOnMainSync {
+                vm = ViewModelProvider(activity!!)[ReaderViewModel::class.java]
+            }
+            val download = app.dao.download("$id-1")!!
+            instrumentation.runOnMainSync { vm.readOffline(download) }
+            waitUntil { vm.readerReady.value && vm.reader.value?.id == "$id-1" }
+            val session = vm.readerSession.value
+            SystemClock.sleep(1000)
+            val metrics = instrumentation.targetContext.resources.displayMetrics
+            repeat(18) {
+                if (vm.reader.value?.id != "$id-4") {
+                    val start = SystemClock.uptimeMillis()
+                    for (step in 0..12) {
+                        val event =
+                            MotionEvent.obtain(
+                                start,
+                                start + step * 20L,
+                                when (step) {
+                                    0 -> MotionEvent.ACTION_DOWN
+                                    12 -> MotionEvent.ACTION_UP
+                                    else -> MotionEvent.ACTION_MOVE
+                                },
+                                metrics.widthPixels * .5f,
+                                metrics.heightPixels * (.8f - .5f * step / 12f),
+                                0,
+                            )
+                        instrumentation.sendPointerSync(event)
+                        event.recycle()
+                        SystemClock.sleep(20)
+                    }
+                    SystemClock.sleep(450)
+                }
+            }
+            waitUntil { vm.reader.value?.id == "$id-4" }
+            assertEquals(
+                "Continuous transitions must keep the same reader session",
+                session,
+                vm.readerSession.value,
+            )
+            waitUntil { runBlocking { app.dao.progress("$id-3")?.completed == true } }
+            for (number in 1..3) assertTrue(
+                "Chapter $number should be completed",
+                app.dao.progress("$id-$number")!!.completed,
+            )
+            assertEquals("$id-4", app.dao.shelf(id)?.lastRelease)
+            instrumentation.runOnMainSync {
+                vm.read(chapters.first().release().copy(local = true))
+                vm.scrollChapterPosition(chapters.last().release(), 0, 0f, session)
+                assertEquals(
+                    "Old scroll callbacks must not undo a manual chapter change",
+                    "$id-1",
+                    vm.reader.value?.id,
+                )
+            }
+        } finally {
+            activity?.let { instrumentation.runOnMainSync { it.finish() } }
+            instrumentation.waitForIdleSync()
+            app.settings.set("webtoon", old.webtoon)
+            app.settings.set("continuousChapters", old.continuousChapters)
+            app.settings.set("resume", old.resume)
+            for (number in 1..4) chapterDirectory(app, "$id-$number").deleteRecursively()
+            for (table in
+                listOf(
+                    "progress",
+                    "downloads",
+                    "chapters",
+                    "shelf",
+                    "chapter_preferences",
+                    "chapter_feeds",
+                )) app.database.openHelper.writableDatabase.execSQL(
+                "DELETE FROM $table WHERE mangaId = ?",
+                arrayOf(id),
+            )
+            app.database.openHelper.writableDatabase.execSQL(
+                "DELETE FROM manga WHERE id = ?",
+                arrayOf(id),
+            )
+        }
+    }
+
+    private fun waitUntil(condition: () -> Boolean) {
+        val deadline = SystemClock.uptimeMillis() + 15000
+        while (!condition() && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(100)
+        assertTrue("Timed out waiting for reader state", condition())
+    }
+}

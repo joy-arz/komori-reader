@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.komori.data.connectionMessage
 import app.komori.domain.Release
 import com.davemorrissey.labs.subscaleview.ImageSource
@@ -30,7 +31,7 @@ private data class ScrollImage(val file: File, val width: Int, val height: Int) 
         get() = (height + STRIP_HEIGHT - 1) / STRIP_HEIGHT
 }
 
-/** Only visible strips create decoders; no full chapter or tall page bitmap is allocated. */
+/** A bounded previous/current/next window. Only visible strips allocate image decoders. */
 @OptIn(FlowPreview::class)
 @Composable
 fun WebtoonReader(
@@ -39,28 +40,75 @@ fun WebtoonReader(
     modifier: Modifier = Modifier,
     onTap: () -> Unit = {},
 ) {
+    val settings by vm.settings.collectAsStateWithLifecycle()
+    val initialChapter = remember { chapter }
+    val session = remember { vm.readerSession.value }
     val initialPage = remember { vm.readerPage.value }
     val initialFraction = remember { vm.readerScroll.value }
-    val images = remember { mutableStateMapOf<Int, ScrollImage>() }
-    // Restore from source-page coordinates, not saved flattened strip indices.
+    var window by remember { mutableStateOf(listOf(chapter)) }
+    val images = remember { mutableStateMapOf<String, ScrollImage>() }
     val list = remember { LazyListState(initialPage) }
     var restored by remember { mutableStateOf(false) }
+    var nextError by remember { mutableStateOf<String?>(null) }
+    var nextLoading by remember { mutableStateOf(false) }
+    var nextAttempt by remember { mutableIntStateOf(0) }
+    val tail = window.last()
+    val next = vm.nextChapter(tail)
+    val nextCountdown =
+        key(tail.id) {
+            imageRetryCountdown(nextError != null, settings.retrySeconds) { nextAttempt++ }
+        }
+
+    LaunchedEffect(tail.id, settings.continuousChapters, nextAttempt) {
+        nextError = null
+        if (!settings.continuousChapters || next == null) return@LaunchedEffect
+        snapshotFlow {
+                list.layoutInfo.visibleItemsInfo.any {
+                    val parts = it.key.toString().split('|')
+                    parts.size == 3 &&
+                        parts[0] == tail.id &&
+                        (parts[1].toIntOrNull() ?: -1) >= tail.pages - 2
+                }
+            }
+            .first { it }
+        nextLoading = true
+        try {
+            val resolved = vm.resolveChapter(next)
+            if (window.none { it.id == resolved.id }) window = window + resolved
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            nextError = connectionMessage(e)
+        } finally {
+            nextLoading = false
+        }
+    }
+
     BoxWithConstraints(modifier.fillMaxWidth()) {
         val widthPixels = with(LocalDensity.current) { maxWidth.toPx() }
-        fun position(): Pair<Int, Float>? {
-            val item = list.layoutInfo.visibleItemsInfo.firstOrNull() ?: return null
-            val parts = item.key.toString().split(':')
-            val page = parts.firstOrNull()?.toIntOrNull() ?: return null
-            val strip = parts.getOrNull(1)?.toIntOrNull() ?: return null
-            val image = images[page] ?: return null
+        fun position(): Triple<Release, Int, Float>? {
+            val item =
+                list.layoutInfo.visibleItemsInfo.firstOrNull {
+                    it.key.toString().split('|').size == 3
+                } ?: return null
+            val parts = item.key.toString().split('|')
+            val release = window.find { it.id == parts[0] } ?: return null
+            val page = parts[1].toIntOrNull() ?: return null
+            val strip = parts[2].toIntOrNull() ?: return null
+            val image = images["${release.id}|$page"] ?: return null
             val sourceOffset = (-item.offset).coerceAtLeast(0) * image.width / widthPixels
-            return page to ((strip * STRIP_HEIGHT + sourceOffset) / image.height).coerceIn(0f, 1f)
+            return Triple(
+                release,
+                page,
+                ((strip * STRIP_HEIGHT + sourceOffset) / image.height).coerceIn(0f, 1f),
+            )
         }
-        LaunchedEffect(images[initialPage], widthPixels) {
-            val image = images[initialPage] ?: return@LaunchedEffect
+        LaunchedEffect(images["${initialChapter.id}|$initialPage"], widthPixels) {
+            val image = images["${initialChapter.id}|$initialPage"] ?: return@LaunchedEffect
             if (!restored) {
                 val sourceY = (initialFraction * image.height).toInt().coerceIn(0, image.height - 1)
-                val preceding = (0 until initialPage).sumOf { images[it]?.strips ?: 1 }
+                val preceding =
+                    (0 until initialPage).sumOf { images["${initialChapter.id}|$it"]?.strips ?: 1 }
                 list.scrollToItem(
                     preceding + sourceY / STRIP_HEIGHT,
                     ((sourceY % STRIP_HEIGHT) * widthPixels / image.width).toInt(),
@@ -73,149 +121,205 @@ fun WebtoonReader(
                 snapshotFlow { position() }
                     .filterNotNull()
                     .distinctUntilChanged()
-                    .debounce(200)
-                    .collect { vm.scrollPosition(chapter, it.first, it.second) }
+                    .debounce(150)
+                    .collect { (release, page, fraction) ->
+                        vm.scrollChapterPosition(release, page, fraction, session)
+                        val index = window.indexOfFirst { it.id == release.id }
+                        if (index > 1) {
+                            window = window.drop(index - 1)
+                            val retained = window.map { it.id }.toSet()
+                            images.keys
+                                .filter { it.substringBefore('|') !in retained }
+                                .forEach { images.remove(it) }
+                        }
+                    }
         }
-        DisposableEffect(chapter.id) {
+        DisposableEffect(Unit) {
             onDispose {
-                if (restored) position()?.let { vm.scrollPosition(chapter, it.first, it.second) }
+                if (restored)
+                    position()?.let { (release, page, fraction) ->
+                        vm.scrollChapterPosition(release, page, fraction, session)
+                    }
             }
         }
         LazyColumn(state = list, modifier = Modifier.fillMaxSize().background(Color.Black)) {
-            repeat(chapter.pages) { page ->
-                val image = images[page]
-                if (image == null) {
-                    item(key = "$page:0") {
-                        var failure by remember { mutableStateOf<String?>(null) }
-                        var attempt by remember { mutableIntStateOf(0) }
-                        LaunchedEffect(attempt) {
-                            failure = null
-                            try {
-                                val file = vm.pageFileFor(chapter, page)
-                                val dimensions =
-                                    withContext(Dispatchers.IO) {
-                                        val bounds =
-                                            BitmapFactory.Options().apply {
-                                                inJustDecodeBounds = true
-                                            }
-                                        BitmapFactory.decodeFile(file.path, bounds)
-                                        check(bounds.outWidth > 0 && bounds.outHeight > 0) {
-                                            "Could not decode page ${page + 1}"
-                                        }
-                                        ScrollImage(file, bounds.outWidth, bounds.outHeight)
-                                    }
-                                images[page] = dimensions
-                            } catch (e: CancellationException) {
-                                throw e
-                            } catch (e: Exception) {
-                                failure = connectionMessage(e)
-                            }
-                        }
-                        Column(
-                            Modifier.fillMaxWidth().height(420.dp).padding(24.dp),
-                            verticalArrangement = Arrangement.Center,
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            Text("Page ${page + 1}", color = Color.LightGray)
-                            if (failure == null) CircularProgressIndicator(Modifier.padding(16.dp))
-                            else {
-                                Text(failure!!, color = Color.White)
-                                Button(onClick = { attempt++ }) { Text("Retry page") }
-                            }
-                        }
+            window.forEach { release ->
+                if (release.id != initialChapter.id)
+                    item(key = "chapter-${release.id}") {
+                        Text(
+                            release.label,
+                            Modifier.fillMaxWidth().padding(20.dp),
+                            color = Color.LightGray,
+                            style = MaterialTheme.typography.titleMedium,
+                        )
                     }
-                } else
-                    repeat(image.strips) { strip ->
-                        item(key = "$page:$strip") {
-                            val top = strip * STRIP_HEIGHT
-                            val bottom = minOf(top + STRIP_HEIGHT, image.height)
-                            var availableFile by remember { mutableStateOf<File?>(null) }
-                            var decodeError by remember { mutableStateOf(false) }
-                            var retry by remember { mutableIntStateOf(0) }
-                            LaunchedEffect(retry) {
+                repeat(release.pages.coerceAtLeast(0)) { page ->
+                    val imageKey = "${release.id}|$page"
+                    val image = images[imageKey]
+                    if (image == null)
+                        item(key = "$imageKey|0") {
+                            var failure by remember { mutableStateOf<String?>(null) }
+                            var attempt by remember { mutableIntStateOf(0) }
+                            val countdown =
+                                imageRetryCountdown(failure != null, settings.retrySeconds) {
+                                    attempt++
+                                }
+                            LaunchedEffect(attempt) {
+                                failure = null
                                 try {
-                                    availableFile = vm.pageFileFor(chapter, page)
+                                    if (attempt > 0) vm.invalidateCachedPage(release, page)
+                                    val file = vm.pageFileFor(release, page)
+                                    images[imageKey] =
+                                        withContext(Dispatchers.IO) {
+                                            val bounds =
+                                                BitmapFactory.Options().apply {
+                                                    inJustDecodeBounds = true
+                                                }
+                                            BitmapFactory.decodeFile(file.path, bounds)
+                                            check(bounds.outWidth > 0 && bounds.outHeight > 0) {
+                                                "Could not decode page ${page + 1}"
+                                            }
+                                            ScrollImage(file, bounds.outWidth, bounds.outHeight)
+                                        }
                                 } catch (e: CancellationException) {
                                     throw e
                                 } catch (e: Exception) {
-                                    decodeError = true
+                                    failure = connectionMessage(e)
                                 }
                             }
-                            Box(
-                                Modifier.fillMaxWidth()
-                                    .height(maxWidth * ((bottom - top).toFloat() / image.width))
+                            Column(
+                                Modifier.fillMaxWidth().height(420.dp).padding(24.dp),
+                                verticalArrangement = Arrangement.Center,
+                                horizontalAlignment = Alignment.CenterHorizontally,
                             ) {
-                                if (availableFile != null)
-                                    key(retry) {
-                                        AndroidView(
-                                            factory = { context ->
-                                                ReaderImageView(context).apply {
-                                                    setZoomEnabled(false)
-                                                    setPanEnabled(false)
-                                                    setMinimumScaleType(
-                                                        SubsamplingScaleImageView
-                                                            .SCALE_TYPE_CENTER_INSIDE
-                                                    )
-                                                    setOnImageEventListener(
-                                                        object :
-                                                            SubsamplingScaleImageView.DefaultOnImageEventListener() {
-                                                            override fun onImageLoadError(
-                                                                e: Exception
-                                                            ) {
-                                                                decodeError = true
-                                                            }
-
-                                                            override fun onTileLoadError(
-                                                                e: Exception
-                                                            ) {
-                                                                decodeError = true
-                                                            }
-                                                        }
-                                                    )
-                                                    setImage(
-                                                        ImageSource.uri(Uri.fromFile(availableFile))
-                                                            .region(
-                                                                Rect(0, top, image.width, bottom)
-                                                            )
-                                                    )
-                                                }
-                                            },
-                                            update = { it.onReaderTap = { onTap() } },
-                                            modifier = Modifier.fillMaxSize(),
-                                            onReset = null,
-                                            onRelease = { it.recycle() },
+                                Text("${release.label} · Page ${page + 1}", color = Color.LightGray)
+                                if (failure == null)
+                                    CircularProgressIndicator(Modifier.padding(16.dp))
+                                else {
+                                    Text(failure!!, color = Color.White)
+                                    if (countdown > 0)
+                                        Text(
+                                            "Retrying this page in ${countdown}s",
+                                            color = Color.LightGray,
                                         )
-                                    }
-                                if (decodeError)
-                                    Button(
-                                        onClick = {
-                                            decodeError = false
-                                            retry++
-                                        },
-                                        modifier = Modifier.align(Alignment.Center),
-                                    ) {
-                                        Text("Retry image")
-                                    }
+                                    Button(onClick = { attempt++ }) { Text("Retry page now") }
+                                }
                             }
                         }
-                    }
+                    else
+                        repeat(image.strips) { strip ->
+                            item(key = "$imageKey|$strip") {
+                                val top = strip * STRIP_HEIGHT
+                                val bottom = minOf(top + STRIP_HEIGHT, image.height)
+                                var availableFile by remember { mutableStateOf<File?>(null) }
+                                var decodeError by remember { mutableStateOf(false) }
+                                var retry by remember { mutableIntStateOf(0) }
+                                val countdown =
+                                    imageRetryCountdown(decodeError, settings.retrySeconds) {
+                                        retry++
+                                    }
+                                LaunchedEffect(retry) {
+                                    availableFile = null
+                                    decodeError = false
+                                    try {
+                                        if (retry > 0) vm.invalidateCachedPage(release, page)
+                                        availableFile = vm.pageFileFor(release, page)
+                                    } catch (e: CancellationException) {
+                                        throw e
+                                    } catch (_: Exception) {
+                                        decodeError = true
+                                    }
+                                }
+                                Box(
+                                    Modifier.fillMaxWidth()
+                                        .height(maxWidth * ((bottom - top).toFloat() / image.width))
+                                ) {
+                                    if (availableFile != null)
+                                        key(retry) {
+                                            AndroidView(
+                                                factory = { context ->
+                                                    ReaderImageView(context).apply {
+                                                        setZoomEnabled(false)
+                                                        setPanEnabled(false)
+                                                        setMinimumScaleType(
+                                                            SubsamplingScaleImageView
+                                                                .SCALE_TYPE_CENTER_INSIDE
+                                                        )
+                                                        setOnImageEventListener(
+                                                            object :
+                                                                SubsamplingScaleImageView.DefaultOnImageEventListener() {
+                                                                override fun onImageLoadError(
+                                                                    e: Exception
+                                                                ) {
+                                                                    decodeError = true
+                                                                }
+
+                                                                override fun onTileLoadError(
+                                                                    e: Exception
+                                                                ) {
+                                                                    decodeError = true
+                                                                }
+                                                            }
+                                                        )
+                                                        setImage(
+                                                            ImageSource.uri(
+                                                                    Uri.fromFile(availableFile)
+                                                                )
+                                                                .region(
+                                                                    Rect(
+                                                                        0,
+                                                                        top,
+                                                                        image.width,
+                                                                        bottom,
+                                                                    )
+                                                                )
+                                                        )
+                                                    }
+                                                },
+                                                update = { it.onReaderTap = { onTap() } },
+                                                modifier = Modifier.fillMaxSize(),
+                                                onReset = null,
+                                                onRelease = { it.recycle() },
+                                            )
+                                        }
+                                    if (decodeError)
+                                        Button(
+                                            onClick = { retry++ },
+                                            modifier = Modifier.align(Alignment.Center),
+                                        ) {
+                                            Text(
+                                                if (countdown > 0) "Retry image · ${countdown}s"
+                                                else "Retry image"
+                                            )
+                                        }
+                                }
+                            }
+                        }
+                }
             }
-            item(key = "end") {
+            item(key = "end-${tail.id}") {
                 Column(
                     Modifier.fillMaxWidth().padding(32.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Text(
-                        "Chapter complete",
-                        color = Color.White,
-                        style = MaterialTheme.typography.titleLarge,
-                    )
-                    Text(
-                        "Continue to the next available chapter.",
-                        color = Color.LightGray,
-                        modifier = Modifier.padding(vertical = 12.dp),
-                    )
-                    Button(onClick = { vm.finishChapter() }) { Text("Finish & continue") }
+                    if (settings.continuousChapters && next != null) {
+                        Text(nextError ?: "Loading ${next.label}…", color = Color.LightGray)
+                        if (nextLoading) CircularProgressIndicator(Modifier.padding(12.dp))
+                        if (nextError != null) {
+                            if (nextCountdown > 0)
+                                Text("Retrying in ${nextCountdown}s", color = Color.LightGray)
+                            Button(onClick = { nextAttempt++ }) { Text("Retry next chapter") }
+                        }
+                    } else {
+                        Text(
+                            if (next == null) "You're caught up" else "Chapter complete",
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleLarge,
+                        )
+                        Button(onClick = { vm.finishChapter() }) {
+                            Text(if (next == null) "Finish reading" else "Finish & continue")
+                        }
+                    }
                 }
             }
         }
