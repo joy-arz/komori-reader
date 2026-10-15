@@ -6,7 +6,7 @@ Updated October 16, 2026. Based on CURRENT_COMPARISON_REVIEW.md; Komikku is the 
 - [x] Automatically fetch the next source results page near the end; retain source/query/sort/tag/author filters. Prevent concurrent duplicate requests, stop on errors and repeated/empty pages, offer manual retry.
 - [x] Keep forward chapter loading automatic in webtoon mode, including newly refreshed chapter feeds. Keep offline reads local and respect the continuous-chapters setting.
 - [x] Preserve verification errors in webtoon strip reloads; show Verify source and suppress automatic challenge retries.
-- [ ] Run regression checks, push changes and publish a signed APK.
+- [x] Run regression checks, push changes and publish a signed APK (v0.6.0-alpha.2).
 
 ## Reliability and data protection
 - [ ] Persist Needs repair/page indices; reconcile completed download counts; repair only failed pages and test offline restart.
