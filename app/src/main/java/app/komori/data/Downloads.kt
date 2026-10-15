@@ -1,7 +1,6 @@
 package app.komori.data
 
 import android.content.Context
-import android.graphics.BitmapFactory
 import androidx.work.*
 import app.komori.KomoriApp
 import java.io.File
@@ -9,10 +8,10 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import okhttp3.Request
 
 fun chapterDirectory(context: Context, id: String) = File(context.filesDir, "chapters/$id")
 
@@ -87,31 +86,17 @@ class ChapterDownloadWorker(context: Context, params: WorkerParameters) :
                             return@withContext Result.retry()
                         }
                         val file = pageFile(app, id, index)
-                        if (!file.exists()) {
+                        if (!validImage(file)) {
                             if (directory.usableSpace < 64L * 1024 * 1024)
                                 throw IOException("Free at least 64 MB to continue downloading.")
-                            val temporary = File(directory, "$index.part")
+                            val temporary = File.createTempFile("page-$index-", ".part", directory)
                             try {
-                                app.source.client
-                                    .newCall(app.source.imageRequest(url, id))
-                                    .execute()
-                                    .use { response ->
-                                        if (!response.isSuccessful)
-                                            throw IOException(
-                                                "Page ${index + 1}: HTTP ${response.code}"
-                                            )
-                                        val body =
-                                            response.body
-                                                ?: throw IOException("Empty image response")
-                                        temporary.outputStream().use { output ->
-                                            body.byteStream().use { it.copyTo(output) }
-                                        }
-                                    }
-                                val bounds =
-                                    BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                                BitmapFactory.decodeFile(temporary.path, bounds)
-                                if (bounds.outWidth <= 0 || bounds.outHeight <= 0)
-                                    throw IOException("Page ${index + 1} is not a valid image")
+                                transferImage(
+                                    app.source.client,
+                                    app.source.imageRequest(url, id),
+                                    temporary,
+                                )
+                                kotlinx.coroutines.currentCoroutineContext().ensureActive()
                                 if (!temporary.renameTo(file))
                                     throw IOException("Could not save page ${index + 1}")
                             } finally {

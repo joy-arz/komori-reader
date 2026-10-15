@@ -12,7 +12,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -24,6 +26,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -1360,19 +1363,32 @@ private fun BulkDownloadDialog(vm: ReaderViewModel, close: () -> Unit) {
     var choice by remember { mutableStateOf(DownloadChoice.NEXT_5) }
     val downloads by vm.downloads.collectAsStateWithLifecycle()
     val progress by vm.progress.collectAsStateWithLifecycle()
-    val candidates = remember(choice, downloads, progress) { vm.downloadCandidates(choice) }
+    val chapters by vm.chapters.collectAsStateWithLifecycle()
+    val preferences by vm.preferences.collectAsStateWithLifecycle()
+    val settings by vm.settings.collectAsStateWithLifecycle()
+    val shelf by vm.shelf.collectAsStateWithLifecycle()
+    val candidates =
+        remember(choice, downloads, progress, chapters, preferences, settings, shelf) {
+            vm.downloadCandidates(choice)
+        }
     AlertDialog(
         onDismissRequest = close,
         title = { Text("Download chapters") },
         text = {
-            Column {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
                 Text(
                     "Uses your language and Smart Chapter preferences. Completed and active downloads are skipped.",
                     style = MaterialTheme.typography.bodySmall,
                 )
                 DownloadChoice.entries.forEach { value ->
                     Row(
-                        Modifier.fillMaxWidth().clickable { choice = value },
+                        Modifier.fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .selectable(
+                                selected = choice == value,
+                                role = Role.RadioButton,
+                                onClick = { choice = value },
+                            ),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         RadioButton(choice == value, null)
@@ -1389,7 +1405,7 @@ private fun BulkDownloadDialog(vm: ReaderViewModel, close: () -> Unit) {
             TextButton(
                 enabled = candidates.isNotEmpty(),
                 onClick = {
-                    vm.downloadBatch(candidates)
+                    vm.downloadBatch(vm.downloadCandidates(choice))
                     close()
                 },
             ) {

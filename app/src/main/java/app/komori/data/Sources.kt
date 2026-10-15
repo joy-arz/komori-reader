@@ -165,7 +165,11 @@ class WebSource(
                     throw IOException(
                         "${sourceNames[key]} returned HTTP ${it.code}. The source may be unavailable or require browser verification."
                     )
-                val html = it.body?.string() ?: throw IOException("Empty source response")
+                val body = it.body ?: throw IOException("Empty source response")
+                val stream = body.source()
+                if (stream.request(4L * 1024 * 1024 + 1))
+                    throw IOException("The source returned an unexpectedly large page.")
+                val html = stream.readUtf8()
                 val doc = Jsoup.parse(html, base + path)
                 if (
                     doc.title().contains("Just a moment", true) ||

@@ -116,3 +116,10 @@ On the final debug app, changing One Punch-Man from English to Indonesian loaded
 - After upgrade, Yotsuba to! and Eleceed remained in Library, Continue reading remained dismissed, and Downloads retained both completed chapters (48/48 and 7/7 pages). Settings reported up to date (0.5.0-alpha.1).
 - Manual bulk UI check showed all six choices and a 426-chapter preview for All readable chapters. Selected Next unread instead and queued one chapter; its row changed to Downloading, showed page progress and a Pause control. The 426-chapter batch was not downloaded.
 - Timed retries are bounded to three attempts per visible failed reader item. A real network-interruption recovery test and physical low-end-device performance measurements remain outstanding.
+
+## 0.5.0-alpha.2 reliability patch
+
+- Added a shared asynchronous OkHttp image transfer with cancellation wired to Call.cancel(), 32 MiB per-image limits, streaming free-space checks and image-header validation before promotion. HTML source documents have a 4 MiB limit. Downloads use unique temporary paths so canceled callbacks cannot remove a later attempt's temporary file.
+- Reader retries quarantine the failing local page and replace it after a successful fetch; damaged image headers no longer short-circuit network recovery. Download workers also validate existing page headers before skipping them. Header validation cannot detect every possible corruption; decode errors still expose Retry.
+- Bulk download selection observes chapter/feed and preference changes, reselects at confirmation, and has a scrollable dialog with 48 dp radio rows. Network errors are source-neutral.
+- Added transfer regressions for exact size limits, streamed overflow, interruption checks and cancellation of a throttled real HTTP response. No new physical-device or Android instrumentation run was performed for this patch. Browser verification UI, backup/restore, durable queue ordering and backward chapter loading remain subsequent audit work.

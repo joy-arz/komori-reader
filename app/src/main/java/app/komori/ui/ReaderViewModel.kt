@@ -435,6 +435,12 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     suspend fun invalidateCachedPage(chapter: Release, page: Int) =
         withContext(Dispatchers.IO) {
             File(app.cacheDir, "reader/${chapter.id}-$page-${settings.value.saver}.img").delete()
+            val local = pageFile(app, chapter.id, page)
+            if (local.exists()) {
+                val backup = File(local.parentFile, "${local.name}.repair")
+                if (!local.renameTo(backup))
+                    throw IOException("Could not prepare this page for repair.")
+            }
             pageManifests.remove("${chapter.id}-${settings.value.saver}")
             Unit
         }
@@ -527,12 +533,12 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         imageFetch.withLock {
             withContext(Dispatchers.IO) {
                 val downloaded = pageFile(app, chapter.id, page)
-                if (downloaded.exists()) {
+                if (validImage(downloaded)) {
                     return@withContext downloaded
                 }
                 val cacheDir = File(app.cacheDir, "reader").apply { mkdirs() }
                 val target = File(cacheDir, "${chapter.id}-$page-${settings.value.saver}.img")
-                if (target.exists()) {
+                if (validImage(target)) {
                     target.setLastModified(System.currentTimeMillis())
                     return@withContext target
                 }
@@ -548,22 +554,25 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                         ?: throw IOException("Page is no longer available. Reopen the chapter.")
                 val temporary = File.createTempFile("page-", ".part", cacheDir)
                 try {
-                    app.source.client
-                        .newCall(app.source.imageRequest(url, chapter.id))
-                        .execute()
-                        .use { response ->
-                            if (!response.isSuccessful) {
-                                pageManifests.remove(manifestKey)
-                                throw IOException(
-                                    "Page request failed (${response.code}). Tap Retry."
-                                )
-                            }
-                            val body = response.body ?: throw IOException("Empty page")
-                            temporary.outputStream().use { out ->
-                                body.byteStream().use { it.copyTo(out) }
-                            }
-                        }
+                    transferImage(
+                        app.source.client,
+                        app.source.imageRequest(url, chapter.id),
+                        temporary,
+                    )
                     coroutineContext.ensureActive()
+                    val backup = File(downloaded.parentFile, "${downloaded.name}.repair")
+                    if (downloaded.exists() || backup.exists()) {
+                        val repaired = File(downloaded.parentFile, "${downloaded.name}.replacement")
+                        try {
+                            temporary.copyTo(repaired, overwrite = true)
+                            coroutineContext.ensureActive()
+                            if (!repaired.renameTo(downloaded))
+                                throw IOException("Could not repair the downloaded page.")
+                            backup.delete()
+                        } finally {
+                            repaired.delete()
+                        }
+                    }
                     if (!temporary.renameTo(target)) throw IOException("Could not cache page")
                     // Keep the current file; trim oldest pages to a bounded 128 MB cache.
                     var total = cacheDir.listFiles()?.sumOf { it.length() } ?: 0L
