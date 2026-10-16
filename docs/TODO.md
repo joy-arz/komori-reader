@@ -2,6 +2,11 @@
 
 Updated October 16, 2026. Based on CURRENT_COMPARISON_REVIEW.md; Komikku is the main behavior reference and Mihon the secondary reference. Checkboxes mean delivered and validated, not merely started.
 
+## Compact browsing UI
+- [x] Expand Discover and Library search from icons; keep source filters and verification accessible.
+- [x] Swipe left/right through sources in Settings order without loading all catalogs.
+- [x] Tighten grid spacing and simplify shared navigation; inspect the UI on an Android emulator.
+
 ## Current delivery: automatic loading and reader error handling
 - [x] Automatically fetch the next source results page near the end; retain source/query/sort/tag/author filters. Prevent concurrent duplicate requests, stop on errors and repeated/empty pages, offer manual retry.
 - [x] Keep forward chapter loading automatic in webtoon mode, including newly refreshed chapter feeds. Keep offline reads local and respect the continuous-chapters setting.

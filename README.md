@@ -4,9 +4,11 @@ A quiet, lightweight Android manga reader. Built with Kotlin and Compose, with n
 
 **Status: early alpha.** The first end-to-end reading milestone is implemented. This is not yet the complete product in the roadmap.
 
-<img src="docs/images/library.png" width="280" alt="Komori library in the first Android alpha">
+<img src="docs/images/library.png" width="280" alt="Komori compact library">
 
 ## Available now
+
+- Compact Discover and Library search that opens from an icon; swipe left/right across the catalog to change sources in your Settings order. Discover filters are in the toolbar; Verify source and Reset search are under Source options.
 
 - Download integrity checks when opening saved chapters, persistent Needs repair status and targeted repair. Intact pages remain accessible with Read saved pages.
 
@@ -38,7 +40,7 @@ MangaDex and scanlation groups are credited in the application. This is an indep
 
 ## Install
 
-Download [komori-0.6.0-alpha.3.apk](https://github.com/joy-arz/komori-reader/releases/download/v0.6.0-alpha.3/komori-0.6.0-alpha.3.apk), or open [GitHub Releases](https://github.com/joy-arz/komori-reader/releases) and expand **Assets**. Choose the `.apk` file, not the source-code archives. Alpha releases are signed with the same private release key, allowing future updates without uninstalling.
+Download [komori-0.6.0-alpha.4.apk](https://github.com/joy-arz/komori-reader/releases/download/v0.6.0-alpha.4/komori-0.6.0-alpha.4.apk), or open [GitHub Releases](https://github.com/joy-arz/komori-reader/releases) and expand **Assets**. Choose the `.apk` file, not the source-code archives. Alpha releases are signed with the same private release key, allowing future updates without uninstalling.
 
 ## Build
 

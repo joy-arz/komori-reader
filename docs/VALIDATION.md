@@ -150,3 +150,12 @@ On the final debug app, changing One Punch-Man from English to Indonesian loaded
 - Tests cover lock ordering, canceled-writer lock release, persistent repair markers/counts, preservation of unaffected pages and missing-file completeness. This does not constitute a physical-device or full WorkManager/network race stress test.
 - Local final checks: 70 JVM tests passed, four optional live tests skipped; lint and debug/test APK assembly passed. All ten API 30 Android tests passed, including two new repair-state/integrity tests, five migrations, continuous reading, gestures and source-session isolation.
 - GitHub Android checks 38839288907 and release build 38839292566 passed. Published v0.6.0-alpha.3 APK is 2,090,053 bytes, version code 110; downloaded checksum matched and apksigner verified the unchanged signing certificate. The published APK was not newly installed on a device during this pass.
+
+## 0.6.0-alpha.4 compact browsing — October 16, 2026
+
+- Discover replaces its permanent search/filter/verification rows with a compact title toolbar. Search expands on demand, focuses the input and supports the keyboard Search action. Filters remain one tap away; source verification and search reset are in Source options, with the existing verification action also available on errors.
+- Horizontal catalog swipes select adjacent sources using the Settings order, with a 72 dp threshold and bounded ends. Vertical gestures remain delegated to the catalog grid. Only the active source catalog is loaded; this is gesture navigation rather than preloading a pager for every source.
+- Library search opens from an icon beside the shelf filters; Back closes it and resets the local filter. Shared grids use tighter gutters, the redundant brand label is removed, and bottom navigation labels appear for the active destination while all icons retain accessibility labels.
+- Initial API 30 visual inspection confirmed populated DemonicScans covers, leftward switching to WeebCentral, return switching and focused search with the keyboard. Ten Android regression tests passed (continuous reader, repair, migrations, gestures and source session). No physical-device validation was performed.
+
+- Final build: 70 unit tests passed, four optional live tests skipped; debug lint and assembly passed. Final emulator inspection confirmed the compact Library row, opening/closing its search and returning to Discover; a vertical catalog gesture retained the selected source.

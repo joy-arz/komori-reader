@@ -38,6 +38,7 @@ object KomoriIcons {
             "Creator",
             "M12,3a4,4 0,1 0,0 8a4,4 0,1 0,0 -8ZM12,5a2,2 0,1 1,0 4a2,2 0,1 1,0 -4ZM4,21v-3c0,-7 16,-7 16,0v3ZM6,19h12v-1c0,-4 -12,-4 -12,0Z",
         )
+    val More = icon("More", "M11,4h2v2h-2ZM11,11h2v2h-2ZM11,18h2v2h-2Z")
     val Search =
         icon(
             "Search",

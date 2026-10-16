@@ -9,6 +9,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -17,6 +18,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -24,16 +27,22 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
@@ -119,41 +128,36 @@ fun KomoriScreen(vm: ReaderViewModel) {
                 Scaffold(
                     snackbarHost = { SnackbarHost(snackbar) },
                     topBar = {
-                        TopAppBar(
-                            title = {
-                                Text(
-                                    if (selected != null) "Title details"
-                                    else
-                                        listOf(
-                                            "Your library",
-                                            "Discover",
-                                            "Authors",
-                                            "Downloads",
-                                            "Settings",
-                                        )[tab],
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                            },
-                            navigationIcon = {
-                                if (selected != null)
-                                    IconButton(onClick = vm::back) {
-                                        Icon(KomoriIcons.ArrowBack, "Back")
-                                    }
-                            },
-                            actions = {
-                                if (selected == null)
+                        if (selected != null || tab != 1)
+                            TopAppBar(
+                                title = {
                                     Text(
-                                        "Komori",
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.padding(end = 20.dp),
+                                        if (selected != null) "Title details"
+                                        else
+                                            listOf(
+                                                "Your library",
+                                                "Discover",
+                                                "Authors",
+                                                "Downloads",
+                                                "Settings",
+                                            )[tab],
+                                        fontWeight = FontWeight.SemiBold,
                                     )
-                            },
-                        )
+                                },
+                                navigationIcon = {
+                                    if (selected != null)
+                                        IconButton(onClick = vm::back) {
+                                            Icon(KomoriIcons.ArrowBack, "Back")
+                                        }
+                                },
+                            )
                     },
                     bottomBar = {
                         if (selected == null)
-                            NavigationBar {
+                            NavigationBar(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                                tonalElevation = 0.dp,
+                            ) {
                                 listOf(
                                         "Library" to KomoriIcons.CollectionsBookmark,
                                         "Discover" to KomoriIcons.Explore,
@@ -163,6 +167,7 @@ fun KomoriScreen(vm: ReaderViewModel) {
                                     )
                                     .forEachIndexed { index, item ->
                                         NavigationBarItem(
+                                            alwaysShowLabel = false,
                                             selected = tab == index,
                                             onClick = { tab = index },
                                             icon = { Icon(item.second, item.first) },
@@ -274,6 +279,16 @@ private fun Library(vm: ReaderViewModel, discover: () -> Unit) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     var filter by rememberSaveable { mutableStateOf("Saved") }
     var query by rememberSaveable { mutableStateOf("") }
+    var searchExpanded by rememberSaveable { mutableStateOf(false) }
+    val focus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    fun closeSearch() {
+        searchExpanded = false
+        query = ""
+        keyboard?.hide()
+    }
+    BackHandler(searchExpanded) { closeSearch() }
+    LaunchedEffect(searchExpanded) { if (searchExpanded) focus.requestFocus() }
     Column {
         val recent = shelf.firstOrNull { it.lastRelease != null }
         val book = manga.find { it.id == recent?.mangaId }
@@ -315,22 +330,33 @@ private fun Library(vm: ReaderViewModel, discover: () -> Unit) {
                 }
             }
         }
-        OutlinedTextField(
-            query,
-            { query = it },
-            Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-            placeholder = { Text("Find something on your shelf") },
-            leadingIcon = { Icon(KomoriIcons.Search, null) },
-            singleLine = true,
-            shape = RoundedCornerShape(18.dp),
-        )
+        if (searchExpanded)
+            OutlinedTextField(
+                query,
+                { query = it },
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp).focusRequester(focus),
+                placeholder = { Text("Find something on your shelf") },
+                leadingIcon = {
+                    IconButton(onClick = { closeSearch() }) {
+                        Icon(KomoriIcons.ArrowBack, "Close library search")
+                    }
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(18.dp),
+            )
         Row(
-            Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             listOf("Saved", "Liked", "History").forEach {
                 FilterChip(filter == it, { filter = it }, label = { Text(it) })
             }
+            Spacer(Modifier.weight(1f))
+            if (!searchExpanded)
+                IconButton(onClick = { searchExpanded = true }) {
+                    Icon(KomoriIcons.Search, "Search library")
+                }
         }
         run {
             val entries =
@@ -457,9 +483,105 @@ private fun Discover(vm: ReaderViewModel) {
     LaunchedEffect(activeSource, filter) { grid.scrollToItem(0) }
     var showFilters by remember { mutableStateOf(false) }
     var query by rememberSaveable(activeSource) { mutableStateOf("") }
+    var submittedQuery by rememberSaveable(activeSource) { mutableStateOf("") }
+    var searchExpanded by rememberSaveable { mutableStateOf(false) }
+    var sourceMenu by remember { mutableStateOf(false) }
+    val focusRequester = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    val sources = sourceOrder(settings.sources)
+    val swipeThreshold = with(LocalDensity.current) { 72.dp.toPx() }
+    fun closeSearch() {
+        searchExpanded = false
+        keyboard?.hide()
+    }
+    fun submitSearch() {
+        submittedQuery = query
+        vm.submitSearch(query)
+        closeSearch()
+    }
+    BackHandler(searchExpanded) { closeSearch() }
+    LaunchedEffect(searchExpanded) { if (searchExpanded) focusRequester.requestFocus() }
+    LaunchedEffect(activeSource) { closeSearch() }
     if (showFilters) SourceFilters(vm, activeSource, filter, tags) { showFilters = false }
     LaunchedEffect(Unit) { if (activeSource.isEmpty() && !loading) vm.search("", null) }
-    Column {
+    Column(Modifier.fillMaxSize()) {
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (searchExpanded) {
+                IconButton(onClick = { closeSearch() }) {
+                    Icon(KomoriIcons.ArrowBack, "Close search")
+                }
+                TextField(
+                    query,
+                    { query = it },
+                    Modifier.weight(1f).focusRequester(focusRequester),
+                    placeholder = { Text("Search ${filter.searchType.lowercase()}s") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(20.dp),
+                    colors =
+                        TextFieldDefaults.colors(
+                            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent,
+                        ),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { submitSearch() }),
+                )
+                IconButton(onClick = { submitSearch() }) {
+                    Icon(KomoriIcons.Search, "Search source")
+                }
+            } else {
+                Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
+                    Text(
+                        "Discover",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        submittedQuery.ifBlank {
+                            filter.sort.ifEmpty {
+                                vm.app.source.sorts(activeSource).firstOrNull().orEmpty()
+                            }
+                        } + if (filter.tags.isNotEmpty()) " · ${filter.tags.size} tags" else "",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                IconButton(onClick = { searchExpanded = true }) {
+                    Icon(KomoriIcons.Search, "Open search")
+                }
+                IconButton(
+                    onClick = {
+                        showFilters = true
+                        vm.loadTags()
+                    }
+                ) {
+                    Icon(KomoriIcons.FilterList, "Filters and sorting")
+                }
+                Box {
+                    IconButton(onClick = { sourceMenu = true }) {
+                        Icon(KomoriIcons.More, "Source options")
+                    }
+                    DropdownMenu(sourceMenu, { sourceMenu = false }) {
+                        VerifySourceButton(vm, activeSource)
+                        DropdownMenuItem(
+                            text = { Text("Reset search") },
+                            onClick = {
+                                query = ""
+                                submittedQuery = ""
+                                vm.submitSearch("")
+                                sourceMenu = false
+                            },
+                        )
+                    }
+                }
+            }
+        }
         ScrollableTabRow(
             selectedTabIndex = sourceOrder(settings.sources).indexOf(activeSource).coerceAtLeast(0),
             edgePadding = 12.dp,
@@ -472,7 +594,7 @@ private fun Discover(vm: ReaderViewModel) {
                 )
             }
         }
-        if (activeSource in listOf("zap", "nhentai", "imhentai")) {
+        if (searchExpanded && activeSource in listOf("zap", "nhentai", "imhentai")) {
             Row(
                 Modifier.padding(horizontal = 20.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -500,78 +622,66 @@ private fun Discover(vm: ReaderViewModel) {
                 TextButton(onClick = vm::clearFacet) { Text("Clear") }
             }
         }
-        Row(
-            Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        Box(
+            Modifier.weight(1f).fillMaxWidth().pointerInput(activeSource, sources) {
+                var distance = 0f
+                detectHorizontalDragGestures(
+                    onDragStart = { distance = 0f },
+                    onHorizontalDrag = { change, amount ->
+                        change.consume()
+                        distance += amount
+                    },
+                    onDragCancel = { distance = 0f },
+                    onDragEnd = {
+                        val index = sources.indexOf(activeSource)
+                        val next =
+                            when {
+                                distance < -swipeThreshold -> index + 1
+                                distance > swipeThreshold -> index - 1
+                                else -> index
+                            }
+                        if (index >= 0 && next != index && next in sources.indices)
+                            vm.chooseSource(sources[next])
+                    },
+                )
+            }
         ) {
-            OutlinedTextField(
-                query,
-                { query = it },
-                Modifier.weight(1f),
-                placeholder = {
-                    Text(
-                        if (filter.searchType == "Title") "Search titles"
-                        else "Exact ${filter.searchType.lowercase()} name"
-                    )
-                },
-                singleLine = true,
-                shape = RoundedCornerShape(18.dp),
-            )
-            IconButton(onClick = { vm.submitSearch(query) }) {
-                Icon(KomoriIcons.Search, "Search source")
-            }
+            if (results.isEmpty() && !loading)
+                EmptyState(
+                    KomoriIcons.Search,
+                    "No titles to show",
+                    "Try a different search, or check your connection.",
+                    "Retry",
+                    { vm.search() },
+                )
+            else
+                MangaGrid(
+                    results,
+                    gridState = grid,
+                    onOpen = { vm.open(it) },
+                    onRead = { vm.open(it, true) },
+                    subtitle = { title ->
+                        if (shelf.any { it.mangaId == title.id && it.saved }) "In your library"
+                        else if (duplicateTitles(title, library, shelf).isNotEmpty())
+                            "Possible duplicate in library"
+                        else ""
+                    },
+                    footer = {
+                        if (vm.canLoadMore && results.isNotEmpty())
+                            TextButton(
+                                enabled = !loading,
+                                onClick = { vm.search(more = true) },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text(
+                                    if (loading) "Loading more titles…"
+                                    else if (browseError != null) "Retry loading titles"
+                                    else "Load more titles"
+                                )
+                            }
+                    },
+                )
         }
-        Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                "${filter.sort.ifEmpty { vm.app.source.sorts(activeSource).firstOrNull().orEmpty() }} · ${filter.tags.size} tags",
-                Modifier.weight(1f),
-                style = MaterialTheme.typography.labelSmall,
-            )
-            TextButton(
-                onClick = {
-                    showFilters = true
-                    vm.loadTags()
-                }
-            ) {
-                Text("Filters")
-            }
-            VerifySourceButton(vm, activeSource)
-        }
-        if (results.isEmpty() && !loading)
-            EmptyState(
-                KomoriIcons.Search,
-                "No titles to show",
-                "Try a different search, or check your connection.",
-                "Retry",
-                { vm.search() },
-            )
-        else
-            MangaGrid(
-                results,
-                gridState = grid,
-                onOpen = { vm.open(it) },
-                onRead = { vm.open(it, true) },
-                subtitle = { title ->
-                    if (shelf.any { it.mangaId == title.id && it.saved }) "In your library"
-                    else if (duplicateTitles(title, library, shelf).isNotEmpty())
-                        "Possible duplicate in library"
-                    else ""
-                },
-                footer = {
-                    if (vm.canLoadMore && results.isNotEmpty())
-                        TextButton(
-                            enabled = !loading,
-                            onClick = { vm.search(more = true) },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text(
-                                if (loading) "Loading more titles…"
-                                else if (browseError != null) "Retry loading titles"
-                                else "Load more titles"
-                            )
-                        }
-                },
-            )
     }
 }
 
@@ -587,9 +697,9 @@ private fun MangaGrid(
     LazyVerticalGrid(
         GridCells.Adaptive(140.dp),
         state = gridState,
-        contentPadding = PaddingValues(20.dp, 4.dp, 20.dp, 24.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalArrangement = Arrangement.spacedBy(22.dp),
+        contentPadding = PaddingValues(16.dp, 12.dp, 16.dp, 24.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         items(manga, key = { it.id }) { title ->
             Column {
