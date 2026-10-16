@@ -142,3 +142,10 @@ On the final debug app, changing One Punch-Man from English to Indonesian loaded
 - All audit recommendations are recorded in docs/TODO.md. This patch does not claim the entire backlog is implemented.
 - API 30 emulator: all eight Android tests passed (continuous reading, five migrations, gestures and cookie/session isolation). The continuous-reader test now waits for the asynchronous Library resume-marker write before asserting it; chapter 4 and crossed-chapter completion are verified. Live browsing pagination and real browser challenges were not newly tested.
 - Published artifact: Android checks 38785905483 and release 38785914318 succeeded. Downloaded v0.6.0-alpha.2 APK (2,090,049 bytes, version code 109); release checksum matches and apksigner verifies the existing signing identity. No new on-device installation of the published APK was performed in this pass.
+
+## 0.6.0-alpha.3 repair and download coordination — October 16, 2026
+
+- Failed local-page retries persist Needs repair plus per-page `.repair` markers before removing the canonical file. Offline opening reconciles file validity and counts; intact pages remain accessible through Read saved pages. Repair resumes skip intact files when the source manifest is unchanged.
+- Workers, pause/delete state changes and reader repair promotion share chapter locks. Cancellation is checked before worker publication; generation counters prevent a stale reader fetch from restoring a deleted/paused download. Duplicate enqueue requests no longer reset an active worker's record.
+- Tests cover lock ordering, canceled-writer lock release, persistent repair markers/counts, preservation of unaffected pages and missing-file completeness. This does not constitute a physical-device or full WorkManager/network race stress test.
+- Local final checks: 70 JVM tests passed, four optional live tests skipped; lint and debug/test APK assembly passed. All ten API 30 Android tests passed, including two new repair-state/integrity tests, five migrations, continuous reading, gestures and source-session isolation.

@@ -89,7 +89,8 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                     canLoadMore = true
                     query = text
                     if (creator != null && creator.id != creatorFilter?.id)
-                        browseFilter.value = browseFilter.value.copy(facetPath = "", tags = emptySet())
+                        browseFilter.value =
+                            browseFilter.value.copy(facetPath = "", tags = emptySet())
                     creatorFilter = creator
                     activeCreator.value = creator
                 }
@@ -116,7 +117,8 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                 nextOffset += 1
                 val previous = if (more) results.value else emptyList()
                 val merged = (previous + found).distinctBy { it.id }
-                canLoadMore = PaginationPolicy.hasNext(foundPage.hasMore, previous.size, merged.size)
+                canLoadMore =
+                    PaginationPolicy.hasNext(foundPage.hasMore, previous.size, merged.size)
                 results.value = merged
             } finally {
                 loading.value = false
@@ -133,7 +135,8 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         require(type in listOf("Title", "Tag", "Author"))
         creatorFilter = null
         activeCreator.value = null
-        browseFilter.value = browseFilter.value.copy(searchType = type, facetPath = "", tags = emptySet())
+        browseFilter.value =
+            browseFilter.value.copy(searchType = type, facetPath = "", tags = emptySet())
     }
 
     fun clearFacet() {
@@ -146,8 +149,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         val title = selected.value
         if (release != null && sourceKey(release.mangaId) == key) read(release)
         else if (title != null && sourceKey(title.id) == key) open(title)
-        else if (activeSource.value == key) search()
-        else chooseSource(key)
+        else if (activeSource.value == key) search() else chooseSource(key)
     }
 
     fun browseTag(manga: Manga, tag: SourceTag) {
@@ -190,6 +192,24 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     fun readOffline(download: Download) {
         detailJob?.cancel()
         detailJob = task {
+            val checked =
+                withContext(Dispatchers.IO) {
+                    val current = dao.download(download.releaseId)
+                    if (current?.state in DownloadPolicy.activeStates) current
+                    else
+                        ChapterFiles.locked(download.releaseId) {
+                            if (
+                                dao.download(download.releaseId)?.state !in
+                                    DownloadPolicy.activeStates
+                            )
+                                reconcileDownload(app, download.releaseId)
+                            dao.download(download.releaseId)
+                        }
+                } ?: return@task
+            if (checked.done == 0) {
+                notice.value = "No intact saved pages remain. Choose Repair to download them again."
+                return@task
+            }
             val book = dao.manga(download.mangaId) ?: return@task
             val rows = dao.chapters(book.id).map { it.release() }
             val complete =
@@ -198,7 +218,13 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                     .filter { it.state == "Complete" }
                     .associate { it.releaseId to it.total }
             selected.value = book
-            chapters.value = retainDownloadedChapters(emptyList(), rows, complete)
+            chapters.value =
+                retainDownloadedChapters(
+                    emptyList(),
+                    rows,
+                    if (checked.done > 0) complete + (checked.releaseId to checked.total)
+                    else complete,
+                )
             val release = chapters.value.find { it.id == download.releaseId } ?: return@task
             offlineLanguage = release.language
             chapterStatus.value = "Saved chapter list · Offline"
@@ -489,11 +515,11 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     suspend fun invalidateCachedPage(chapter: Release, page: Int) =
         withContext(Dispatchers.IO) {
             File(app.cacheDir, "reader/${chapter.id}-$page-${settings.value.saver}.img").delete()
-            val local = pageFile(app, chapter.id, page)
-            if (local.exists()) {
-                val backup = File(local.parentFile, "${local.name}.repair")
-                if (!local.renameTo(backup))
-                    throw IOException("Could not prepare this page for repair.")
+            if (dao.download(chapter.id)?.state in DownloadPolicy.activeStates)
+                throw IOException("Pause this chapter's download before repairing a page.")
+            ChapterFiles.locked(chapter.id) {
+                ChapterFiles.invalidate(chapter.id)
+                markPageForRepair(app, chapter.id, page)
             }
             pageManifests.remove("${chapter.id}-${settings.value.saver}")
             Unit
@@ -559,10 +585,10 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun resumeAll() = task {
-        for (download in downloads.value.filter { it.state in listOf("Paused", "Failed", "Verification required") }) resume(
-                download
-            )
-            .join()
+        for (download in
+            downloads.value.filter {
+                it.state in listOf("Paused", "Failed", "Verification required", "Needs repair")
+            }) resume(download).join()
     }
 
     private suspend fun savePage(
@@ -587,12 +613,19 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         imageFetch.withLock {
             withContext(Dispatchers.IO) {
                 val downloaded = pageFile(app, chapter.id, page)
-                if (validImage(downloaded)) {
+                if (!repairMarker(app, chapter.id, page).exists() && validImage(downloaded)) {
                     return@withContext downloaded
                 }
+                val saved = dao.download(chapter.id)
+                if (saved != null && saved.state !in DownloadPolicy.activeStates)
+                    ChapterFiles.locked(chapter.id) {
+                        if (dao.download(chapter.id)?.state !in DownloadPolicy.activeStates)
+                            markPageForRepair(app, chapter.id, page)
+                    }
+                val repairVersion = ChapterFiles.version(chapter.id)
                 val cacheDir = File(app.cacheDir, "reader").apply { mkdirs() }
                 val target = File(cacheDir, "${chapter.id}-$page-${settings.value.saver}.img")
-                if (validImage(target)) {
+                if (validImage(target) && !repairMarker(app, chapter.id, page).exists()) {
                     target.setLastModified(System.currentTimeMillis())
                     return@withContext target
                 }
@@ -614,19 +647,27 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                         temporary,
                     )
                     coroutineContext.ensureActive()
-                    val backup = File(downloaded.parentFile, "${downloaded.name}.repair")
-                    if (downloaded.exists() || backup.exists()) {
-                        val repaired = File(downloaded.parentFile, "${downloaded.name}.replacement")
-                        try {
-                            temporary.copyTo(repaired, overwrite = true)
-                            coroutineContext.ensureActive()
-                            if (!repaired.renameTo(downloaded))
-                                throw IOException("Could not repair the downloaded page.")
-                            backup.delete()
-                        } finally {
-                            repaired.delete()
+                    if (repairMarker(app, chapter.id, page).exists())
+                        ChapterFiles.locked(chapter.id) {
+                            if (
+                                ChapterFiles.version(chapter.id) == repairVersion &&
+                                    dao.download(chapter.id) != null &&
+                                    repairMarker(app, chapter.id, page).exists()
+                            ) {
+                                val repaired =
+                                    File.createTempFile("repair-", ".part", downloaded.parentFile)
+                                try {
+                                    temporary.copyTo(repaired, overwrite = true)
+                                    coroutineContext.ensureActive()
+                                    if (!repaired.renameTo(downloaded))
+                                        throw IOException("Could not repair the downloaded page.")
+                                    repairMarker(app, chapter.id, page).delete()
+                                    reconcileDownload(app, chapter.id)
+                                } finally {
+                                    repaired.delete()
+                                }
+                            }
                         }
-                    }
                     if (!temporary.renameTo(target)) throw IOException("Could not cache page")
                     // Keep the current file; trim oldest pages to a bounded 128 MB cache.
                     var total = cacheDir.listFiles()?.sumOf { it.length() } ?: 0L
@@ -723,8 +764,12 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                 .result
                 .get()
         }
-        val latest = dao.download(download.releaseId) ?: return@task
-        dao.putDownload(latest.copy(state = "Paused"))
+        ChapterFiles.locked(download.releaseId) {
+            ChapterFiles.invalidate(download.releaseId)
+            dao.download(download.releaseId)?.let { latest ->
+                if (latest.state != "Complete") dao.putDownload(latest.copy(state = "Paused"))
+            }
+        }
     }
 
     fun resume(download: Download) = task {
@@ -737,8 +782,16 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                 .cancelUniqueWork("download-${download.releaseId}")
                 .result
                 .get()
-            chapterDirectory(app, download.releaseId).deleteRecursively()
+            ChapterFiles.locked(download.releaseId) {
+                ChapterFiles.invalidate(download.releaseId)
+                if (
+                    !chapterDirectory(app, download.releaseId).let {
+                        !it.exists() || it.deleteRecursively()
+                    }
+                )
+                    throw IOException("Could not delete the downloaded chapter. Please retry.")
+                dao.removeDownload(download.releaseId)
+            }
         }
-        dao.removeDownload(download.releaseId)
     }
 }

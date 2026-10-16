@@ -9,8 +9,10 @@ Updated October 16, 2026. Based on CURRENT_COMPARISON_REVIEW.md; Komikku is the 
 - [x] Run regression checks, push changes and publish a signed APK (v0.6.0-alpha.2).
 
 ## Reliability and data protection
-- [ ] Persist Needs repair/page indices; reconcile completed download counts; repair only failed pages and test offline restart.
-- [ ] Coordinate worker ownership, reader repair, pause and deletion per chapter; test slow-transfer cancellation races.
+Current patch: durable per-page repair markers, Needs repair counts, partial offline reading, chapter file locks and stale reader-repair rejection are implemented. Local unit, lint and API 30 device checks passed; full process-death and slow-network WorkManager race coverage remains a follow-up.
+- [x] Persist Needs repair/page indices, reconcile completed download counts and repair failed pages while retaining intact files.
+- [x] Coordinate worker writes, reader repair, pause and deletion per chapter; reject stale reader repair results and test lock/cancellation behavior.
+- [ ] Stress-test repair across process death and real WorkManager pause/delete during slow network transfers.
 - [ ] Add typed offline/rate-limit/missing-page/storage handling, Retry-After support and stable page retry budgets.
 - [ ] Add document-picker metadata backup/export, strict validation, restore preview and transactional restore; exclude cookies/images by default.
 - [ ] Add optional scheduled backups with retention and restore round-trip tests.

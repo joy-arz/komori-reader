@@ -4,11 +4,9 @@ package app.komori.ui
 
 import android.app.Activity
 import android.content.Intent
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.ui.platform.LocalContext
-import app.komori.SourceVerificationActivity
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -29,6 +27,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
@@ -40,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.komori.BuildConfig
+import app.komori.SourceVerificationActivity
 import app.komori.data.*
 import app.komori.domain.DownloadChoice
 import app.komori.domain.DownloadPolicy
@@ -124,8 +124,13 @@ fun KomoriScreen(vm: ReaderViewModel) {
                                 Text(
                                     if (selected != null) "Title details"
                                     else
-                                        listOf("Your library", "Discover", "Authors", "Downloads", "Settings")[
-                                            tab],
+                                        listOf(
+                                            "Your library",
+                                            "Discover",
+                                            "Authors",
+                                            "Downloads",
+                                            "Settings",
+                                        )[tab],
                                     fontWeight = FontWeight.SemiBold,
                                 )
                             },
@@ -180,7 +185,10 @@ fun KomoriScreen(vm: ReaderViewModel) {
                                         modifier = Modifier.weight(1f),
                                         style = MaterialTheme.typography.bodySmall,
                                     )
-                                    VerifySourceButton(vm, selected?.id?.let(::sourceKey) ?: activeSource)
+                                    VerifySourceButton(
+                                        vm,
+                                        selected?.id?.let(::sourceKey) ?: activeSource,
+                                    )
                                     TextButton(onClick = { vm.error.value = null }) {
                                         Text("Dismiss")
                                     }
@@ -188,10 +196,14 @@ fun KomoriScreen(vm: ReaderViewModel) {
                             }
                         }
                         if (selected != null)
-                            Details(vm, selected!!, browseTag = { tag ->
-                                vm.browseTag(selected!!, tag)
-                                tab = 1
-                            }) { creator ->
+                            Details(
+                                vm,
+                                selected!!,
+                                browseTag = { tag ->
+                                    vm.browseTag(selected!!, tag)
+                                    tab = 1
+                                },
+                            ) { creator ->
                                 vm.back()
                                 tab = 1
                                 vm.search("", creator)
@@ -200,10 +212,11 @@ fun KomoriScreen(vm: ReaderViewModel) {
                             when (tab) {
                                 0 -> Library(vm, { tab = 1 })
                                 1 -> Discover(vm)
-                                2 -> Authors(vm) { creator ->
-                                    tab = 1
-                                    vm.search("", creator)
-                                }
+                                2 ->
+                                    Authors(vm) { creator ->
+                                        tab = 1
+                                        vm.search("", creator)
+                                    }
                                 3 -> Downloads(vm)
                                 4 -> SettingsScreen(vm, settings)
                             }
@@ -218,9 +231,10 @@ fun KomoriScreen(vm: ReaderViewModel) {
 private fun coverRequest(manga: Manga): coil.request.ImageRequest {
     val context = LocalContext.current
     return remember(context, manga.id, manga.cover) {
-        coil.request.ImageRequest.Builder(context).data(manga.cover).apply {
-            sourceOrigins[sourceKey(manga.id)]?.let { addHeader("Referer", "$it/") }
-        }.build()
+        coil.request.ImageRequest.Builder(context)
+            .data(manga.cover)
+            .apply { sourceOrigins[sourceKey(manga.id)]?.let { addHeader("Referer", "$it/") } }
+            .build()
     }
 }
 
@@ -360,38 +374,60 @@ private fun Authors(vm: ReaderViewModel, browseCreator: (Creator) -> Unit) {
     val creators by vm.creators.collectAsStateWithLifecycle()
     var query by rememberSaveable { mutableStateOf("") }
     Column(Modifier.fillMaxSize()) {
-        OutlinedTextField(query, { query = it },
+        OutlinedTextField(
+            query,
+            { query = it },
             Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-            label = { Text("Search followed authors and artists") }, singleLine = true)
+            label = { Text("Search followed authors and artists") },
+            singleLine = true,
+        )
         val visible = creators.filter { it.name.contains(query, true) }
-        if (visible.isEmpty()) EmptyState(KomoriIcons.PersonOutline,
-            if (creators.isEmpty()) "No followed authors yet" else "No matching authors",
-            "Follow an author or artist from title details. Tap a follow to browse works on its source.")
-        else LazyColumn {
-            items(visible, key = { it.id }) { creator ->
-                ListItem(
-                    headlineContent = { Text(creator.name) },
-                    supportingContent = { Text("${sourceName(creator.id)} · ${creator.role} · Local follow") },
-                    leadingContent = { Icon(KomoriIcons.PersonOutline, null) },
-                    trailingContent = { TextButton(onClick = { vm.follow(creator) }) { Text("Unfollow") } },
-                    modifier = Modifier.clickable { browseCreator(creator) },
-                )
+        if (visible.isEmpty())
+            EmptyState(
+                KomoriIcons.PersonOutline,
+                if (creators.isEmpty()) "No followed authors yet" else "No matching authors",
+                "Follow an author or artist from title details. Tap a follow to browse works on its source.",
+            )
+        else
+            LazyColumn {
+                items(visible, key = { it.id }) { creator ->
+                    ListItem(
+                        headlineContent = { Text(creator.name) },
+                        supportingContent = {
+                            Text("${sourceName(creator.id)} · ${creator.role} · Local follow")
+                        },
+                        leadingContent = { Icon(KomoriIcons.PersonOutline, null) },
+                        trailingContent = {
+                            TextButton(onClick = { vm.follow(creator) }) { Text("Unfollow") }
+                        },
+                        modifier = Modifier.clickable { browseCreator(creator) },
+                    )
+                }
             }
-        }
     }
 }
 
 @Composable
 internal fun VerifySourceButton(vm: ReaderViewModel, source: String) {
     val context = LocalContext.current
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            result.data?.getStringExtra("source")?.let(vm::retrySource)
+    val launcher =
+        rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result
+            ->
+            if (result.resultCode == Activity.RESULT_OK) {
+                result.data?.getStringExtra("source")?.let(vm::retrySource)
+            }
         }
-    }
-    if (source in sourceOrigins) TextButton(onClick = {
-        launcher.launch(Intent(context, SourceVerificationActivity::class.java).putExtra("source", source))
-    }) { Text("Verify source") }
+    if (source in sourceOrigins)
+        TextButton(
+            onClick = {
+                launcher.launch(
+                    Intent(context, SourceVerificationActivity::class.java)
+                        .putExtra("source", source)
+                )
+            }
+        ) {
+            Text("Verify source")
+        }
 }
 
 @Composable
@@ -410,11 +446,13 @@ private fun Discover(vm: ReaderViewModel) {
     val nearEnd by remember {
         derivedStateOf {
             val info = grid.layoutInfo
-            info.totalItemsCount > 0 && (info.visibleItemsInfo.lastOrNull()?.index ?: -1) >= info.totalItemsCount - 5
+            info.totalItemsCount > 0 &&
+                (info.visibleItemsInfo.lastOrNull()?.index ?: -1) >= info.totalItemsCount - 5
         }
     }
     LaunchedEffect(nearEnd, results.size, loading, browseError, activeSource, filter) {
-        if (nearEnd && !loading && browseError == null && results.isNotEmpty()) vm.search(more = true)
+        if (nearEnd && !loading && browseError == null && results.isNotEmpty())
+            vm.search(more = true)
     }
     LaunchedEffect(activeSource, filter) { grid.scrollToItem(0) }
     var showFilters by remember { mutableStateOf(false) }
@@ -435,18 +473,30 @@ private fun Discover(vm: ReaderViewModel) {
             }
         }
         if (activeSource in listOf("zap", "nhentai", "imhentai")) {
-            Row(Modifier.padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(
+                Modifier.padding(horizontal = 20.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
                 listOf("Title", "Tag", "Author").forEach { type ->
-                    FilterChip(filter.searchType == type, {
-                        vm.setSearchType(type)
-                    }, label = { Text(type) })
+                    FilterChip(
+                        filter.searchType == type,
+                        { vm.setSearchType(type) },
+                        label = { Text(type) },
+                    )
                 }
             }
         }
         if (activeCreator != null || filter.facetPath.isNotEmpty()) {
-            Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(activeCreator?.name ?: android.net.Uri.decode(filter.facetPath.trim('/').substringAfter('/')),
-                    Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
+            Row(
+                Modifier.padding(horizontal = 20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    activeCreator?.name
+                        ?: android.net.Uri.decode(filter.facetPath.trim('/').substringAfter('/')),
+                    Modifier.weight(1f),
+                    style = MaterialTheme.typography.labelLarge,
+                )
                 TextButton(onClick = vm::clearFacet) { Text("Clear") }
             }
         }
@@ -458,7 +508,12 @@ private fun Discover(vm: ReaderViewModel) {
                 query,
                 { query = it },
                 Modifier.weight(1f),
-                placeholder = { Text(if (filter.searchType == "Title") "Search titles" else "Exact ${filter.searchType.lowercase()} name") },
+                placeholder = {
+                    Text(
+                        if (filter.searchType == "Title") "Search titles"
+                        else "Exact ${filter.searchType.lowercase()} name"
+                    )
+                },
                 singleLine = true,
                 shape = RoundedCornerShape(18.dp),
             )
@@ -476,7 +531,7 @@ private fun Discover(vm: ReaderViewModel) {
                 onClick = {
                     showFilters = true
                     vm.loadTags()
-                },
+                }
             ) {
                 Text("Filters")
             }
@@ -509,7 +564,11 @@ private fun Discover(vm: ReaderViewModel) {
                             onClick = { vm.search(more = true) },
                             modifier = Modifier.fillMaxWidth(),
                         ) {
-                            Text(if (loading) "Loading more titles…" else if (browseError != null) "Retry loading titles" else "Load more titles")
+                            Text(
+                                if (loading) "Loading more titles…"
+                                else if (browseError != null) "Retry loading titles"
+                                else "Load more titles"
+                            )
                         }
                 },
             )
@@ -572,7 +631,12 @@ private fun MangaGrid(
 }
 
 @Composable
-private fun Details(vm: ReaderViewModel, manga: Manga, browseTag: (SourceTag) -> Unit, browseCreator: (Creator) -> Unit) {
+private fun Details(
+    vm: ReaderViewModel,
+    manga: Manga,
+    browseTag: (SourceTag) -> Unit,
+    browseCreator: (Creator) -> Unit,
+) {
     val shelf by vm.shelf.collectAsStateWithLifecycle()
     val followed by vm.creators.collectAsStateWithLifecycle()
     val raw by vm.chapters.collectAsStateWithLifecycle()
@@ -721,9 +785,12 @@ private fun Details(vm: ReaderViewModel, manga: Manga, browseTag: (SourceTag) ->
             )
         }
         item {
-            val metadataTags = remember(manga.tagsJson) {
-                JSONArray(manga.tagsJson).objects().map { SourceTag(it.getString("id"), it.getString("name")) }
-            }
+            val metadataTags =
+                remember(manga.tagsJson) {
+                    JSONArray(manga.tagsJson).objects().map {
+                        SourceTag(it.getString("id"), it.getString("name"))
+                    }
+                }
             if (metadataTags.isNotEmpty()) {
                 Text("Tags", style = MaterialTheme.typography.titleMedium)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -998,7 +1065,16 @@ private fun Downloads(vm: ReaderViewModel) {
                         Text("Pause queue")
                     }
                     TextButton(
-                        enabled = downloads.any { it.state in listOf("Paused", "Failed", "Verification required") },
+                        enabled =
+                            downloads.any {
+                                it.state in
+                                    listOf(
+                                        "Paused",
+                                        "Failed",
+                                        "Verification required",
+                                        "Needs repair",
+                                    )
+                            },
                         onClick = { vm.resumeAll() },
                     ) {
                         Text("Resume / retry all")
@@ -1039,13 +1115,28 @@ private fun Downloads(vm: ReaderViewModel) {
                         if (download.state == "Verification required")
                             VerifySourceButton(vm, sourceKey(download.mangaId))
                         Row {
-                            if (download.state in listOf("Paused", "Failed", "Verification required"))
-                                TextButton(onClick = { vm.resume(download) }) { Text("Resume") }
+                            if (
+                                download.state in
+                                    listOf(
+                                        "Paused",
+                                        "Failed",
+                                        "Verification required",
+                                        "Needs repair",
+                                    )
+                            )
+                                TextButton(onClick = { vm.resume(download) }) {
+                                    Text(
+                                        if (download.state == "Needs repair") "Repair" else "Resume"
+                                    )
+                                }
                             else if (download.state != "Complete")
                                 TextButton(onClick = { vm.pause(download) }) { Text("Pause") }
-                            if (download.state == "Complete")
+                            if (download.done > 0)
                                 TextButton(onClick = { vm.readOffline(download) }) {
-                                    Text("Read offline")
+                                    Text(
+                                        if (download.state == "Complete") "Read offline"
+                                        else "Read saved pages"
+                                    )
                                 }
                             TextButton(onClick = { deleting = download }) { Text("Delete") }
                         }
@@ -1371,8 +1462,9 @@ private fun SourceFilters(
         mutableStateOf(filter.sort.ifEmpty { vm.app.source.sorts(source).firstOrNull().orEmpty() })
     }
     val creator by vm.activeCreator.collectAsStateWithLifecycle()
-    val facetBrowse = source in listOf("zap", "nhentai", "imhentai") &&
-        (creator != null || filter.facetPath.isNotEmpty() || filter.searchType != "Title")
+    val facetBrowse =
+        source in listOf("zap", "nhentai", "imhentai") &&
+            (creator != null || filter.facetPath.isNotEmpty() || filter.searchType != "Title")
     var chosen by remember { mutableStateOf(filter.tags) }
     var tagQuery by remember { mutableStateOf("") }
     AlertDialog(
@@ -1389,45 +1481,57 @@ private fun SourceFilters(
                     }
                 }
                 if (source in listOf("zap", "imhentai"))
-                    Text("Categories filter title searches. Use Tag or Author search for an exact name, or tap metadata on a title.",
-                        style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        "Categories filter title searches. Use Tag or Author search for an exact name, or tap metadata on a title.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
                 if (source == "demonic")
                     Text(
                         "Sort and tags apply to browsing. Title search is separate.",
                         style = MaterialTheme.typography.bodySmall,
                     )
                 if (facetBrowse) {
-                    Text("Tag and category filters apply to title searches. Metadata browsing uses the exact source name.",
-                        style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        "Tag and category filters apply to title searches. Metadata browsing uses the exact source name.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
                 } else {
-                OutlinedTextField(
-                    tagQuery,
-                    { tagQuery = it },
-                    label = { Text(if (source in listOf("zap", "imhentai")) "Find a category" else "Find a tag") },
-                    singleLine = true,
-                )
-                LazyColumn(Modifier.heightIn(max = 280.dp)) {
-                    items(tags.filter { it.name.contains(tagQuery, true) }, key = { it.id }) { tag
-                        ->
-                        Row(
-                            Modifier.fillMaxWidth().clickable {
-                                chosen = if (tag.id in chosen) chosen - tag.id else chosen + tag.id
-                            },
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Checkbox(tag.id in chosen, null)
-                            Text(tag.name)
+                    OutlinedTextField(
+                        tagQuery,
+                        { tagQuery = it },
+                        label = {
+                            Text(
+                                if (source in listOf("zap", "imhentai")) "Find a category"
+                                else "Find a tag"
+                            )
+                        },
+                        singleLine = true,
+                    )
+                    LazyColumn(Modifier.heightIn(max = 280.dp)) {
+                        items(tags.filter { it.name.contains(tagQuery, true) }, key = { it.id }) {
+                            tag ->
+                            Row(
+                                Modifier.fillMaxWidth().clickable {
+                                    chosen =
+                                        if (tag.id in chosen) chosen - tag.id else chosen + tag.id
+                                },
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Checkbox(tag.id in chosen, null)
+                                Text(tag.name)
+                            }
                         }
+                        if (tags.isEmpty()) item { Text("Tags unavailable or still loading.") }
                     }
-                    if (tags.isEmpty()) item { Text("Tags unavailable or still loading.") }
-                }
                 }
             }
         },
         confirmButton = {
             TextButton(
                 onClick = {
-                    vm.applyFilter(filter.copy(sort = sort, tags = if (facetBrowse) emptySet() else chosen))
+                    vm.applyFilter(
+                        filter.copy(sort = sort, tags = if (facetBrowse) emptySet() else chosen)
+                    )
                     close()
                 }
             ) {
@@ -1540,9 +1644,13 @@ private fun ChapterDownloadControl(
             }
         "Paused",
         "Verification required",
+        "Needs repair",
         "Failed" ->
             TextButton(onClick = { vm.resume(download) }) {
-                Text(if (download.state == "Failed") "Retry" else "Resume")
+                Text(
+                    if (download.state == "Needs repair") "Repair"
+                    else if (download.state == "Failed") "Retry" else "Resume"
+                )
             }
         else ->
             IconButton(onClick = { vm.download(chapter) }, enabled = chapter.readable) {

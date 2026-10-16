@@ -8,6 +8,8 @@ A quiet, lightweight Android manga reader. Built with Kotlin and Compose, with n
 
 ## Available now
 
+- Download integrity checks when opening saved chapters, persistent Needs repair status and targeted repair. Intact pages remain accessible with Read saved pages.
+
 - Source results automatically load the next page near the end; failures keep a manual retry and repeated pages stop automatic loading.
 
 - Reorderable source tabs: DemonicScans, WeebCentral, MangaDex, HentaiZap, ImHentai and Nhentai. Comix is removed; existing source preferences are filtered automatically. WeebCentral remains experimental.
@@ -36,7 +38,7 @@ MangaDex and scanlation groups are credited in the application. This is an indep
 
 ## Install
 
-Download [komori-0.6.0-alpha.2.apk](https://github.com/joy-arz/komori-reader/releases/download/v0.6.0-alpha.2/komori-0.6.0-alpha.2.apk), or open [GitHub Releases](https://github.com/joy-arz/komori-reader/releases) and expand **Assets**. Choose the `.apk` file, not the source-code archives. Alpha releases are signed with the same private release key, allowing future updates without uninstalling.
+Download [komori-0.6.0-alpha.3.apk](https://github.com/joy-arz/komori-reader/releases/download/v0.6.0-alpha.3/komori-0.6.0-alpha.3.apk), or open [GitHub Releases](https://github.com/joy-arz/komori-reader/releases) and expand **Assets**. Choose the `.apk` file, not the source-code archives. Alpha releases are signed with the same private release key, allowing future updates without uninstalling.
 
 ## Build
 
