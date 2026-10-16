@@ -2,6 +2,12 @@
 
 Updated October 16, 2026. Based on CURRENT_COMPARISON_REVIEW.md; Komikku is the main behavior reference and Mihon the secondary reference. Checkboxes mean delivered and validated, not merely started.
 
+## Reference-led visual redesign
+- [x] Replace shared chrome, typography, colors and controls with the black/green/lime design; retain all existing destinations and settings.
+- [x] Group Settings, add outlined collection counts and keep catalog loading visible.
+- [x] Use native Compose drag arbitration and test real navigation/search/cover/swipe touches.
+- [x] Keep automatic update checks/downloads nonmodal.
+
 ## Compact browsing UI
 - [x] Expand Discover and Library search from icons; keep source filters and verification accessible.
 - [x] Swipe left/right through sources in Settings order without loading all catalogs.

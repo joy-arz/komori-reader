@@ -33,7 +33,7 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
                 state.value =
                     UpdateState(
                         update = update,
-                        show = update != null,
+                        show = manual && update != null,
                         message =
                             if (update == null) "You're up to date (${BuildConfig.VERSION_NAME})."
                             else "Version ${update.version} is available.",
@@ -69,7 +69,7 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
                 downloading = true,
                 percent = 0,
                 message = "Downloading update…",
-                show = true,
+                show = state.value.show,
             )
         viewModelScope.launch {
             try {

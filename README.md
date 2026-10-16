@@ -4,9 +4,12 @@ A quiet, lightweight Android manga reader. Built with Kotlin and Compose, with n
 
 **Status: early alpha.** The first end-to-end reading milestone is implemented. This is not yet the complete product in the roadmap.
 
-<img src="docs/images/library.png" width="280" alt="Komori compact library">
+<img src="docs/images/library.png" width="240" alt="Komori black-and-lime library"> <img src="docs/images/discover.png" width="240" alt="Source browsing"> <img src="docs/images/settings.png" width="240" alt="Grouped reading settings">
 
 ## Available now
+
+- Black-and-lime design with Outfit typography, outlined collection/setting/chapter cards, green gradient actions and floating navigation. Dark appearance is the default; an explicitly saved light preference is retained. Settings are grouped into Reading, Sources and App.
+- Background update checks/downloads use a nonblocking banner; installation dialogs open from Review/Install.
 
 - Compact Discover and Library search that opens from an icon; swipe left/right across the catalog to change sources in your Settings order. Discover filters are in the toolbar; Verify source and Reset search are under Source options.
 
@@ -40,7 +43,7 @@ MangaDex and scanlation groups are credited in the application. This is an indep
 
 ## Install
 
-Download [komori-0.6.0-alpha.4.apk](https://github.com/joy-arz/komori-reader/releases/download/v0.6.0-alpha.4/komori-0.6.0-alpha.4.apk), or open [GitHub Releases](https://github.com/joy-arz/komori-reader/releases) and expand **Assets**. Choose the `.apk` file, not the source-code archives. Alpha releases are signed with the same private release key, allowing future updates without uninstalling.
+Download [komori-0.7.0-alpha.1.apk](https://github.com/joy-arz/komori-reader/releases/download/v0.7.0-alpha.1/komori-0.7.0-alpha.1.apk), or open [GitHub Releases](https://github.com/joy-arz/komori-reader/releases) and expand **Assets**. Choose the `.apk` file, not the source-code archives. Alpha releases are signed with the same private release key, allowing future updates without uninstalling.
 
 ## Build
 
@@ -95,3 +98,5 @@ MangaDex external-only chapters cannot supply pages to the native reader. Start 
 Source websites may block requests or change their HTML. WeebCentral's parser and request routing have fixture coverage but live reading has not been verified on the current network. Use Verify source for HTTP 403 or a browser-verification prompt, complete verification manually, then Retry native access. Download jobs waiting for verification retain completed pages; resume them from Downloads after verification. Reset sessions clears all source browser cookies/storage without changing library data. Browser verification cannot guarantee that a source will accept native requests. Unsupported sources are not represented as working readers.
 
 The complete prioritized backlog is tracked in [TODO](docs/TODO.md).
+
+Typography: Outfit is bundled under the SIL Open Font License; see `app/src/main/assets/licenses/Outfit-OFL.txt`.

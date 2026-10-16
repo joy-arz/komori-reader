@@ -91,3 +91,26 @@ fun UpdateSettings(vm: UpdateViewModel = viewModel()) {
             }
     }
 }
+
+@Composable
+fun UpdateBanner(vm: UpdateViewModel = viewModel()) {
+    val state by vm.state.collectAsStateWithLifecycle()
+    if (state.update != null && !state.show) {
+        Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
+            Row(
+                Modifier.fillMaxWidth().padding(start = 18.dp, end = 8.dp),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            ) {
+                Text(
+                    if (state.downloading) "Updating · ${state.percent}%"
+                    else "Komori ${state.update!!.version} available",
+                    Modifier.weight(1f),
+                    style = MaterialTheme.typography.labelMedium,
+                )
+                TextButton(onClick = vm::show) {
+                    Text(if (state.file != null) "Install" else "Review")
+                }
+            }
+        }
+    }
+}

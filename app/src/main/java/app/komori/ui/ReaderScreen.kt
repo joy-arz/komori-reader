@@ -42,7 +42,9 @@ fun ReaderScreen(vm: ReaderViewModel, chapter: Release) {
     val ready by vm.readerReady.collectAsStateWithLifecycle()
     val retryCountdown =
         key(chapter.id, page) {
-            imageRetryCountdown(error != null && retryAllowed, settings.retrySeconds) { vm.retryPage() }
+            imageRetryCountdown(error != null && retryAllowed, settings.retrySeconds) {
+                vm.retryPage()
+            }
         }
     val override = preferences.find { it.mangaId == chapter.mangaId }?.readerMode.orEmpty()
     val mode = ReadingMode.resolve(override, settings.webtoon, settings.rtl)
@@ -74,12 +76,12 @@ fun ReaderScreen(vm: ReaderViewModel, chapter: Release) {
         Column(Modifier.fillMaxSize()) {
             if (controls)
                 Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                    Modifier.fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surface)
+                        .padding(horizontal = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    IconButton(onClick = vm::closeReader) {
-                        Icon(KomoriIcons.ArrowBack, "Close reader")
-                    }
+                    RoundControl(KomoriIcons.ArrowBack, "Close reader", vm::closeReader)
                     Column(Modifier.weight(1f)) {
                         Text(chapter.label, style = MaterialTheme.typography.titleSmall)
                         Text(
@@ -94,9 +96,7 @@ fun ReaderScreen(vm: ReaderViewModel, chapter: Release) {
                         Modifier.padding(8.dp),
                         style = MaterialTheme.typography.labelLarge,
                     )
-                    IconButton(onClick = { options = true }) {
-                        Icon(KomoriIcons.Tune, "Reader settings")
-                    }
+                    RoundControl(KomoriIcons.Tune, "Reader settings", { options = true })
                 }
             if (mode == ReadingMode.WEBTOON && ready) {
                 WebtoonReader(vm, chapter, Modifier.weight(1f), onTap = { controls = !controls })
@@ -108,7 +108,8 @@ fun ReaderScreen(vm: ReaderViewModel, chapter: Release) {
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             Text(error!!)
-                            if (!retryAllowed) VerifySourceButton(vm, app.komori.data.sourceKey(chapter.mangaId))
+                            if (!retryAllowed)
+                                VerifySourceButton(vm, app.komori.data.sourceKey(chapter.mangaId))
                             if (retryCountdown > 0) Text("Retrying this page in ${retryCountdown}s")
                             Button(onClick = { vm.retryPage() }) { Text("Retry") }
                         }
@@ -176,7 +177,7 @@ fun ReaderScreen(vm: ReaderViewModel, chapter: Release) {
                             }
                         }
                         val next: @Composable () -> Unit = {
-                            Button(onClick = { navigate(1) }, enabled = file != null) {
+                            ActionButton(onClick = { navigate(1) }, enabled = file != null) {
                                 Text(if (page + 1 < count) "Next page" else "Finish chapter")
                             }
                         }

@@ -7,16 +7,23 @@ import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -29,9 +36,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -54,34 +62,6 @@ import app.komori.domain.DownloadChoice
 import app.komori.domain.DownloadPolicy
 import coil.compose.AsyncImage
 import org.json.JSONArray
-
-private val Day =
-    lightColorScheme(
-        primary = Color(0xFF1F6256),
-        onPrimary = Color.White,
-        primaryContainer = Color(0xFFD8ECE1),
-        onPrimaryContainer = Color(0xFF244535),
-        secondary = Color(0xFF56665D),
-        secondaryContainer = Color(0xFFE0EBE2),
-        onSecondaryContainer = Color(0xFF244535),
-        surfaceContainer = Color(0xFFEAF0E9),
-        background = Color(0xFFF6F8F5),
-        surface = Color(0xFFF6F8F5),
-        surfaceVariant = Color(0xFFE6ECE5),
-    )
-private val Night =
-    darkColorScheme(
-        primary = Color(0xFF9CD5BD),
-        onPrimary = Color(0xFF163A2F),
-        primaryContainer = Color(0xFF224C40),
-        onPrimaryContainer = Color(0xFFC2E1D0),
-        secondaryContainer = Color(0xFF2D473B),
-        onSecondaryContainer = Color(0xFFC2E1D0),
-        surfaceContainer = Color(0xFF1B251E),
-        background = Color(0xFF121713),
-        surface = Color(0xFF121713),
-        surfaceVariant = Color(0xFF29332D),
-    )
 
 @Composable
 fun KomoriScreen(vm: ReaderViewModel) {
@@ -112,9 +92,13 @@ fun KomoriScreen(vm: ReaderViewModel) {
             vm.notice.value = null
         }
     }
-    MaterialTheme(colorScheme = if (settings.dark) Night else Day) {
+    MaterialTheme(
+        colorScheme = if (settings.dark) Night else Day,
+        typography = ReaderTypography,
+        shapes = ReaderShapes,
+    ) {
         UpdateDialog()
-        Surface(Modifier.fillMaxSize()) {
+        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             if (reader != null)
                 key(readerSession) {
                     MaterialTheme(colorScheme = Night) {
@@ -127,57 +111,45 @@ fun KomoriScreen(vm: ReaderViewModel) {
                 BackHandler(selected != null) { vm.back() }
                 Scaffold(
                     snackbarHost = { SnackbarHost(snackbar) },
+                    modifier =
+                        Modifier.background(
+                            Brush.radialGradient(
+                                if (settings.dark) listOf(Color(0xFF073017), Color.Black)
+                                else listOf(Color(0xFFE1F2DB), Day.background),
+                                center = Offset.Zero,
+                                radius = 1000f,
+                            )
+                        ),
+                    containerColor = Color.Transparent,
                     topBar = {
                         if (selected != null || tab != 1)
-                            TopAppBar(
-                                title = {
-                                    Text(
-                                        if (selected != null) "Title details"
-                                        else
-                                            listOf(
-                                                "Your library",
-                                                "Discover",
-                                                "Authors",
-                                                "Downloads",
-                                                "Settings",
-                                            )[tab],
-                                        fontWeight = FontWeight.SemiBold,
-                                    )
-                                },
-                                navigationIcon = {
-                                    if (selected != null)
-                                        IconButton(onClick = vm::back) {
-                                            Icon(KomoriIcons.ArrowBack, "Back")
-                                        }
-                                },
+                            AppHeading(
+                                if (selected != null) "Title details"
+                                else
+                                    listOf(
+                                        "Your library",
+                                        "Discover",
+                                        "Following",
+                                        "Downloads",
+                                        "Settings",
+                                    )[tab],
+                                if (selected != null) ""
+                                else
+                                    listOf(
+                                        "Your stories, in one place",
+                                        "",
+                                        "Authors & artists",
+                                        "Ready whenever you are",
+                                        "Make Komori yours",
+                                    )[tab],
+                                if (selected != null) vm::back else null,
+                                browse = { tab = 1 },
                             )
                     },
-                    bottomBar = {
-                        if (selected == null)
-                            NavigationBar(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                                tonalElevation = 0.dp,
-                            ) {
-                                listOf(
-                                        "Library" to KomoriIcons.CollectionsBookmark,
-                                        "Discover" to KomoriIcons.Explore,
-                                        "Authors" to KomoriIcons.PersonOutline,
-                                        "Downloads" to KomoriIcons.Download,
-                                        "Settings" to KomoriIcons.Tune,
-                                    )
-                                    .forEachIndexed { index, item ->
-                                        NavigationBarItem(
-                                            alwaysShowLabel = false,
-                                            selected = tab == index,
-                                            onClick = { tab = index },
-                                            icon = { Icon(item.second, item.first) },
-                                            label = { Text(item.first) },
-                                        )
-                                    }
-                            }
-                    },
+                    bottomBar = { if (selected == null) FloatingNavigation(tab) { tab = it } },
                 ) { padding ->
                     Column(Modifier.fillMaxSize().padding(padding)) {
+                        UpdateBanner()
                         if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
                         error?.let { message ->
                             Surface(color = MaterialTheme.colorScheme.errorContainer) {
@@ -251,23 +223,19 @@ private fun EmptyState(
     action: String? = null,
     onAction: () -> Unit = {},
 ) {
-    Column(
-        Modifier.fillMaxSize().padding(32.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Icon(icon, null, Modifier.size(52.dp), tint = MaterialTheme.colorScheme.primary)
-        Spacer(Modifier.height(20.dp))
-        Text(title, style = MaterialTheme.typography.headlineSmall)
-        Spacer(Modifier.height(8.dp))
-        Text(
-            subtitle,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        if (action != null) {
-            Spacer(Modifier.height(24.dp))
-            Button(onClick = onAction) { Text(action) }
+    Column(Modifier.fillMaxSize().padding(18.dp), verticalArrangement = Arrangement.Top) {
+        OutlinePanel {
+            Icon(icon, null, Modifier.size(28.dp), tint = MaterialTheme.colorScheme.secondary)
+            Text(title, style = MaterialTheme.typography.titleLarge)
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (action != null)
+                ActionButton(onClick = onAction, modifier = Modifier.fillMaxWidth()) {
+                    Text(action)
+                }
         }
     }
 }
@@ -297,10 +265,9 @@ private fun Library(vm: ReaderViewModel, discover: () -> Unit) {
                 onClick = { vm.open(book, true) },
                 modifier = Modifier.fillMaxWidth().padding(20.dp, 0.dp, 20.dp, 16.dp),
                 colors =
-                    CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
-                    ),
-                shape = RoundedCornerShape(24.dp),
+                    CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                shape = RoundedCornerShape(18.dp),
             ) {
                 Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     AsyncImage(
@@ -321,10 +288,7 @@ private fun Library(vm: ReaderViewModel, discover: () -> Unit) {
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        Text(
-                            "Pick up where you left off",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
+                        Text("Continue your chapter", style = MaterialTheme.typography.bodySmall)
                     }
                     TextButton(onClick = { vm.setting("showContinue", false) }) { Text("Dismiss") }
                 }
@@ -345,18 +309,53 @@ private fun Library(vm: ReaderViewModel, discover: () -> Unit) {
                 shape = RoundedCornerShape(18.dp),
             )
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 18.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            listOf("Saved", "Liked", "History").forEach {
-                FilterChip(filter == it, { filter = it }, label = { Text(it) })
-            }
-            Spacer(Modifier.weight(1f))
+            Text("Collections", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
             if (!searchExpanded)
-                IconButton(onClick = { searchExpanded = true }) {
-                    Icon(KomoriIcons.Search, "Search library")
+                RoundControl(KomoriIcons.Search, "Search library", { searchExpanded = true })
+        }
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            listOf("Saved", "Liked", "History").forEach { label ->
+                val count =
+                    shelf.count {
+                        when (label) {
+                            "Saved" -> it.saved
+                            "Liked" -> it.liked
+                            else -> it.lastRelease != null
+                        }
+                    }
+                Column(
+                    Modifier.weight(1f)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(MaterialTheme.colorScheme.surface)
+                        .border(
+                            1.dp,
+                            if (filter == label) MaterialTheme.colorScheme.secondary
+                            else MaterialTheme.colorScheme.outlineVariant,
+                            RoundedCornerShape(14.dp),
+                        )
+                        .selectable(filter == label, role = Role.Tab, onClick = { filter = label })
+                        .padding(12.dp)
+                ) {
+                    Text(
+                        count.toString(),
+                        style = MaterialTheme.typography.titleLarge,
+                        color =
+                            if (filter == label) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        label,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
+            }
         }
         run {
             val entries =
@@ -379,8 +378,8 @@ private fun Library(vm: ReaderViewModel, discover: () -> Unit) {
             if (titles.isEmpty())
                 EmptyState(
                     KomoriIcons.MenuBook,
-                    "A little space for your next story",
-                    "Save a title from Discover, or start reading to build your history.",
+                    "Your next story starts here",
+                    "Browse a source, save a title, and make it yours.",
                     "Explore sources",
                     discover,
                 )
@@ -404,7 +403,9 @@ private fun Authors(vm: ReaderViewModel, browseCreator: (Creator) -> Unit) {
             query,
             { query = it },
             Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-            label = { Text("Search followed authors and artists") },
+            placeholder = { Text("Find an author or artist") },
+            leadingIcon = { Icon(KomoriIcons.Search, null, Modifier.size(18.dp)) },
+            shape = RoundedCornerShape(24.dp),
             singleLine = true,
         )
         val visible = creators.filter { it.name.contains(query, true) }
@@ -426,7 +427,15 @@ private fun Authors(vm: ReaderViewModel, browseCreator: (Creator) -> Unit) {
                         trailingContent = {
                             TextButton(onClick = { vm.follow(creator) }) { Text("Unfollow") }
                         },
-                        modifier = Modifier.clickable { browseCreator(creator) },
+                        modifier =
+                            Modifier.padding(horizontal = 18.dp, vertical = 5.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .border(
+                                    1.dp,
+                                    MaterialTheme.colorScheme.outlineVariant,
+                                    RoundedCornerShape(14.dp),
+                                )
+                                .clickable { browseCreator(creator) },
                     )
                 }
             }
@@ -489,6 +498,11 @@ private fun Discover(vm: ReaderViewModel) {
     val focusRequester = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     val sources = sourceOrder(settings.sources)
+    val sourceTabs = rememberLazyListState()
+    LaunchedEffect(activeSource, sources) {
+        val index = sources.indexOf(activeSource)
+        if (index >= 0) sourceTabs.animateScrollToItem(index)
+    }
     val swipeThreshold = with(LocalDensity.current) { 72.dp.toPx() }
     fun closeSearch() {
         searchExpanded = false
@@ -506,7 +520,7 @@ private fun Discover(vm: ReaderViewModel) {
     LaunchedEffect(Unit) { if (activeSource.isEmpty() && !loading) vm.search("", null) }
     Column(Modifier.fillMaxSize()) {
         Row(
-            Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 16.dp),
+            Modifier.fillMaxWidth().heightIn(min = 76.dp).padding(horizontal = 18.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (searchExpanded) {
@@ -552,21 +566,17 @@ private fun Discover(vm: ReaderViewModel) {
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                IconButton(onClick = { searchExpanded = true }) {
-                    Icon(KomoriIcons.Search, "Open search")
-                }
-                IconButton(
-                    onClick = {
+                RoundControl(KomoriIcons.Search, "Open search", { searchExpanded = true })
+                RoundControl(
+                    KomoriIcons.FilterList,
+                    "Filters and sorting",
+                    {
                         showFilters = true
                         vm.loadTags()
-                    }
-                ) {
-                    Icon(KomoriIcons.FilterList, "Filters and sorting")
-                }
+                    },
+                )
                 Box {
-                    IconButton(onClick = { sourceMenu = true }) {
-                        Icon(KomoriIcons.More, "Source options")
-                    }
+                    RoundControl(KomoriIcons.More, "Source options", { sourceMenu = true })
                     DropdownMenu(sourceMenu, { sourceMenu = false }) {
                         VerifySourceButton(vm, activeSource)
                         DropdownMenuItem(
@@ -582,15 +592,18 @@ private fun Discover(vm: ReaderViewModel) {
                 }
             }
         }
-        ScrollableTabRow(
-            selectedTabIndex = sourceOrder(settings.sources).indexOf(activeSource).coerceAtLeast(0),
-            edgePadding = 12.dp,
+        LazyRow(
+            state = sourceTabs,
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            sourceOrder(settings.sources).forEach { key ->
-                Tab(
-                    selected = activeSource == key,
-                    onClick = { vm.chooseSource(key) },
-                    text = { Text(sourceNames.getValue(key)) },
+            items(sources, key = { it }) { key ->
+                FilterChip(
+                    activeSource == key,
+                    { vm.chooseSource(key) },
+                    label = { Text(sourceNames.getValue(key)) },
+                    shape = RoundedCornerShape(50),
                 )
             }
         }
@@ -622,31 +635,44 @@ private fun Discover(vm: ReaderViewModel) {
                 TextButton(onClick = vm::clearFacet) { Text("Clear") }
             }
         }
+        var sourceDrag by remember { mutableFloatStateOf(0f) }
         Box(
-            Modifier.weight(1f).fillMaxWidth().pointerInput(activeSource, sources) {
-                var distance = 0f
-                detectHorizontalDragGestures(
-                    onDragStart = { distance = 0f },
-                    onHorizontalDrag = { change, amount ->
-                        change.consume()
-                        distance += amount
-                    },
-                    onDragCancel = { distance = 0f },
-                    onDragEnd = {
+            Modifier.weight(1f)
+                .fillMaxWidth()
+                .draggable(
+                    orientation = Orientation.Horizontal,
+                    state = rememberDraggableState { sourceDrag += it },
+                    onDragStarted = { sourceDrag = 0f },
+                    onDragStopped = {
                         val index = sources.indexOf(activeSource)
                         val next =
                             when {
-                                distance < -swipeThreshold -> index + 1
-                                distance > swipeThreshold -> index - 1
+                                sourceDrag < -swipeThreshold -> index + 1
+                                sourceDrag > swipeThreshold -> index - 1
                                 else -> index
                             }
                         if (index >= 0 && next != index && next in sources.indices)
                             vm.chooseSource(sources[next])
+                        sourceDrag = 0f
                     },
                 )
-            }
         ) {
-            if (results.isEmpty() && !loading)
+            if (results.isEmpty() && loading) {
+                OutlinePanel(Modifier.padding(18.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                        Text("Loading titles…", style = MaterialTheme.typography.titleSmall)
+                    }
+                    Text(
+                        sourceNames[activeSource].orEmpty(),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            } else if (results.isEmpty())
                 EmptyState(
                     KomoriIcons.Search,
                     "No titles to show",
@@ -709,14 +735,25 @@ private fun MangaGrid(
                         title.title,
                         Modifier.fillMaxWidth()
                             .aspectRatio(0.7f)
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(16.dp))
+                            .border(
+                                1.dp,
+                                MaterialTheme.colorScheme.outlineVariant,
+                                RoundedCornerShape(16.dp),
+                            )
                             .background(MaterialTheme.colorScheme.surfaceVariant)
                             .clickable { onOpen(title) },
                         contentScale = ContentScale.Crop,
                     )
                     FilledIconButton(
                         onClick = { onRead(title) },
-                        modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp).size(44.dp),
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp).size(48.dp),
+                        colors =
+                            IconButtonDefaults.filledIconButtonColors(
+                                containerColor =
+                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+                                contentColor = MaterialTheme.colorScheme.primary,
+                            ),
                     ) {
                         Icon(KomoriIcons.PlayArrow, "Read ${title.title}")
                     }
@@ -819,7 +856,7 @@ private fun Details(
                 .distinctBy { it.id }
         }
     LazyColumn(
-        contentPadding = PaddingValues(20.dp),
+        contentPadding = PaddingValues(18.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
@@ -850,7 +887,7 @@ private fun Details(
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
+                ActionButton(
                     onClick = { vm.startReading() },
                     enabled = selected.any { it.readable } && !loading,
                     modifier = Modifier.weight(1f),
@@ -997,6 +1034,12 @@ private fun Details(
             Row(
                 Modifier.fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .border(
+                        1.dp,
+                        MaterialTheme.colorScheme.outlineVariant,
+                        RoundedCornerShape(12.dp),
+                    )
                     .clickable {
                         if (
                             !chapter.local &&
@@ -1006,7 +1049,7 @@ private fun Details(
                             uri.openUri(chapter.externalUrl)
                         else vm.read(chapter)
                     }
-                    .padding(vertical = 10.dp),
+                    .padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
@@ -1044,7 +1087,6 @@ private fun Details(
                 }
                 ChapterDownloadControl(vm, chapter, downloaded)
             }
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
         }
         item {
             TextButton(onClick = { uri.openUri(sourcePageUrl(manga.id)) }) {
@@ -1160,7 +1202,7 @@ private fun Downloads(vm: ReaderViewModel) {
         )
     else
         LazyColumn(
-            contentPadding = PaddingValues(20.dp),
+            contentPadding = PaddingValues(18.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
@@ -1195,7 +1237,13 @@ private fun Downloads(vm: ReaderViewModel) {
                 downloads.sortedBy { if (it.state == "Complete") 1 else 0 },
                 key = { it.releaseId },
             ) { download ->
-                ElevatedCard {
+                OutlinedCard(
+                    colors =
+                        CardDefaults.outlinedCardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        ),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                ) {
                     Column(Modifier.padding(16.dp)) {
                         Text(
                             manga.find { it.id == download.mangaId }?.title ?: download.label,
@@ -1277,7 +1325,12 @@ private fun Downloads(vm: ReaderViewModel) {
 @Composable
 private fun Toggle(title: String, detail: String, checked: Boolean, change: (Boolean) -> Unit) {
     Row(
-        Modifier.fillMaxWidth().padding(vertical = 10.dp),
+        Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(14.dp))
+            .toggleable(value = checked, role = Role.Switch, onValueChange = change)
+            .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f).padding(end = 16.dp)) {
@@ -1288,215 +1341,267 @@ private fun Toggle(title: String, detail: String, checked: Boolean, change: (Boo
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Switch(checked, change)
+        Switch(checked, null)
     }
 }
 
 @Composable
 private fun SettingsScreen(vm: ReaderViewModel, settings: Settings) {
-    LazyColumn(
-        contentPadding = PaddingValues(20.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        item {
-            Text(
-                "Make room for your reading rhythm",
-                style = MaterialTheme.typography.headlineSmall,
-            )
-            Spacer(Modifier.height(12.dp))
+    var section by rememberSaveable { mutableStateOf("Reading") }
+    Column(Modifier.fillMaxSize()) {
+        Row(
+            Modifier.fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 18.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            listOf("Reading", "Sources", "App").forEach { label ->
+                FilterChip(
+                    section == label,
+                    { section = label },
+                    label = { Text(label) },
+                    shape = RoundedCornerShape(50),
+                )
+            }
         }
-        item {
-            Text("Sources", style = MaterialTheme.typography.titleLarge)
-            Text(
-                "Top source opens first in Discover. MangaDex library entries stay available.",
-                style = MaterialTheme.typography.bodySmall,
-            )
-            sourceOrder(settings.sources).forEachIndexed { index, key ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "${index + 1}. ${sourceNames.getValue(key)}${if(index == 0) " · Default" else ""}",
-                        Modifier.weight(1f),
-                    )
-                    TextButton(enabled = index > 0, onClick = { vm.moveSource(key, -1) }) {
-                        Text("Up")
+        key(section) {
+            LazyColumn(
+                contentPadding = PaddingValues(18.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                if (section == "Sources") {
+                    item {
+                        Text("Sources", style = MaterialTheme.typography.titleLarge)
+                        Text(
+                            "Top source opens first in Discover. MangaDex library entries stay available.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        sourceOrder(settings.sources).forEachIndexed { index, key ->
+                            Row(
+                                Modifier.fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(MaterialTheme.colorScheme.surface)
+                                    .border(
+                                        1.dp,
+                                        MaterialTheme.colorScheme.outlineVariant,
+                                        RoundedCornerShape(12.dp),
+                                    )
+                                    .padding(start = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    "${index + 1}. ${sourceNames.getValue(key)}${if(index == 0) " · Default" else ""}",
+                                    Modifier.weight(1f),
+                                )
+                                TextButton(
+                                    enabled = index > 0,
+                                    onClick = { vm.moveSource(key, -1) },
+                                ) {
+                                    Text("Up")
+                                }
+                                TextButton(
+                                    enabled = index < sourceNames.size - 1,
+                                    onClick = { vm.moveSource(key, 1) },
+                                ) {
+                                    Text("Down")
+                                }
+                            }
+                        }
                     }
-                    TextButton(
-                        enabled = index < sourceNames.size - 1,
-                        onClick = { vm.moveSource(key, 1) },
-                    ) {
-                        Text("Down")
+                    item {
+                        Toggle(
+                            "Continue reading banner",
+                            "Show the most recently read title in Library",
+                            settings.showContinue,
+                        ) {
+                            vm.setting("showContinue", it)
+                        }
+                    }
+                    item {
+                        TextButton(onClick = { vm.resetSourceOrder() }) {
+                            Text("Reset source order")
+                        }
+                    }
+                }
+                if (section == "Reading") {
+                    item { Text("Reading", style = MaterialTheme.typography.titleLarge) }
+                    item {
+                        Toggle(
+                            "Continuous chapters",
+                            "Scroll into the next webtoon chapter automatically",
+                            settings.continuousChapters,
+                        ) {
+                            vm.setting("continuousChapters", it)
+                        }
+                    }
+                    item {
+                        Text(
+                            "Retry failed reader images",
+                            style = MaterialTheme.typography.titleSmall,
+                        )
+                        Text(
+                            "Retry the failed image up to three times while it is visible.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            listOf(0, 5, 10, 30).forEach { seconds ->
+                                FilterChip(
+                                    settings.retrySeconds == seconds,
+                                    { vm.retryInterval(seconds) },
+                                    label = { Text(if (seconds == 0) "Off" else "${seconds}s") },
+                                )
+                            }
+                        }
+                    }
+                    item {
+                        Toggle(
+                            "Default to webtoon scrolling",
+                            "Titles without a reader override use continuous scrolling",
+                            settings.webtoon,
+                        ) {
+                            vm.setting("webtoon", it)
+                        }
+                    }
+                    item {
+                        Toggle(
+                            "Default to right-to-left paging",
+                            "Used when webtoon is off and a title has no override",
+                            settings.rtl,
+                        ) {
+                            vm.setting("rtl", it)
+                        }
+                    }
+                    item {
+                        Toggle(
+                            "Keep screen awake while reading",
+                            "Only active inside the reader",
+                            settings.keepScreenOn,
+                        ) {
+                            vm.setting("keepScreenOn", it)
+                        }
+                    }
+                    item {
+                        Toggle(
+                            "Resume your page",
+                            "Off starts the current chapter from page one",
+                            settings.resume,
+                        ) {
+                            vm.setting("resume", it)
+                        }
+                    }
+                    item {
+                        Toggle(
+                            "Read again when caught up",
+                            "Start from the first chapter when all are read",
+                            settings.reread,
+                        ) {
+                            vm.setting("reread", it)
+                        }
+                    }
+                    item {
+                        Toggle(
+                            "Open library titles in reader",
+                            "Tap a cover to read immediately",
+                            settings.direct,
+                        ) {
+                            vm.setting("direct", it)
+                        }
+                    }
+                    item {
+                        Toggle(
+                            "Smart Chapters",
+                            "Collapse matching numbered releases",
+                            settings.smart,
+                        ) {
+                            vm.setting("smart", it)
+                        }
+                    }
+                    item {
+                        Text("Chapter language", style = MaterialTheme.typography.titleSmall)
+                        var languageDialog by remember { mutableStateOf(false) }
+                        TextButton(onClick = { languageDialog = true }) {
+                            Text(languageName(settings.language))
+                        }
+                        if (languageDialog)
+                            LanguagePicker(
+                                settings.language,
+                                emptyList(),
+                                { languageDialog = false },
+                            ) {
+                                vm.language(it)
+                                languageDialog = false
+                            }
+                    }
+                    item {
+                        Toggle(
+                            "Alphabetical library",
+                            "Off sorts your shelf by last activity",
+                            settings.libraryAlphabetical,
+                        ) {
+                            vm.setting("libraryAlphabetical", it)
+                        }
+                    }
+                }
+                if (section == "App") {
+                    item {
+                        HorizontalDivider()
+                        Text(
+                            "Downloads & appearance",
+                            Modifier.padding(top = 16.dp),
+                            style = MaterialTheme.typography.titleLarge,
+                        )
+                    }
+                    item {
+                        Toggle(
+                            "Data-saving images",
+                            "Use smaller images for new reads and downloads",
+                            settings.saver,
+                        ) {
+                            vm.setting("saver", it)
+                        }
+                    }
+                    item {
+                        Toggle(
+                            "Wi-Fi-only downloads",
+                            "Applies to newly queued or resumed downloads",
+                            settings.wifi,
+                        ) {
+                            vm.setting("wifi", it)
+                        }
+                    }
+                    item {
+                        Toggle(
+                            "Dark appearance",
+                            "A softer shelf for late-night reading",
+                            settings.dark,
+                        ) {
+                            vm.setting("dark", it)
+                        }
+                    }
+                    item {
+                        HorizontalDivider()
+                        UpdateSettings()
+                        Toggle(
+                            "Download updates on Wi-Fi",
+                            "Automatically download verified updates on unmetered connections. Android confirms installation.",
+                            settings.autoUpdateDownload,
+                        ) {
+                            vm.setting("autoUpdateDownload", it)
+                        }
+                        Text(
+                            "Komori ${BuildConfig.VERSION_NAME}",
+                            Modifier.padding(top = 16.dp),
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Text(
+                            "An independent, ad-free reader. Manga and chapter metadata are provided by the selected source. Translations belong to their credited scanlation groups. Library, likes, creator follows and reading progress are stored on this device.",
+                            Modifier.padding(top = 8.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
                     }
                 }
             }
-        }
-        item {
-            Toggle(
-                "Continue reading banner",
-                "Show the most recently read title in Library",
-                settings.showContinue,
-            ) {
-                vm.setting("showContinue", it)
-            }
-        }
-        item { TextButton(onClick = { vm.resetSourceOrder() }) { Text("Reset source order") } }
-        item { Text("Reading", style = MaterialTheme.typography.titleLarge) }
-        item {
-            Toggle(
-                "Continuous chapters",
-                "Scroll into the next webtoon chapter automatically",
-                settings.continuousChapters,
-            ) {
-                vm.setting("continuousChapters", it)
-            }
-        }
-        item {
-            Text("Retry failed reader images", style = MaterialTheme.typography.titleSmall)
-            Text(
-                "Retry the failed image up to three times while it is visible.",
-                style = MaterialTheme.typography.bodySmall,
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf(0, 5, 10, 30).forEach { seconds ->
-                    FilterChip(
-                        settings.retrySeconds == seconds,
-                        { vm.retryInterval(seconds) },
-                        label = { Text(if (seconds == 0) "Off" else "${seconds}s") },
-                    )
-                }
-            }
-        }
-        item {
-            Toggle(
-                "Default to webtoon scrolling",
-                "Titles without a reader override use continuous scrolling",
-                settings.webtoon,
-            ) {
-                vm.setting("webtoon", it)
-            }
-        }
-        item {
-            Toggle(
-                "Default to right-to-left paging",
-                "Used when webtoon is off and a title has no override",
-                settings.rtl,
-            ) {
-                vm.setting("rtl", it)
-            }
-        }
-        item {
-            Toggle(
-                "Keep screen awake while reading",
-                "Only active inside the reader",
-                settings.keepScreenOn,
-            ) {
-                vm.setting("keepScreenOn", it)
-            }
-        }
-        item {
-            Toggle(
-                "Resume your page",
-                "Off starts the current chapter from page one",
-                settings.resume,
-            ) {
-                vm.setting("resume", it)
-            }
-        }
-        item {
-            Toggle(
-                "Read again when caught up",
-                "Start from the first chapter when all are read",
-                settings.reread,
-            ) {
-                vm.setting("reread", it)
-            }
-        }
-        item {
-            Toggle(
-                "Open library titles in reader",
-                "Tap a cover to read immediately",
-                settings.direct,
-            ) {
-                vm.setting("direct", it)
-            }
-        }
-        item {
-            Toggle("Smart Chapters", "Collapse matching numbered releases", settings.smart) {
-                vm.setting("smart", it)
-            }
-        }
-        item {
-            Text("Chapter language", style = MaterialTheme.typography.titleSmall)
-            var languageDialog by remember { mutableStateOf(false) }
-            TextButton(onClick = { languageDialog = true }) {
-                Text(languageName(settings.language))
-            }
-            if (languageDialog)
-                LanguagePicker(settings.language, emptyList(), { languageDialog = false }) {
-                    vm.language(it)
-                    languageDialog = false
-                }
-        }
-        item {
-            Toggle(
-                "Alphabetical library",
-                "Off sorts your shelf by last activity",
-                settings.libraryAlphabetical,
-            ) {
-                vm.setting("libraryAlphabetical", it)
-            }
-        }
-
-        item {
-            HorizontalDivider()
-            Text(
-                "Downloads & appearance",
-                Modifier.padding(top = 16.dp),
-                style = MaterialTheme.typography.titleLarge,
-            )
-        }
-        item {
-            Toggle(
-                "Data-saving images",
-                "Use smaller images for new reads and downloads",
-                settings.saver,
-            ) {
-                vm.setting("saver", it)
-            }
-        }
-        item {
-            Toggle(
-                "Wi-Fi-only downloads",
-                "Applies to newly queued or resumed downloads",
-                settings.wifi,
-            ) {
-                vm.setting("wifi", it)
-            }
-        }
-        item {
-            Toggle("Dark appearance", "A softer shelf for late-night reading", settings.dark) {
-                vm.setting("dark", it)
-            }
-        }
-        item {
-            HorizontalDivider()
-            UpdateSettings()
-            Toggle(
-                "Download updates on Wi-Fi",
-                "Automatically download verified updates on unmetered connections. Android confirms installation.",
-                settings.autoUpdateDownload,
-            ) {
-                vm.setting("autoUpdateDownload", it)
-            }
-            Text(
-                "Komori ${BuildConfig.VERSION_NAME}",
-                Modifier.padding(top = 16.dp),
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Text(
-                "An independent, ad-free reader. Manga and chapter metadata are provided by the selected source. Translations belong to their credited scanlation groups. Library, likes, creator follows and reading progress are stored on this device.",
-                Modifier.padding(top = 8.dp),
-                style = MaterialTheme.typography.bodySmall,
-            )
         }
     }
 }
