@@ -31,6 +31,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -73,7 +74,10 @@ fun KomoriScreen(vm: ReaderViewModel) {
     val error by vm.error.collectAsStateWithLifecycle()
     val notice by vm.notice.collectAsStateWithLifecycle()
     val loading by vm.loading.collectAsStateWithLifecycle()
-    var tab by rememberSaveable { mutableIntStateOf(0) }
+    val tab by vm.currentTab.collectAsStateWithLifecycle()
+    val navigationEntry by vm.navigationEntry.collectAsStateWithLifecycle()
+    val canNavigateBack by vm.canNavigateBack.collectAsStateWithLifecycle()
+    val screenState = rememberSaveableStateHolder()
     val snackbar = remember { SnackbarHostState() }
     val view = LocalView.current
     LaunchedEffect(reader, settings.dark) {
@@ -108,7 +112,9 @@ fun KomoriScreen(vm: ReaderViewModel) {
                     }
                 }
             else {
-                BackHandler(selected != null) { vm.back() }
+                BackHandler(selected != null || canNavigateBack || tab != 0) {
+                    if (selected != null || canNavigateBack) vm.back() else vm.currentTab.value = 0
+                }
                 Scaffold(
                     snackbarHost = { SnackbarHost(snackbar) },
                     modifier =
@@ -143,10 +149,12 @@ fun KomoriScreen(vm: ReaderViewModel) {
                                         "Make Komori yours",
                                     )[tab],
                                 if (selected != null) vm::back else null,
-                                browse = { tab = 1 },
+                                browse = { vm.currentTab.value = 1 },
                             )
                     },
-                    bottomBar = { if (selected == null) FloatingNavigation(tab) { tab = it } },
+                    bottomBar = {
+                        if (selected == null) FloatingNavigation(tab) { vm.currentTab.value = it }
+                    },
                 ) { padding ->
                     Column(Modifier.fillMaxSize().padding(padding)) {
                         UpdateBanner()
@@ -172,31 +180,27 @@ fun KomoriScreen(vm: ReaderViewModel) {
                                 }
                             }
                         }
-                        if (selected != null)
-                            Details(
-                                vm,
-                                selected!!,
-                                browseTag = { tag ->
-                                    vm.browseTag(selected!!, tag)
-                                    tab = 1
-                                },
-                            ) { creator ->
-                                vm.back()
-                                tab = 1
-                                vm.search("", creator)
-                            }
-                        else
-                            when (tab) {
-                                0 -> Library(vm, { tab = 1 })
-                                1 -> Discover(vm)
-                                2 ->
-                                    Authors(vm) { creator ->
-                                        tab = 1
-                                        vm.search("", creator)
-                                    }
-                                3 -> Downloads(vm)
-                                4 -> SettingsScreen(vm, settings)
-                            }
+                        screenState.SaveableStateProvider("$navigationEntry-$tab") {
+                            if (selected != null)
+                                Details(
+                                    vm,
+                                    selected!!,
+                                    browseTag = { tag ->
+                                        vm.browseTag(selected!!, tag)
+                                        vm.currentTab.value = 1
+                                    },
+                                ) { creator ->
+                                    vm.browseCreator(creator)
+                                }
+                            else
+                                when (tab) {
+                                    0 -> Library(vm, { vm.currentTab.value = 1 })
+                                    1 -> Discover(vm)
+                                    2 -> Authors(vm) { creator -> vm.browseCreator(creator) }
+                                    3 -> Downloads(vm)
+                                    4 -> SettingsScreen(vm, settings)
+                                }
+                        }
                     }
                 }
             }
@@ -397,48 +401,165 @@ private fun Library(vm: ReaderViewModel, discover: () -> Unit) {
 @Composable
 private fun Authors(vm: ReaderViewModel, browseCreator: (Creator) -> Unit) {
     val creators by vm.creators.collectAsStateWithLifecycle()
+    val library by vm.library.collectAsStateWithLifecycle()
+    val shelf by vm.shelf.collectAsStateWithLifecycle()
+    var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
+    var manage by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
+    val selected = creators.find { it.id == selectedId }
+    val visible = creators.filter { it.name.contains(query, true) }
+    val followedIds = creators.map { it.id }.toSet()
+    val savedIds = shelf.filter { it.saved || it.liked }.map { it.mangaId }.toSet()
+    val works =
+        remember(library, savedIds, followedIds, selected) {
+            library.filter { manga ->
+                manga.id in savedIds &&
+                    runCatching {
+                            JSONArray(manga.creatorsJson).objects().any {
+                                val id = it.optString("id")
+                                if (selected != null) id == selected.id else id in followedIds
+                            }
+                        }
+                        .getOrDefault(false)
+            }
+        }
     Column(Modifier.fillMaxSize()) {
-        OutlinedTextField(
-            query,
-            { query = it },
+        Row(
             Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-            placeholder = { Text("Find an author or artist") },
-            leadingIcon = { Icon(KomoriIcons.Search, null, Modifier.size(18.dp)) },
-            shape = RoundedCornerShape(24.dp),
-            singleLine = true,
-        )
-        val visible = creators.filter { it.name.contains(query, true) }
-        if (visible.isEmpty())
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "${creators.size} following",
+                Modifier.weight(1f),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            TextButton(
+                onClick = {
+                    manage = !manage
+                    query = ""
+                }
+            ) {
+                Text(if (manage) "Done" else "Manage")
+            }
+        }
+        if (creators.isEmpty()) {
             EmptyState(
                 KomoriIcons.PersonOutline,
-                if (creators.isEmpty()) "No followed authors yet" else "No matching authors",
-                "Follow an author or artist from title details. Tap a follow to browse works on its source.",
+                "Follow your favorite creators",
+                "Follow an author or artist from a title. Their saved works will appear here.",
             )
-        else
+        } else if (manage) {
+            OutlinedTextField(
+                query,
+                { query = it },
+                Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                placeholder = { Text("Find a creator") },
+                singleLine = true,
+                shape = RoundedCornerShape(24.dp),
+            )
             LazyColumn {
                 items(visible, key = { it.id }) { creator ->
                     ListItem(
                         headlineContent = { Text(creator.name) },
-                        supportingContent = {
-                            Text("${sourceName(creator.id)} · ${creator.role} · Local follow")
-                        },
-                        leadingContent = { Icon(KomoriIcons.PersonOutline, null) },
+                        supportingContent = { Text("${sourceName(creator.id)} · ${creator.role}") },
                         trailingContent = {
                             TextButton(onClick = { vm.follow(creator) }) { Text("Unfollow") }
                         },
                         modifier =
-                            Modifier.padding(horizontal = 18.dp, vertical = 5.dp)
-                                .clip(RoundedCornerShape(14.dp))
-                                .border(
-                                    1.dp,
-                                    MaterialTheme.colorScheme.outlineVariant,
-                                    RoundedCornerShape(14.dp),
-                                )
-                                .clickable { browseCreator(creator) },
+                            Modifier.clickable {
+                                selectedId = creator.id
+                                manage = false
+                            },
                     )
                 }
             }
+        } else {
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                item { CreatorBubble("All", selected == null) { selectedId = null } }
+                items(creators, key = { it.id }) { creator ->
+                    CreatorBubble(creator.name, selected?.id == creator.id) {
+                        selectedId = creator.id
+                    }
+                }
+            }
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        selected?.name ?: "From your library",
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    Text(
+                        if (selected != null) "${sourceName(selected.id)} · ${selected.role}"
+                        else "Saved works by creators you follow",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (selected != null)
+                    TextButton(onClick = { browseCreator(selected) }) { Text("All works") }
+            }
+            if (works.isEmpty())
+                EmptyState(
+                    KomoriIcons.PersonOutline,
+                    "No saved works yet",
+                    if (selected != null) "Open All works to explore this creator on their source."
+                    else
+                        "Choose a creator above to explore their works and add titles to your library.",
+                )
+            else MangaGrid(works, { vm.open(it) }, { vm.open(it, true) })
+        }
+    }
+}
+
+@Composable
+private fun CreatorBubble(name: String, selected: Boolean, onClick: () -> Unit) {
+    Column(
+        Modifier.width(72.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .selectable(selected, onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            Modifier.size(58.dp)
+                .clip(androidx.compose.foundation.shape.CircleShape)
+                .background(
+                    if (selected) MaterialTheme.colorScheme.primaryContainer
+                    else MaterialTheme.colorScheme.surfaceVariant
+                )
+                .border(
+                    if (selected) 2.dp else 1.dp,
+                    if (selected) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.outlineVariant,
+                    androidx.compose.foundation.shape.CircleShape,
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                name
+                    .split(" ")
+                    .filter { it.isNotEmpty() }
+                    .take(2)
+                    .joinToString("") { it.take(1) }
+                    .uppercase(),
+                style = MaterialTheme.typography.titleMedium,
+                color =
+                    if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+                    else MaterialTheme.colorScheme.onSurface,
+            )
+        }
+        Text(
+            name,
+            Modifier.padding(top = 6.dp, bottom = 4.dp),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.labelMedium,
+        )
     }
 }
 
@@ -489,10 +610,16 @@ private fun Discover(vm: ReaderViewModel) {
         if (nearEnd && !loading && browseError == null && results.isNotEmpty())
             vm.search(more = true)
     }
-    LaunchedEffect(activeSource, filter) { grid.scrollToItem(0) }
+
     var showFilters by remember { mutableStateOf(false) }
-    var query by rememberSaveable(activeSource) { mutableStateOf("") }
-    var submittedQuery by rememberSaveable(activeSource) { mutableStateOf("") }
+    val searchQuery by vm.searchQuery.collectAsStateWithLifecycle()
+    val canNavigateBack by vm.canNavigateBack.collectAsStateWithLifecycle()
+    var query by rememberSaveable(activeSource) { mutableStateOf(searchQuery) }
+    var submittedQuery by rememberSaveable(activeSource) { mutableStateOf(searchQuery) }
+    LaunchedEffect(searchQuery) {
+        query = searchQuery
+        submittedQuery = searchQuery
+    }
     var searchExpanded by rememberSaveable { mutableStateOf(false) }
     var sourceMenu by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
@@ -513,7 +640,7 @@ private fun Discover(vm: ReaderViewModel) {
         vm.submitSearch(query)
         closeSearch()
     }
-    BackHandler(searchExpanded) { closeSearch() }
+    BackHandler(searchExpanded && !canNavigateBack) { closeSearch() }
     LaunchedEffect(searchExpanded) { if (searchExpanded) focusRequester.requestFocus() }
     LaunchedEffect(activeSource) { closeSearch() }
     if (showFilters) SourceFilters(vm, activeSource, filter, tags) { showFilters = false }
@@ -1191,6 +1318,8 @@ private fun Details(
 
 @Composable
 private fun Downloads(vm: ReaderViewModel) {
+    val transfers by vm.downloadTransfers.collectAsStateWithLifecycle()
+    val settings by vm.settings.collectAsStateWithLifecycle()
     val downloads by vm.downloads.collectAsStateWithLifecycle()
     val manga by vm.library.collectAsStateWithLifecycle()
     var deleting by remember { mutableStateOf<Download?>(null) }
@@ -1253,15 +1382,45 @@ private fun Downloads(vm: ReaderViewModel) {
                             "${download.label} · ${download.state}",
                             style = MaterialTheme.typography.bodySmall,
                         )
-                        LinearProgressIndicator(
-                            progress = {
-                                if (download.total == 0) 0f
-                                else download.done.toFloat() / download.total
-                            },
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
-                        )
+                        val transfer = transfers[download.releaseId]
+                        val receiving = download.state == "Downloading" && transfer != null
+                        if (receiving && (transfer!!.resolving || transfer.totalBytes <= 0)) {
+                            LinearProgressIndicator(
+                                Modifier.fillMaxWidth().padding(vertical = 12.dp)
+                            )
+                        } else {
+                            LinearProgressIndicator(
+                                progress = {
+                                    val fraction =
+                                        if (receiving && transfer!!.totalBytes > 0)
+                                            (transfer.bytes.toFloat() / transfer.totalBytes)
+                                                .coerceIn(0f, 1f)
+                                        else 0f
+                                    if (download.total == 0) 0f
+                                    else
+                                        (((if (receiving) transfer!!.completedPages
+                                            else download.done) + fraction) / download.total)
+                                            .coerceIn(0f, 1f)
+                                },
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                            )
+                        }
                         Text(
-                            "${download.done} / ${download.total} pages",
+                            when {
+                                receiving && transfer!!.resolving -> "Finding chapter images…"
+                                receiving ->
+                                    "Page ${transfer!!.page} · ${transfer.bytes / 1024} KB" +
+                                        if (transfer.totalBytes > 0)
+                                            " / ${transfer.totalBytes / 1024} KB"
+                                        else " received"
+                                download.state == "Queued" ->
+                                    if (settings.wifi)
+                                        "Waiting for queue, unmetered Wi-Fi and available storage"
+                                    else "Waiting for queue, connection and available storage"
+                                download.state == "Retrying" ->
+                                    "Retry scheduled · ${download.done} pages saved"
+                                else -> "${download.done} / ${download.total} pages"
+                            },
                             style = MaterialTheme.typography.labelMedium,
                         )
                         if (download.error.isNotEmpty())
@@ -1445,7 +1604,7 @@ private fun SettingsScreen(vm: ReaderViewModel, settings: Settings) {
                             style = MaterialTheme.typography.bodySmall,
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            listOf(0, 5, 10, 30).forEach { seconds ->
+                            listOf(0, 3, 5, 10, 30).forEach { seconds ->
                                 FilterChip(
                                     settings.retrySeconds == seconds,
                                     { vm.retryInterval(seconds) },

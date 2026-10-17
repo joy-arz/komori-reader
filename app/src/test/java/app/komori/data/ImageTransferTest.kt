@@ -9,6 +9,18 @@ import org.junit.Test
 
 class ImageTransferTest {
     @Test
+    fun reportsBytesDuringCopyForUnknownLengths() {
+        val updates = mutableListOf<Long>()
+        val bytes = ByteArray(100_000)
+        val output = ByteArrayOutputStream()
+        copyImageBytes(ByteArrayInputStream(bytes), output, progress = { updates += it })
+        assertTrue(updates.size > 1)
+        assertEquals(100_000L, updates.last())
+        assertTrue(updates.zipWithNext().all { (a, b) -> b > a })
+        assertArrayEquals(bytes, output.toByteArray())
+    }
+
+    @Test
     fun acceptsExactLimit() {
         val output = ByteArrayOutputStream()
         copyImageBytes(ByteArrayInputStream(byteArrayOf(1, 2, 3)), output, 3)

@@ -1,9 +1,9 @@
 package app.komori.ui
 
 import android.graphics.BitmapFactory
-import android.graphics.Rect
-import android.net.Uri
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -12,16 +12,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.komori.data.connectionMessage
 import app.komori.data.requiresSourceAction
 import app.komori.data.sourceKey
 import app.komori.domain.Release
-import com.davemorrissey.labs.subscaleview.ImageSource
-import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
 import java.io.File
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -58,10 +57,16 @@ fun WebtoonReader(
     var nextLoading by remember { mutableStateOf(false) }
     var nextAttempt by remember { mutableIntStateOf(0) }
     val tail = window.last()
-    val next = remember(tail, chapterFeed, titlePreferences, shelf, settings) { vm.nextChapter(tail) }
+    val next =
+        remember(tail, chapterFeed, titlePreferences, shelf, settings) { vm.nextChapter(tail) }
     val nextCountdown =
         key(tail.id) {
-            imageRetryCountdown(nextError != null && !requiresSourceAction(nextError), settings.retrySeconds) { nextAttempt++ }
+            imageRetryCountdown(
+                nextError != null && !requiresSourceAction(nextError),
+                settings.retrySeconds,
+            ) {
+                nextAttempt++
+            }
         }
 
     LaunchedEffect(tail.id, next?.id, settings.continuousChapters, nextAttempt) {
@@ -166,7 +171,10 @@ fun WebtoonReader(
                             var failure by remember { mutableStateOf<Exception?>(null) }
                             var attempt by remember { mutableIntStateOf(0) }
                             val countdown =
-                                imageRetryCountdown(failure != null && !requiresSourceAction(failure), settings.retrySeconds) {
+                                imageRetryCountdown(
+                                    failure != null && !requiresSourceAction(failure),
+                                    settings.retrySeconds,
+                                ) {
                                     attempt++
                                 }
                             LaunchedEffect(attempt) {
@@ -202,7 +210,8 @@ fun WebtoonReader(
                                     CircularProgressIndicator(Modifier.padding(16.dp))
                                 else {
                                     Text(connectionMessage(failure!!), color = Color.White)
-                                    if (requiresSourceAction(failure)) VerifySourceButton(vm, sourceKey(release.mangaId))
+                                    if (requiresSourceAction(failure))
+                                        VerifySourceButton(vm, sourceKey(release.mangaId))
                                     if (countdown > 0)
                                         Text(
                                             "Retrying this page in ${countdown}s",
@@ -217,15 +226,24 @@ fun WebtoonReader(
                             item(key = "$imageKey|$strip") {
                                 val top = strip * STRIP_HEIGHT
                                 val bottom = minOf(top + STRIP_HEIGHT, image.height)
-                                var availableFile by remember { mutableStateOf<File?>(null) }
+                                var availableFile by
+                                    remember(image.file) {
+                                        mutableStateOf<File?>(image.file.takeIf { it.exists() })
+                                    }
+                                var decoded by remember { mutableStateOf(false) }
                                 var decodeError by remember { mutableStateOf<Exception?>(null) }
                                 var retry by remember { mutableIntStateOf(0) }
                                 val countdown =
-                                    imageRetryCountdown(decodeError != null && !requiresSourceAction(decodeError), settings.retrySeconds) {
+                                    imageRetryCountdown(
+                                        decodeError != null && !requiresSourceAction(decodeError),
+                                        settings.retrySeconds,
+                                    ) {
                                         retry++
                                     }
                                 LaunchedEffect(retry) {
+                                    if (retry == 0 && availableFile != null) return@LaunchedEffect
                                     availableFile = null
+                                    decoded = false
                                     decodeError = null
                                     try {
                                         if (retry > 0) vm.invalidateCachedPage(release, page)
@@ -236,66 +254,71 @@ fun WebtoonReader(
                                         decodeError = e
                                     }
                                 }
+                                val stripWidth = maxWidth
                                 Box(
                                     Modifier.fillMaxWidth()
-                                        .height(maxWidth * ((bottom - top).toFloat() / image.width))
+                                        .height(stripWidth * ((bottom - top).toFloat() / image.width))
                                 ) {
-                                    if (availableFile != null)
-                                        key(retry) {
-                                            AndroidView(
-                                                factory = { context ->
-                                                    ReaderImageView(context).apply {
-                                                        setZoomEnabled(false)
-                                                        setPanEnabled(false)
-                                                        setMinimumScaleType(
-                                                            SubsamplingScaleImageView
-                                                                .SCALE_TYPE_CENTER_INSIDE
+                                    availableFile?.let { file ->
+                                        val displayWidth =
+                                            with(LocalDensity.current) { stripWidth.roundToPx() }
+                                        val stripKey =
+                                            WebtoonStripCache.key(file, top, bottom, displayWidth)
+                                        var bitmap by
+                                            remember(stripKey, retry) {
+                                                mutableStateOf(WebtoonStripCache.peek(stripKey))
+                                            }
+                                        LaunchedEffect(stripKey, retry) {
+                                            try {
+                                                bitmap =
+                                                    bitmap
+                                                        ?: WebtoonStripCache.load(
+                                                            file,
+                                                            top,
+                                                            bottom,
+                                                            image.width,
+                                                            displayWidth,
                                                         )
-                                                        setOnImageEventListener(
-                                                            object :
-                                                                SubsamplingScaleImageView.DefaultOnImageEventListener() {
-                                                                override fun onImageLoadError(
-                                                                    e: Exception
-                                                                ) {
-                                                                    decodeError = e
-                                                                }
-
-                                                                override fun onTileLoadError(
-                                                                    e: Exception
-                                                                ) {
-                                                                    decodeError = e
-                                                                }
-                                                            }
-                                                        )
-                                                        setImage(
-                                                            ImageSource.uri(
-                                                                    Uri.fromFile(availableFile)
-                                                                )
-                                                                .region(
-                                                                    Rect(
-                                                                        0,
-                                                                        top,
-                                                                        image.width,
-                                                                        bottom,
-                                                                    )
-                                                                )
-                                                        )
-                                                    }
-                                                },
-                                                update = { it.onReaderTap = { onTap() } },
-                                                modifier = Modifier.fillMaxSize(),
-                                                onReset = null,
-                                                onRelease = { it.recycle() },
+                                                decoded = true
+                                            } catch (e: CancellationException) {
+                                                throw e
+                                            } catch (e: Exception) {
+                                                decodeError = e
+                                            }
+                                        }
+                                        bitmap?.let {
+                                            Image(
+                                                it.asImageBitmap(),
+                                                null,
+                                                Modifier.fillMaxSize().clickable { onTap() },
+                                                contentScale = ContentScale.FillBounds,
                                             )
                                         }
+                                    }
+                                    if (!decoded && decodeError == null)
+                                        CircularProgressIndicator(
+                                            Modifier.size(24.dp).align(Alignment.Center),
+                                            strokeWidth = 2.dp,
+                                        )
                                     if (decodeError != null)
-                                        Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-                                            Text(connectionMessage(decodeError!!), color = Color.White)
+                                        Column(
+                                            Modifier.align(Alignment.Center),
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                        ) {
+                                            Text(
+                                                connectionMessage(decodeError!!),
+                                                color = Color.White,
+                                            )
                                             if (requiresSourceAction(decodeError))
                                                 VerifySourceButton(vm, sourceKey(release.mangaId))
-                                            else Button(onClick = { retry++ }) {
-                                                Text(if (countdown > 0) "Retry image · ${countdown}s" else "Retry image")
-                                            }
+                                            else
+                                                Button(onClick = { retry++ }) {
+                                                    Text(
+                                                        if (countdown > 0)
+                                                            "Retry image · ${countdown}s"
+                                                        else "Retry image"
+                                                    )
+                                                }
                                         }
                                 }
                             }
@@ -308,9 +331,13 @@ fun WebtoonReader(
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     if (settings.continuousChapters && next != null) {
-                        Text(nextError?.let(::connectionMessage) ?: "Loading ${next.label}…", color = Color.LightGray)
+                        Text(
+                            nextError?.let(::connectionMessage) ?: "Loading ${next.label}…",
+                            color = Color.LightGray,
+                        )
                         if (nextLoading) CircularProgressIndicator(Modifier.padding(12.dp))
-                        if (requiresSourceAction(nextError)) VerifySourceButton(vm, sourceKey(next.mangaId))
+                        if (requiresSourceAction(nextError))
+                            VerifySourceButton(vm, sourceKey(next.mangaId))
                         if (nextError != null) {
                             if (nextCountdown > 0)
                                 Text("Retrying in ${nextCountdown}s", color = Color.LightGray)

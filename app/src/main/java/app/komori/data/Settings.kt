@@ -25,7 +25,7 @@ data class Settings(
     val autoUpdateDownload: Boolean = true,
     val showContinue: Boolean = true,
     val continuousChapters: Boolean = true,
-    val retrySeconds: Int = 5,
+    val retrySeconds: Int = 3,
     val sources: String = "demonic,weeb,mangadex,zap,imhentai,nhentai",
 )
 
@@ -50,11 +50,10 @@ class SettingsStore(private val context: Context) {
                 p[booleanPreferencesKey("autoUpdateDownload")] ?: true,
                 p[booleanPreferencesKey("showContinue")] ?: true,
                 p[booleanPreferencesKey("continuousChapters")] ?: true,
-                (p[intPreferencesKey("retrySeconds")] ?: 5).let {
-                    if (it in listOf(0, 5, 10, 30)) it else 5
+                (p[intPreferencesKey("retrySeconds")] ?: 3).let {
+                    if (it in listOf(0, 3, 5, 10, 30)) it else 3
                 },
-                p[stringPreferencesKey("sources")]
-                    ?: "demonic,weeb,mangadex,zap,imhentai,nhentai",
+                p[stringPreferencesKey("sources")] ?: "demonic,weeb,mangadex,zap,imhentai,nhentai",
             )
         }
 
@@ -63,7 +62,7 @@ class SettingsStore(private val context: Context) {
     }
 
     suspend fun retrySeconds(value: Int) {
-        require(value in listOf(0, 5, 10, 30))
+        require(value in listOf(0, 3, 5, 10, 30))
         context.settingsStore.edit { it[intPreferencesKey("retrySeconds")] = value }
     }
 

@@ -12,7 +12,9 @@ import java.io.IOException
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 
 class ReaderViewModel(application: Application) : AndroidViewModel(application) {
     val app = application as KomoriApp
@@ -46,7 +48,9 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     val readerPage = MutableStateFlow(0)
     val readerScroll = MutableStateFlow(0f)
     val readerReady = MutableStateFlow(false)
-    private val imageFetch = Mutex()
+    private val imageFetch = Array(16) { Mutex() }
+    private val imageConnections = Semaphore(2)
+    val downloadTransfers = DownloadTransfers.progress
     val readerFile = MutableStateFlow<File?>(null)
     val readerError = MutableStateFlow<String?>(null)
     val readerRetryAllowed = MutableStateFlow(true)
@@ -65,6 +69,69 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     private val pageManifests = java.util.concurrent.ConcurrentHashMap<String, List<String>>()
     private val mutation = Mutex()
 
+    val currentTab = MutableStateFlow(0)
+    val navigationEntry = MutableStateFlow(0L)
+    val canNavigateBack = MutableStateFlow(false)
+    val searchQuery = MutableStateFlow("")
+    private var nextEntry = 0L
+
+    private data class NavigationSnapshot(
+        val entry: Long,
+        val tab: Int,
+        val query: String,
+        val source: String,
+        val filter: BrowseFilter,
+        val creator: Creator?,
+        val results: List<Manga>,
+        val nextOffset: Int,
+        val more: Boolean,
+        val tags: List<SourceTag>,
+        val title: Manga?,
+        val chapters: List<Release>,
+        val languages: List<String>,
+        val status: String,
+        val offlineLanguage: String?,
+        val error: String?,
+    )
+
+    private val history = ArrayDeque<NavigationSnapshot>()
+
+    private fun pushScreen() {
+        history.addLast(
+            NavigationSnapshot(
+                navigationEntry.value,
+                currentTab.value,
+                query,
+                activeSource.value,
+                browseFilter.value,
+                creatorFilter,
+                results.value,
+                nextOffset,
+                canLoadMore,
+                tags.value,
+                selected.value,
+                chapters.value,
+                sourceLanguages.value,
+                chapterStatus.value,
+                offlineLanguage,
+                error.value,
+            )
+        )
+        if (history.size > 30) history.removeFirst()
+        navigationEntry.value = ++nextEntry
+        canNavigateBack.value = true
+    }
+
+    fun browseCreator(creator: Creator) {
+        pushScreen()
+        detailJob?.cancel()
+        selected.value = null
+        chapters.value = emptyList()
+        currentTab.value = 1
+        browseFilter.value = BrowseFilter()
+        search("", creator)
+    }
+
     private fun task(block: suspend () -> Unit) =
         viewModelScope.launch {
             try {
@@ -79,6 +146,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     fun search(text: String = query, creator: Creator? = creatorFilter, more: Boolean = false) {
         if (more && (searchJob?.isActive == true || !canLoadMore || results.value.isEmpty())) return
         searchJob?.cancel()
+        if (!more) searchQuery.value = text
         searchJob = task {
             loading.value = true
             error.value = null
@@ -127,7 +195,10 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun submitSearch(text: String) {
-        browseFilter.value = browseFilter.value.copy(facetPath = "")
+        pushScreen()
+        if (text != query)
+            browseFilter.value = BrowseFilter(searchType = browseFilter.value.searchType)
+        else browseFilter.value = browseFilter.value.copy(facetPath = "")
         search(text, null)
     }
 
@@ -140,7 +211,8 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun clearFacet() {
-        browseFilter.value = browseFilter.value.copy(facetPath = "")
+        pushScreen()
+        browseFilter.value = BrowseFilter()
         search("", null)
     }
 
@@ -153,7 +225,11 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun browseTag(manga: Manga, tag: SourceTag) {
-        back()
+        pushScreen()
+        detailJob?.cancel()
+        selected.value = null
+        chapters.value = emptyList()
+        currentTab.value = 1
         activeSource.value = sourceKey(manga.id)
         tagsJob?.cancel()
         tags.value = emptyList()
@@ -162,6 +238,8 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun chooseSource(key: String) {
+        if (activeSource.value == key) return
+        pushScreen()
         activeSource.value = key
         browseFilter.value = BrowseFilter()
         tags.value = emptyList()
@@ -176,6 +254,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun applyFilter(filter: BrowseFilter) {
+        pushScreen()
         browseFilter.value = filter
         search()
     }
@@ -217,6 +296,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                     .first()
                     .filter { it.state == "Complete" }
                     .associate { it.releaseId to it.total }
+            if (selected.value?.id != book.id) pushScreen()
             selected.value = book
             chapters.value =
                 retainDownloadedChapters(
@@ -233,6 +313,8 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun open(manga: Manga, immediately: Boolean = false) {
+        if (selected.value?.id != manga.id) pushScreen()
+        searchJob?.cancel()
         offlineLanguage = null
         detailJob?.cancel()
         selected.value = manga
@@ -321,10 +403,35 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
 
     fun back() {
         detailJob?.cancel()
-        selected.value = null
-        chapters.value = emptyList()
+        searchJob?.cancel()
+        tagsJob?.cancel()
         loading.value = false
-        error.value = null
+        val previous = history.removeLastOrNull()
+        if (previous == null) {
+            selected.value = null
+            chapters.value = emptyList()
+            error.value = null
+        } else {
+            currentTab.value = previous.tab
+            query = previous.query
+            searchQuery.value = previous.query
+            activeSource.value = previous.source
+            browseFilter.value = previous.filter
+            creatorFilter = previous.creator
+            activeCreator.value = previous.creator
+            results.value = previous.results
+            nextOffset = previous.nextOffset
+            canLoadMore = previous.more
+            tags.value = previous.tags
+            selected.value = previous.title
+            chapters.value = previous.chapters
+            sourceLanguages.value = previous.languages
+            chapterStatus.value = previous.status
+            offlineLanguage = previous.offlineLanguage
+            error.value = previous.error
+            navigationEntry.value = previous.entry
+        }
+        canNavigateBack.value = history.isNotEmpty()
     }
 
     fun chapterLanguage(): String =
@@ -388,7 +495,19 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun setting(key: String, value: Boolean) = task { app.settings.set(key, value) }
+    fun setting(key: String, value: Boolean) = task {
+        app.settings.set(key, value)
+        if (key == "wifi") {
+            // WorkManager constraints are immutable; apply the new choice to the existing queue.
+            val queued = downloads.value.filter { it.state in DownloadPolicy.activeStates }
+            for (download in queued) {
+                pause(download).join()
+                dao.chapter(download.releaseId)?.release()?.let {
+                    enqueueDownload(app, it, settings.value.copy(wifi = value))
+                }
+            }
+        }
+    }
 
     fun language(value: String) = task {
         app.settings.language(value)
@@ -609,8 +728,26 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    suspend fun pageFileFor(chapter: Release, page: Int): File =
-        imageFetch.withLock {
+    suspend fun pageFileFor(chapter: Release, page: Int): File {
+        // Disk hits must never queue behind an unrelated slow network request.
+        val cached =
+            withContext(Dispatchers.IO) {
+                if (repairMarker(app, chapter.id, page).exists()) null
+                else {
+                    val offline = pageFile(app, chapter.id, page)
+                    val online =
+                        File(app.cacheDir, "reader/${chapter.id}-$page-${settings.value.saver}.img")
+                    when {
+                        validImage(offline) -> offline
+                        validImage(online) ->
+                            online.also { it.setLastModified(System.currentTimeMillis()) }
+                        else -> null
+                    }
+                }
+            }
+        if (cached != null) return cached
+        val key = "${chapter.id}-$page"
+        return imageFetch[(key.hashCode() and Int.MAX_VALUE) % imageFetch.size].withLock {
             withContext(Dispatchers.IO) {
                 val downloaded = pageFile(app, chapter.id, page)
                 if (!repairMarker(app, chapter.id, page).exists() && validImage(downloaded)) {
@@ -641,11 +778,13 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                         ?: throw IOException("Page is no longer available. Reopen the chapter.")
                 val temporary = File.createTempFile("page-", ".part", cacheDir)
                 try {
-                    transferImage(
-                        app.source.client,
-                        app.source.imageRequest(url, chapter.id),
-                        temporary,
-                    )
+                    imageConnections.withPermit {
+                        transferImage(
+                            app.source.client,
+                            app.source.imageRequest(url, chapter.id),
+                            temporary,
+                        )
+                    }
                     coroutineContext.ensureActive()
                     if (repairMarker(app, chapter.id, page).exists())
                         ChapterFiles.locked(chapter.id) {
@@ -687,6 +826,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                 }
             }
         }
+    }
 
     private suspend fun loadPage(chapter: Release, page: Int) {
         readerFile.value = null

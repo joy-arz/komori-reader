@@ -9,9 +9,34 @@ import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+
+data class DownloadTransfer(
+    val page: Int = 0,
+    val bytes: Long = 0,
+    val totalBytes: Long = -1,
+    val resolving: Boolean = false,
+    val completedPages: Int = 0,
+)
+
+/** Transient byte progress; completed pages remain persisted in Room. */
+object DownloadTransfers {
+    private val current = MutableStateFlow<Map<String, DownloadTransfer>>(emptyMap())
+    val progress = current.asStateFlow()
+
+    fun report(id: String, value: DownloadTransfer) {
+        current.update { it + (id to value) }
+    }
+
+    fun clear(id: String) {
+        current.update { it - id }
+    }
+}
 
 fun chapterDirectory(context: Context, id: String) = File(context.filesDir, "chapters/$id")
 
@@ -58,7 +83,9 @@ suspend fun enqueueDownload(
 
 class ChapterDownloadWorker(context: Context, params: WorkerParameters) :
     CoroutineWorker(context, params) {
-    override suspend fun doWork(): Result =
+    override suspend fun doWork(): Result = download((applicationContext as KomoriApp).source)
+
+    internal suspend fun download(source: Sources): Result =
         gate.withLock {
             withContext(Dispatchers.IO) {
                 val app = applicationContext as KomoriApp
@@ -69,7 +96,10 @@ class ChapterDownloadWorker(context: Context, params: WorkerParameters) :
                     if (record.state !in setOf("Queued", "Downloading", "Retrying"))
                         return@chapter Result.failure()
                     try {
-                        val urls = app.source.pages(id, record.dataSaver)
+                        record = record.copy(state = "Downloading", error = "")
+                        app.dao.putDownload(record)
+                        DownloadTransfers.report(id, DownloadTransfer(resolving = true))
+                        val urls = source.pages(id, record.dataSaver)
                         if (urls.isEmpty())
                             throw IOException("This release has no downloadable pages.")
                         kotlinx.coroutines.currentCoroutineContext().ensureActive()
@@ -115,11 +145,33 @@ class ChapterDownloadWorker(context: Context, params: WorkerParameters) :
                                 val temporary =
                                     File.createTempFile("page-$index-", ".part", directory)
                                 try {
-                                    transferImage(
-                                        app.source.client,
-                                        app.source.imageRequest(url, id),
-                                        temporary,
+                                    DownloadTransfers.report(
+                                        id,
+                                        DownloadTransfer(
+                                            page = index + 1,
+                                            completedPages = record.done,
+                                        ),
                                     )
+                                    var lastProgress = 0L
+                                    transferImage(
+                                        source.client,
+                                        source.imageRequest(url, id),
+                                        temporary,
+                                    ) { bytes, total ->
+                                        val now = System.nanoTime()
+                                        if (now - lastProgress >= 250_000_000L || bytes == total) {
+                                            lastProgress = now
+                                            DownloadTransfers.report(
+                                                id,
+                                                DownloadTransfer(
+                                                    index + 1,
+                                                    bytes,
+                                                    total,
+                                                    completedPages = record.done,
+                                                ),
+                                            )
+                                        }
+                                    }
                                     kotlinx.coroutines.currentCoroutineContext().ensureActive()
                                     if (!temporary.renameTo(file))
                                         throw IOException("Could not save page ${index + 1}")
@@ -150,6 +202,8 @@ class ChapterDownloadWorker(context: Context, params: WorkerParameters) :
                         )
                         if (!needsAction && runAttemptCount < 3) Result.retry()
                         else Result.failure()
+                    } finally {
+                        DownloadTransfers.clear(id)
                     }
                 }
             }

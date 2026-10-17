@@ -16,6 +16,7 @@ internal fun copyImageBytes(
     input: InputStream,
     output: OutputStream,
     limit: Long = MAX_IMAGE_BYTES,
+    progress: (Long) -> Unit = {},
     check: () -> Unit = {},
 ) {
     val buffer = ByteArray(32 * 1024)
@@ -27,6 +28,7 @@ internal fun copyImageBytes(
         total += count
         if (total > limit) throw IOException("This image exceeds the 32 MB page limit.")
         output.write(buffer, 0, count)
+        progress(total)
     }
 }
 
@@ -38,7 +40,12 @@ fun validImage(file: File): Boolean {
 }
 
 /** Cancellation closes the actual socket, including while the body is being read. */
-suspend fun transferImage(client: OkHttpClient, request: Request, target: File) =
+suspend fun transferImage(
+    client: OkHttpClient,
+    request: Request,
+    target: File,
+    progress: (Long, Long) -> Unit = { _, _ -> },
+) =
     suspendCancellableCoroutine<Unit> { continuation ->
         val call = client.newCall(request)
         continuation.invokeOnCancellation { call.cancel() }
@@ -62,7 +69,13 @@ suspend fun transferImage(client: OkHttpClient, request: Request, target: File) 
                                 throw IOException("This image exceeds the 32 MB page limit.")
                             target.outputStream().use { out ->
                                 body.byteStream().use { input ->
-                                    copyImageBytes(input, out) {
+                                    copyImageBytes(
+                                        input,
+                                        out,
+                                        progress = { bytes ->
+                                            progress(bytes, body.contentLength())
+                                        },
+                                    ) {
                                         if (!continuation.isActive)
                                             throw IOException("Image request cancelled")
                                         if (target.parentFile!!.usableSpace < 16L * 1024 * 1024)

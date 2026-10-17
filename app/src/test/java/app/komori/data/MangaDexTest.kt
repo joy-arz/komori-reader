@@ -10,6 +10,65 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class MangaDexTest {
+    @Test
+    fun `connection reset retries once with HTTP1 compatibility and identity`() = runBlocking {
+        var requests = 0
+        val client =
+            MangaDex.client()
+                .newBuilder()
+                .addInterceptor { chain ->
+                    requests++
+                    assertTrue(chain.request().header("User-Agent")!!.startsWith("Komori/"))
+                    if (requests == 1) throw java.net.SocketException("Connection reset")
+                    okhttp3.Response.Builder()
+                        .request(chain.request())
+                        .protocol(okhttp3.Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body(
+                            okhttp3.ResponseBody.create(
+                                null,
+                                "{\"data\":[],\"offset\":0,\"total\":0}",
+                            )
+                        )
+                        .build()
+                }
+                .build()
+        assertTrue(MangaDex(client).chapters("test", "en").isEmpty())
+        assertEquals(2, requests)
+    }
+
+    @Test
+    fun `rate limits are not immediately retried`() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setResponseCode(429))
+            val source = MangaDex(MangaDex.client(), server.url("/").toString().trimEnd('/'))
+            try {
+                source.chapters("test", "en")
+                fail("Expected failure")
+            } catch (_: IOException) {}
+            assertEquals(1, server.requestCount)
+        }
+    }
+
+    @Test
+    fun `image servers use standard HTTPS port`() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(
+                MockResponse()
+                    .setBody(
+                        """{"baseUrl":"https://images.example","chapter":{"hash":"h","dataSaver":["1.jpg"]}}"""
+                    )
+            )
+            val source = MangaDex(MangaDex.client(), server.url("/").toString().trimEnd('/'))
+            assertEquals(
+                listOf("https://images.example/data-saver/h/1.jpg"),
+                source.pages("test", true),
+            )
+            assertEquals("true", server.takeRequest().requestUrl!!.queryParameter("forcePort443"))
+        }
+    }
+
     private fun response(offset: Int, total: Int, ids: List<String>): MockResponse =
         MockResponse()
             .setBody(

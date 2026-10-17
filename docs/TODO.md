@@ -1,6 +1,16 @@
 # Komori development backlog
 
-Updated October 16, 2026. Based on CURRENT_COMPARISON_REVIEW.md; Komikku is the main behavior reference and Mihon the secondary reference. Checkboxes mean delivered and validated, not merely started.
+Updated October 17, 2026. Based on CURRENT_COMPARISON_REVIEW.md; Komikku is the main behavior reference and Mihon the secondary reference. Checkboxes mean delivered and validated, not merely started.
+
+## Reader, downloads and navigation follow-up
+- [x] Default image retry to 3 seconds while preserving explicit preferences.
+- [x] Let cached pages bypass network waits; add bounded webtoon strip reuse and two concurrent reader image transfers.
+- [x] Show manifest/byte download progress; apply Wi-Fi-only changes to the existing queue.
+- [x] Preserve MangaDex client identity, request port 443 image hosts and retry connection resets once.
+- [x] Add creator subscription strip, saved-works filters and follow management.
+- [x] Restore exact grid/chapter-list scroll position after title/reader navigation.
+- [x] Keep filters scoped to their query; restore search/result/tag-origin history on Back.
+- [ ] Reproduce the reported MangaDex reset on the affected device/network; verify live downloads across each enabled source. Synthetic worker/transfer tests do not establish every site's availability.
 
 ## Reference-led visual redesign
 - [x] Replace shared chrome, typography, colors and controls with the black/green/lime design; retain all existing destinations and settings.

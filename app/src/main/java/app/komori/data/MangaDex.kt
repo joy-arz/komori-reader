@@ -24,6 +24,13 @@ interface MangaSource {
 
 class MangaDex(val client: OkHttpClient, private val baseUrl: String = "https://api.mangadex.org") :
     MangaSource {
+    private val compatibilityClient by lazy {
+        client
+            .newBuilder()
+            .protocols(listOf(okhttp3.Protocol.HTTP_1_1))
+            .connectionPool(okhttp3.ConnectionPool())
+            .build()
+    }
     private val throttle = Mutex()
     private var lastRequest = 0L
 
@@ -42,17 +49,16 @@ class MangaDex(val client: OkHttpClient, private val baseUrl: String = "https://
                         .newBuilder()
                         .apply { params.forEach { addQueryParameter(it.first, it.second) } }
                         .build()
-                client
-                    .newCall(
-                        Request.Builder()
-                            .url(url)
-                            .header(
-                                "User-Agent",
-                                "Komori/${app.komori.BuildConfig.VERSION_NAME} (Android reader)",
-                            )
-                            .build()
-                    )
-                    .readResponse { response ->
+                val request =
+                    Request.Builder()
+                        .url(url)
+                        .header(
+                            "User-Agent",
+                            "Komori/${app.komori.BuildConfig.VERSION_NAME} (Android reader)",
+                        )
+                        .build()
+                suspend fun fetch(connection: OkHttpClient): JSONObject =
+                    connection.newCall(request).readResponse { response ->
                         if (response.code == 429)
                             throw IOException(
                                 "MangaDex is rate limiting requests. Please wait before retrying."
@@ -63,6 +69,15 @@ class MangaDex(val client: OkHttpClient, private val baseUrl: String = "https://
                             )
                         JSONObject(response.body?.string() ?: throw IOException("Empty response"))
                     }
+                try {
+                    fetch(client)
+                } catch (e: IOException) {
+                    if (!isConnectionReset(e)) throw e
+                    // One safe GET retry on a separate HTTP/1.1 pool, without weakening TLS.
+                    // HTTP errors, verification and rate limits never enter this path.
+                    delay(300)
+                    fetch(compatibilityClient)
+                }
             }
         }
 
@@ -198,7 +213,7 @@ class MangaDex(val client: OkHttpClient, private val baseUrl: String = "https://
     }
 
     override suspend fun pages(chapterId: String, saver: Boolean): List<String> {
-        val result = json("at-home/server/$chapterId")
+        val result = json("at-home/server/$chapterId", listOf("forcePort443" to "true"))
         val chapter = result.getJSONObject("chapter")
         val field = if (saver) "dataSaver" else "data"
         val files = chapter.getJSONArray(field)
