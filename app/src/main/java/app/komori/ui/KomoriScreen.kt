@@ -133,7 +133,7 @@ fun KomoriScreen(vm: ReaderViewModel) {
                         ),
                     containerColor = Color.Transparent,
                     topBar = {
-                        if (selected != null || tab != 1)
+                        if (selected != null || (tab != 1 && tab != 2))
                             AppHeading(
                                 if (selected != null) "Title details"
                                 else
@@ -216,7 +216,7 @@ fun KomoriScreen(vm: ReaderViewModel) {
                                 when (tab) {
                                     0 -> Library(vm, { vm.currentTab.value = 1 })
                                     1 -> Discover(vm)
-                                    2 -> Authors(vm) { creator -> vm.browseCreator(creator) }
+                                    2 -> Authors(vm)
                                     3 -> Downloads(vm)
                                     4 -> SettingsScreen(vm, settings)
                                 }
@@ -439,46 +439,27 @@ private fun Library(vm: ReaderViewModel, discover: () -> Unit) {
 }
 
 @Composable
-private fun Authors(vm: ReaderViewModel, browseCreator: (Creator) -> Unit) {
+private fun Authors(vm: ReaderViewModel) {
     val creators by vm.creators.collectAsStateWithLifecycle()
-    val library by vm.library.collectAsStateWithLifecycle()
-    val shelf by vm.shelf.collectAsStateWithLifecycle()
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
     var manage by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
     val selected = creators.find { it.id == selectedId }
     val visible = creators.filter { it.name.contains(query, true) }
     val creatorSelection = rememberMultiSelection(visible.map { it.id })
-    val followedIds = creators.map { it.id }.toSet()
-    val savedIds = shelf.filter { it.saved || it.liked }.map { it.mangaId }.toSet()
-    val cachedWorks =
-        remember(library, savedIds, followedIds, selected) {
-            library.filter { manga ->
-                manga.id in savedIds &&
-                    runCatching {
-                            JSONArray(manga.creatorsJson).objects().any {
-                                val id = it.optString("id")
-                                if (selected != null) id == selected.id else id in followedIds
-                            }
-                        }
-                        .getOrDefault(false)
-            }
-        }
-    val feed by vm.authorFeed.collectAsStateWithLifecycle()
+    val context = (selected?.let { listOf(it) } ?: creators).map { it.id }
+    val currentFeed by vm.authorFeed.collectAsStateWithLifecycle()
+    val feed = if (currentFeed.context == context) currentFeed else AuthorFeed(loading = true)
     LaunchedEffect(creators, selected) {
         vm.showAuthorWorks(selected?.let { listOf(it) } ?: creators)
     }
-    val works = (feed.items + cachedWorks).distinctBy { it.id }
+    val works = feed.items
     Column(Modifier.fillMaxSize()) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                "${creators.size} following",
-                Modifier.weight(1f),
-                style = MaterialTheme.typography.titleMedium,
-            )
+            Text("Following", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
             TextButton(
                 onClick = {
                     manage = !manage
@@ -541,36 +522,19 @@ private fun Authors(vm: ReaderViewModel, browseCreator: (Creator) -> Unit) {
             }
         } else {
             LazyRow(
-                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                item { CreatorBubble("All", selected == null) { selectedId = null } }
+                item { FilterChip(selected == null, { selectedId = null }, { Text("All") }) }
                 items(creators, key = { it.id }) { creator ->
-                    CreatorBubble(creator.name, selected?.id == creator.id) {
-                        selectedId = creator.id
-                    }
-                }
-            }
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        selected?.name ?: "All works",
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-                    Text(
-                        if (selected != null) "${sourceName(selected.id)} · ${selected.role}"
-                        else "From the creators you follow",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    FilterChip(
+                        selected?.id == creator.id,
+                        { selectedId = creator.id },
+                        { Text(creator.name) },
                     )
                 }
-                if (selected != null)
-                    TextButton(onClick = { browseCreator(selected) }) { Text("All works") }
             }
-            key(selectedId) {
+            key(context) {
                 val grid = rememberLazyGridState()
                 val nearEnd by remember {
                     derivedStateOf {
@@ -591,8 +555,8 @@ private fun Authors(vm: ReaderViewModel, browseCreator: (Creator) -> Unit) {
                     works,
                     { vm.open(it) },
                     { vm.open(it, true) },
-                    subtitle = { if (it.id in savedIds) "In your Library" else "" },
                     gridState = grid,
+                    showSelectionShortcut = false,
                     footer = {
                         Column(
                             Modifier.fillMaxWidth(),
@@ -604,8 +568,6 @@ private fun Authors(vm: ReaderViewModel, browseCreator: (Creator) -> Unit) {
                                     feed.errors.joinToString("\n"),
                                     style = MaterialTheme.typography.bodySmall,
                                 )
-                                if (feed.items.isEmpty() && cachedWorks.isNotEmpty())
-                                    Text("Showing saved works while the source is unavailable.")
                             }
                             if (!feed.loading && feed.hasMore)
                                 TextButton(onClick = vm::loadAuthorWorks) {
@@ -621,52 +583,6 @@ private fun Authors(vm: ReaderViewModel, browseCreator: (Creator) -> Unit) {
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun CreatorBubble(name: String, selected: Boolean, onClick: () -> Unit) {
-    Column(
-        Modifier.width(72.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .selectable(selected, onClick = onClick),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Box(
-            Modifier.size(58.dp)
-                .clip(androidx.compose.foundation.shape.CircleShape)
-                .background(
-                    if (selected) MaterialTheme.colorScheme.primaryContainer
-                    else MaterialTheme.colorScheme.surfaceVariant
-                )
-                .border(
-                    if (selected) 2.dp else 1.dp,
-                    if (selected) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.outlineVariant,
-                    androidx.compose.foundation.shape.CircleShape,
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                name
-                    .split(" ")
-                    .filter { it.isNotEmpty() }
-                    .take(2)
-                    .joinToString("") { it.take(1) }
-                    .uppercase(),
-                style = MaterialTheme.typography.titleMedium,
-                color =
-                    if (selected) MaterialTheme.colorScheme.onPrimaryContainer
-                    else MaterialTheme.colorScheme.onSurface,
-            )
-        }
-        Text(
-            name,
-            Modifier.padding(top = 6.dp, bottom = 4.dp),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.labelMedium,
-        )
     }
 }
 
@@ -961,6 +877,7 @@ private fun MangaGrid(
     subtitle: (Manga) -> String = { "" },
     footer: @Composable () -> Unit = {},
     gridState: LazyGridState = rememberLazyGridState(),
+    showSelectionShortcut: Boolean = true,
 ) {
     val available = manga.map { it.id }
     val selection = rememberMultiSelection(available)
@@ -985,7 +902,7 @@ private fun MangaGrid(
                 },
             )
     Column(Modifier.fillMaxSize()) {
-        SelectionBar(selection, available, actions)
+        if (showSelectionShortcut || selection.active) SelectionBar(selection, available, actions)
         LazyVerticalGrid(
             GridCells.Adaptive(140.dp),
             state = gridState,

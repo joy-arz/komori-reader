@@ -58,4 +58,5 @@ data class AuthorFeed(
     val loading: Boolean = false,
     val hasMore: Boolean = false,
     val errors: List<String> = emptyList(),
+    val context: List<String> = emptyList(),
 )

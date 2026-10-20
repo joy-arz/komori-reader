@@ -13,8 +13,11 @@ fun connectionMessage(error: Exception): String =
             "The source could not be reached securely. Check your device clock or try another network."
         is UnknownHostException ->
             "The source could not be found. Check your internet connection and network access."
+        is SourceConnectionResetException -> error.message.orEmpty()
         is SocketException ->
-            "The source reset the connection. Retry, or try another network if it keeps happening."
+            if (isConnectionReset(error))
+                "The source reset the connection. Retry, or try another network if it keeps happening."
+            else "The source connection failed. Check your connection and retry."
         is SocketTimeoutException -> "The connection timed out. Please retry."
         else -> error.message ?: "Could not complete the request. Please retry."
     }

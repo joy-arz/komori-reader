@@ -16,7 +16,12 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 
-class ReaderViewModel(application: Application) : AndroidViewModel(application) {
+class ReaderViewModel(
+    application: Application,
+    private val authorPage: (suspend (Creator, Int) -> BrowsePage)?,
+) : AndroidViewModel(application) {
+    constructor(application: Application) : this(application, null)
+
     val app = application as KomoriApp
     private val dao = app.dao
     val shelf = dao.observeShelf().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
@@ -143,9 +148,11 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                 require(key in setOf("mangadex", "zap", "nhentai", "imhentai")) {
                     "This source does not provide a creator catalog."
                 }
-                app.source.browse(key, "", page, BrowseFilter(), creator)
+                authorPage?.invoke(creator, page)
+                    ?: app.source.browse(key, "", page, BrowseFilter(), creator)
             }
-        authorFeed.value = AuthorFeed(hasMore = creators.isNotEmpty())
+        authorFeed.value =
+            AuthorFeed(hasMore = creators.isNotEmpty(), context = creators.map { it.id })
         loadAuthorWorks()
     }
 
@@ -157,7 +164,14 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                 authorFeed.value = authorFeed.value.copy(loading = true, errors = emptyList())
                 val errors = catalog.loadNext()
                 if (authorCatalog === catalog) {
-                    authorFeed.value = AuthorFeed(catalog.items, false, catalog.hasMore, errors)
+                    authorFeed.value =
+                        AuthorFeed(
+                            catalog.items,
+                            false,
+                            catalog.hasMore,
+                            errors,
+                            authorContext.orEmpty().map { it.id },
+                        )
                 }
             }
     }

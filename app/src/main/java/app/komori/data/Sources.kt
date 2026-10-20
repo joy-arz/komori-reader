@@ -185,6 +185,8 @@ class WebSource(
     private val base: String,
     private val client: OkHttpClient,
 ) {
+    private val connectionRecovery = SourceConnectionRecovery(client, key)
+
     private suspend fun document(path: String, form: FormBody? = null): Document =
         withContext(Dispatchers.IO) {
             val request =
@@ -193,7 +195,7 @@ class WebSource(
                     .header("Referer", "$base/")
                     .apply { if (form != null) post(form) }
                     .build()
-            client.newCall(request).readResponse {
+            connectionRecovery.read(request) {
                 if (!it.isSuccessful)
                     throw SourceHttpException(it.code, key)
                 val body = it.body ?: throw IOException("Empty source response")

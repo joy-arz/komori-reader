@@ -24,10 +24,11 @@ A quiet, lightweight Android manga reader. Built with Kotlin and Compose, with n
 - Dismissible Continue reading banner (restore it in Settings), and direct Read offline from Downloads.
 - GitHub release checks on launch/foreground, automatic APK download on unmetered networks, manual checking/downloading, verified same-key upgrades through Android's installer.
 - Personal library, likes, reading statuses and history stored locally with Room.
-- Dedicated Authors tab for local author/artist follows and browsing works on the original source. Gallery details group tappable tags, parodies, languages and categories, alongside authors/artists. Discover offers exact Tag/Author/Parody/Language/Category name browsing alongside title search. Language and category choices are separate browse filters; Nhentai can combine them with tags, parodies and creators. HentaiZap/ImHentai offer those filter combinations in title browsing, with explicit limits in metadata browsing.
+- Dedicated Authors tab with compact creator chips, searchable follow management, and complete paginated source catalogs. Saved titles keep their source order and receive no Library highlight. Gallery details group tappable tags, parodies, languages and categories, alongside authors/artists. Discover offers exact Tag/Author/Parody/Language/Category name browsing alongside title search. Language and category choices are separate browse filters; Nhentai can combine them with tags, parodies and creators. HentaiZap/ImHentai offer those filter combinations in title browsing, with explicit limits in metadata browsing.
 - HentaiZap metadata extraction excludes unrelated sidebar/ranking tags and strips entity counts from names. Existing saved tags remain compatible; no database reset is needed.
 - Source-native popularity sorting: HentaiZap Popular/Top Rated/Downloaded and Nhentai daily/weekly/monthly/all-time popularity. These are source rankings, not locally calculated view counts.
 - User-operated Verify source screen shares source cookies and user agent with native requests and cover loading. HTTP 403 remains distinct from a detected verification challenge; blocked downloads wait for user action instead of repeatedly retrying. Cookies are isolated from unrelated image hosts and excluded from app backup.
+- Nhentai catalog/reader-manifest GETs retry reset/EOF failures once through a separate HTTP/1.1 connection pool, retaining the browser session and TLS checks. Persistent transport failures explain the network limitation; Verify source handles browser challenges, not connection resets.
 - Smart Chapters: language filtering, conservative duplicate grouping, preferred scanlation and strict/fallback selection.
 - Direct reading from cover play buttons, page resume, restart-current-chapter preference and optional rereading when caught up.
 - Continuous webtoon scrolling across chapters, saved page/scroll position, bounded neighboring-chapter windows and image strips, offline support and a Paged/Webtoon switch.
@@ -44,7 +45,7 @@ MangaDex and scanlation groups are credited in the application. This is an indep
 
 ## Install
 
-Download [komori-0.7.0-alpha.4.apk](https://github.com/joy-arz/komori-reader/releases/download/v0.7.0-alpha.4/komori-0.7.0-alpha.4.apk), or open [GitHub Releases](https://github.com/joy-arz/komori-reader/releases) and expand **Assets**. Choose the `.apk` file, not the source-code archives. Alpha releases are signed with the same private release key, allowing future updates without uninstalling.
+Download [komori-0.7.0-alpha.5.apk](https://github.com/joy-arz/komori-reader/releases/download/v0.7.0-alpha.5/komori-0.7.0-alpha.5.apk), or open [GitHub Releases](https://github.com/joy-arz/komori-reader/releases) and expand **Assets**. Choose the `.apk` file, not the source-code archives. Alpha releases are signed with the same private release key, allowing future updates without uninstalling.
 
 ## Build
 
