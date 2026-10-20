@@ -1,8 +1,10 @@
 # Komori
 
+<img src="docs/images/komori-icon.png" width="128" alt="Komori: a green bat reading an open manga">
+
 A quiet, lightweight Android manga reader. Built with Kotlin and Compose, with native online and offline reading.
 
-**Status: early alpha.** The first end-to-end reading milestone is implemented. This is not yet the complete product in the roadmap.
+**Current release: 0.7.0.** Signed APK for Android 8.0 and newer. This is a full GitHub release; source-specific limitations and planned features are listed below.
 
 <img src="docs/images/library.png" width="240" alt="Komori black-and-lime library"> <img src="docs/images/discover.png" width="240" alt="Source browsing"> <img src="docs/images/settings.png" width="240" alt="Grouped reading settings">
 
@@ -23,7 +25,8 @@ A quiet, lightweight Android manga reader. Built with Kotlin and Compose, with n
 - Possible-duplicate warnings for normalized matching titles already saved from another source; no automatic merging.
 - Dismissible Continue reading banner (restore it in Settings), and direct Read offline from Downloads.
 - GitHub release checks on launch/foreground, automatic APK download on unmetered networks, manual checking/downloading, verified same-key upgrades through Android's installer.
-- Personal library, likes, reading statuses and history stored locally with Room.
+- Personal library, likes, reading statuses and history stored locally with Room. The Downloaded collection includes titles with saved pages and opens their offline chapter list.
+- Multi-select title grids, chapters, downloads and followed creators. Bulk actions include save/like, download, read-state changes, pause/resume and confirmed deletion/unfollow. Select all applies to loaded or filtered items.
 - Dedicated Authors tab with compact creator chips, searchable follow management, and complete paginated source catalogs. Saved titles keep their source order and receive no Library highlight. Gallery details group tappable tags, parodies, languages and categories, alongside authors/artists. Discover offers exact Tag/Author/Parody/Language/Category name browsing alongside title search. Language and category choices are separate browse filters; Nhentai can combine them with tags, parodies and creators. HentaiZap/ImHentai offer those filter combinations in title browsing, with explicit limits in metadata browsing.
 - HentaiZap metadata extraction excludes unrelated sidebar/ranking tags and strips entity counts from names. Existing saved tags remain compatible; no database reset is needed.
 - Source-native popularity sorting: HentaiZap Popular/Top Rated/Downloaded and Nhentai daily/weekly/monthly/all-time popularity. These are source rankings, not locally calculated view counts.
@@ -36,7 +39,7 @@ A quiet, lightweight Android manga reader. Built with Kotlin and Compose, with n
 - Immersive reading: center/image tap hides controls; a floating page counter brings them back.
 - Direction-aware edge taps and swipes in paged mode, plus tiled pinch/double-tap zoom and optional keep-screen-awake.
 - Persistent chapter downloads, Wi-Fi constraint, retries, pause/resume, original/data-saving images and offline access. Bulk options include all readable, all unread and next 1/5/10/25 unread; active/completed downloads are skipped.
-- Per-chapter download progress and pause/retry actions, queue-wide pause/resume, and configurable visible-image retries (off/5/10/30 seconds, up to three attempts).
+- Per-chapter download progress and pause/retry actions, queue-wide pause/resume, and configurable visible-image retries (off/3/5/10/30 seconds, up to three attempts; 3 seconds by default).
 - Light and dark themes. Android 8.0+; no account, ads or analytics.
 
 MangaDex must be reachable on your network. If a network redirects or blocks it, the app reports a connection error and keeps certificate verification enabled.
@@ -45,7 +48,7 @@ MangaDex and scanlation groups are credited in the application. This is an indep
 
 ## Install
 
-Download [komori-0.7.0-alpha.5.apk](https://github.com/joy-arz/komori-reader/releases/download/v0.7.0-alpha.5/komori-0.7.0-alpha.5.apk), or open [GitHub Releases](https://github.com/joy-arz/komori-reader/releases) and expand **Assets**. Choose the `.apk` file, not the source-code archives. Alpha releases are signed with the same private release key, allowing future updates without uninstalling.
+Download [komori-0.7.0.apk](https://github.com/joy-arz/komori-reader/releases/download/v0.7.0/komori-0.7.0.apk), or open [GitHub Releases](https://github.com/joy-arz/komori-reader/releases) and expand **Assets**. Choose the `.apk` file, not the source-code archives. Full releases and earlier alpha builds use the same private release key. Install over your existing app to keep your Library, downloads and reading progress.
 
 ## Build
 
@@ -61,11 +64,11 @@ Release builds use R8 and resource shrinking. An unsigned local release can be b
 
 ## Automated releases
 
-Every push to `main` and pull request runs unit tests, lint and a debug APK build. A version tag such as `v0.1.0-alpha.2` automatically tests, builds, signs and publishes a release APK plus SHA-256 checksum and updater metadata (`update.json`). Tags containing a suffix are published as prereleases.
+Every push to `main` and pull request runs unit tests, lint and a debug APK build. A version tag such as `v0.7.0` automatically tests, builds, signs and publishes a release APK plus SHA-256 checksum and updater metadata (`update.json`). Plain version tags publish full releases and mark them as Latest. Tags containing a suffix remain prereleases.
 
 ```sh
-git tag v0.1.0-alpha.2
-git push origin v0.1.0-alpha.2
+git tag v0.7.0
+git push origin v0.7.0
 ```
 
 Signing secrets are already configured in repository Actions secrets. No signing material is committed. See [RELEASING.md](docs/RELEASING.md) for key backup and release details.
@@ -91,7 +94,7 @@ Local signing is automated through JVM `keytool` validation and Gradle: see [rel
 
 ## App updates
 
-Install version 0.5 manually once if coming from an older build. Subsequent launches check public GitHub releases, including alpha releases, with a 30-second foreground debounce. Failed update checks do not block reading. Automatic downloads default to unmetered connections; change this in Settings or choose a manual download on mobile data. Android requires permission to install from Komori and confirmation in its installer; this is not a silent system installation. The updater verifies the checksum, package, increasing version code, and existing signing certificate before installation. No GitHub token is stored in the app.
+Install version 0.5 manually once if coming from an older build. Subsequent launches check public GitHub releases, including full releases and prereleases, with a 30-second foreground debounce. Failed update checks do not block reading. Automatic downloads default to unmetered connections; change this in Settings or choose a manual download on mobile data. Android requires permission to install from Komori and confirmation in its installer; this is not a silent system installation. The updater verifies the checksum, package, increasing version code, and existing signing certificate before installation. No GitHub token is stored in the app.
 
 ## Source limitations
 
@@ -102,3 +105,5 @@ Source websites may block requests or change their HTML. WeebCentral's parser an
 The complete prioritized backlog is tracked in [TODO](docs/TODO.md).
 
 Typography: Outfit is bundled under the SIL Open Font License; see `app/src/main/assets/licenses/Outfit-OFL.txt`.
+
+Icon: supplied bat-and-manga artwork, cropped to remove the outer surround. Android applies the launcher shape through an adaptive icon; the original illustration is preserved.

@@ -56,6 +56,6 @@ For a brand-new signing identity only, `python3 scripts/sign_release.py init --s
 
 ## In-app update metadata
 
-The tag workflow emits `update.json` alongside the signed APK and checksum. It contains the release tag's version name, CI version code, package name, fixed repository APK URL, byte count and SHA-256 digest. Publish all three assets together. Never reuse a version code or change the signing identity. The updater includes prereleases because this project currently distributes alphas; it does not rely on GitHub's stable-only `/latest` endpoint.
+The tag workflow emits `update.json` alongside the signed APK and checksum. It contains the release tag's version name, CI version code, package name, fixed repository APK URL, byte count and SHA-256 digest. Publish all three assets together. Never reuse a version code or change the signing identity. Plain version tags publish full releases and explicitly mark them as Latest; suffixed tags publish prereleases. The updater recognizes both full releases and prereleases for compatibility with earlier builds; it does not rely on GitHub's stable-only `/latest` endpoint.
 
 The repository must remain public for unauthenticated in-app checks. Android installation is user-confirmed and requires the per-app unknown-source installation permission. No root, silent installation, or GitHub credential is used.

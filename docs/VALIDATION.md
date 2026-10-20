@@ -230,3 +230,12 @@ Installed the published APK over production `v0.7.0-alpha.1` without clearing da
 - Visually inspected the compact Authors fixture screenshot. Covers use synthetic empty image URLs; no live gallery images were fetched for UI validation.
 - Additional host checks returned `cf-mitigated: challenge` / HTTP 403 on both HTTP/2 and HTTP/1.1. This confirms that protocol fallback is not a solution for every access failure and does not establish the cause of the user's device reset.
 - Published signed `v0.7.0-alpha.5` from `a1839d9` (version code 116). Android checks `39407839532` and release `39407845199` succeeded. The 2,214,001-byte APK matched SHA256SUMS and updater metadata: SHA-256 `45d70db1955b2c2e6c907b14b81a987094125e08a6c447a12a4f797269c4b2fc`. `apksigner` verified the original release certificate (`0f654f439d6059cf8caea9fa1d5403342cc47b1b5a8228bf90e2858ec423d5fd`). Installed the downloaded APK over alpha.4/code 115 using `adb install -r`; both visible Library read actions (Eleceed and Yotsuba to!) were retained. The current production process had no fatal entry in its PID-filtered crash buffer. GitHub contributors remained `joy-arz` only; commits have no assistant co-author trailer.
+
+## Full release and launcher artwork (October 21, 2026)
+
+- Updated launcher icon from the user-supplied bat-and-manga image. A centered 660×660 crop removes the outer pale surround and shadow while preserving the original illustration; resized PNG assets supply the README, launcher fallback and adaptive background.
+- Adaptive icon uses a nine-patch background: only the outer green strips stretch, keeping the original illustration intact without a rectangular inset seam. Both regular and round launcher references use the new icon.
+- Version 0.7.0 uses a plain tag; CI explicitly marks full releases as Latest while retaining prerelease handling for suffixed tags. README documents the full-release installation, current selection/download features and 3-second default retry.
+- Local `lintDebug assembleDebug` passed. Signed-release CI performs unit tests, release lint, assembly and signature verification.
+
+- API 30 launcher inspection caught an inset seam and then clipping of the illustration. Replaced the inset with a nine-patch and reduced its fixed artwork size; final resources pass lint/build. A subsequent emulator renderer failure prevented final on-device visual confirmation before publication.

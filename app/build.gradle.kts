@@ -12,7 +12,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = providers.environmentVariable("VERSION_CODE").orNull?.toInt() ?: 1
-        versionName = providers.environmentVariable("VERSION_NAME").orNull ?: "0.7.0-alpha.5"
+        versionName = providers.environmentVariable("VERSION_NAME").orNull ?: "0.7.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     signingConfigs {
