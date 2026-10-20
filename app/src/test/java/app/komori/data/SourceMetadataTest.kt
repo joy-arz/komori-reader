@@ -44,9 +44,10 @@ class SourceMetadataTest {
             source.browse("", 3, BrowseFilter(if (key == "zap") "Popular" else "Popular all time"),
                 Creator(sourceId(key, "/artist/sample-artist/"), "Sample Artist", "artist"))
             val request = server.takeRequest().requestUrl!!
-            assertEquals("/artist/sample-artist/", request.encodedPath)
+            assertEquals(if (key == "zap") "/artist/sample-artist/popular/" else "/artist/sample-artist/", request.encodedPath)
             assertEquals("3", request.queryParameter("page"))
-            assertEquals(if (key == "zap") "1" else "popular", request.queryParameter(if (key == "zap") "pp" else "sort"))
+            if (key == "zap") assertNull(request.queryParameter("pp"))
+            else assertEquals("popular", request.queryParameter("sort"))
         }
     }
 
@@ -72,7 +73,7 @@ class SourceMetadataTest {
             val source = WebSource("nhentai", server.url("/").toString().trimEnd('/'), MangaDex.client())
             source.browse("sample", 4, BrowseFilter("Popular this week", setOf("/tag/colour/")))
             val url = server.takeRequest().requestUrl!!
-            assertEquals("sample tag:colour", url.queryParameter("q"))
+            assertEquals("sample tag:\"colour\"", url.queryParameter("q"))
             assertEquals("popular-week", url.queryParameter("sort"))
             assertEquals("4", url.queryParameter("page"))
             server.enqueue(MockResponse().setBody("<a href='/tag/colour/'><span class='name'>Colour</span><span class='count'>20</span></a>"))

@@ -765,7 +765,7 @@ private fun Discover(vm: ReaderViewModel) {
                     query,
                     { query = it },
                     Modifier.weight(1f).focusRequester(focusRequester),
-                    placeholder = { Text("Search ${filter.searchType.lowercase()}s") },
+                    placeholder = { Text("Search by ${filter.searchType.lowercase()}") },
                     singleLine = true,
                     shape = RoundedCornerShape(20.dp),
                     colors =
@@ -793,7 +793,13 @@ private fun Discover(vm: ReaderViewModel) {
                             filter.sort.ifEmpty {
                                 vm.app.source.sorts(activeSource).firstOrNull().orEmpty()
                             }
-                        } + if (filter.tags.isNotEmpty()) " · ${filter.tags.size} tags" else "",
+                        } + (if (filter.tags.isNotEmpty()) " · ${filter.tags.size} tags" else "") +
+                            listOfNotNull(
+                                sourceBrowseLanguages(activeSource).firstOrNull { it.id == filter.language }?.name,
+                                sourceBrowseCategories(activeSource).firstOrNull { it.id == filter.category }?.name,
+                            ).joinToString(separator = " · ", prefix = " · ").takeIf {
+                                filter.language.isNotEmpty() || filter.category.isNotEmpty()
+                            }.orEmpty(),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
@@ -843,10 +849,10 @@ private fun Discover(vm: ReaderViewModel) {
         }
         if (searchExpanded && activeSource in listOf("zap", "nhentai", "imhentai")) {
             Row(
-                Modifier.padding(horizontal = 20.dp),
+                Modifier.padding(horizontal = 20.dp).horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                listOf("Title", "Tag", "Author").forEach { type ->
+                sourceSearchTypes(activeSource).forEach { type ->
                     FilterChip(
                         filter.searchType == type,
                         { vm.setSearchType(type) },
@@ -1219,20 +1225,19 @@ private fun Details(
             )
         }
         item {
-            val metadataTags =
-                remember(manga.tagsJson) {
-                    JSONArray(manga.tagsJson).objects().map {
-                        SourceTag(it.getString("id"), it.getString("name"))
+            val metadata = remember(manga.tagsJson) { manga.metadata() }
+            listOf("parody" to "Parodies", "language" to "Languages", "category" to "Categories", "tag" to "Tags")
+                .forEach { (type, heading) ->
+                    val entries = metadata.filter { it.type == type }
+                    if (entries.isNotEmpty()) {
+                        Text(heading, style = MaterialTheme.typography.titleMedium)
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            entries.forEach { tag ->
+                                AssistChip(onClick = { browseTag(tag) }, label = { Text(tag.name) })
+                            }
+                        }
                     }
                 }
-            if (metadataTags.isNotEmpty()) {
-                Text("Tags", style = MaterialTheme.typography.titleMedium)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    metadataTags.forEach { tag ->
-                        AssistChip(onClick = { browseTag(tag) }, label = { Text(tag.name) })
-                    }
-                }
-            }
         }
         items(creators, key = { it.id }) { creator ->
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -2043,6 +2048,23 @@ private fun LanguagePicker(
 }
 
 @Composable
+private fun BrowseChoice(
+    title: String,
+    allLabel: String,
+    choices: List<SourceTag>,
+    selected: String,
+    choose: (String) -> Unit,
+) {
+    Text(title, style = MaterialTheme.typography.titleSmall)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        FilterChip(selected.isEmpty(), { choose("") }, label = { Text(allLabel) })
+        choices.forEach { option ->
+            FilterChip(selected == option.id, { choose(option.id) }, label = { Text(option.name) })
+        }
+    }
+}
+
+@Composable
 private fun SourceFilters(
     vm: ReaderViewModel,
     source: String,
@@ -2050,65 +2072,50 @@ private fun SourceFilters(
     tags: List<SourceTag>,
     close: () -> Unit,
 ) {
-    var sort by remember {
-        mutableStateOf(filter.sort.ifEmpty { vm.app.source.sorts(source).firstOrNull().orEmpty() })
-    }
     val creator by vm.activeCreator.collectAsStateWithLifecycle()
-    val facetBrowse =
-        source in listOf("zap", "nhentai", "imhentai") &&
-            (creator != null || filter.facetPath.isNotEmpty() || filter.searchType != "Title")
+    val facetBrowse = source in gallerySources &&
+        (creator != null || filter.facetPath.isNotEmpty() || filter.searchType != "Title")
+    val separateMetadata = source in setOf("zap", "imhentai") && facetBrowse
+    val sorts = vm.app.source.sorts(source, facetBrowse)
+    var sort by remember { mutableStateOf(filter.sort.takeIf { it in sorts } ?: sorts.firstOrNull().orEmpty()) }
+    var language by remember { mutableStateOf(filter.language) }
+    var category by remember { mutableStateOf(filter.category) }
     var chosen by remember { mutableStateOf(filter.tags) }
     var tagQuery by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = close,
         title = { Text("Browse filters") },
         text = {
-            Column {
-                Row(
-                    Modifier.horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    vm.app.source.sorts(source).forEach { value ->
+            Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Sort", style = MaterialTheme.typography.titleSmall)
+                Row(Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    sorts.forEach { value ->
                         FilterChip(sort == value, { sort = value }, label = { Text(value) })
                     }
                 }
-                if (source in listOf("zap", "imhentai"))
-                    Text(
-                        "Categories filter title searches. Use Tag or Author search for an exact name, or tap metadata on a title.",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                if (source == "demonic")
-                    Text(
-                        "Sort and tags apply to browsing. Title search is separate.",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                if (facetBrowse) {
-                    Text(
-                        "Tag and category filters apply to title searches. Metadata browsing uses the exact source name.",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                } else {
-                    OutlinedTextField(
-                        tagQuery,
-                        { tagQuery = it },
-                        label = {
-                            Text(
-                                if (source in listOf("zap", "imhentai")) "Find a category"
-                                else "Find a tag"
-                            )
-                        },
-                        singleLine = true,
-                    )
-                    LazyColumn(Modifier.heightIn(max = 280.dp)) {
-                        items(tags.filter { it.name.contains(tagQuery, true) }, key = { it.id }) {
-                            tag ->
-                            Row(
-                                Modifier.fillMaxWidth().clickable {
-                                    chosen =
-                                        if (tag.id in chosen) chosen - tag.id else chosen + tag.id
-                                },
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
+                if (source in gallerySources) {
+                    if (separateMetadata) Text(
+                        "This source offers language and category filters in title browsing. Clear the metadata selection or choose Title search to use them.",
+                        style = MaterialTheme.typography.bodySmall)
+                    else {
+                        BrowseChoice("Language", "All languages", sourceBrowseLanguages(source), language) { language = it }
+                        BrowseChoice("Category", "All categories", sourceBrowseCategories(source), category) { category = it }
+                    }
+                    Text("Use Parody search for an exact source name, or tap Parodies on title details.",
+                        style = MaterialTheme.typography.bodySmall)
+                }
+                if (source == "demonic") Text(
+                    "Sort and tags apply to browsing. Title search is separate.",
+                    style = MaterialTheme.typography.bodySmall)
+                if (source !in setOf("zap", "imhentai")) {
+                    OutlinedTextField(tagQuery, { tagQuery = it }, label = { Text("Find a tag") }, singleLine = true)
+                    LazyColumn(Modifier.heightIn(max = 220.dp)) {
+                        items(tags.filter { it.name.contains(tagQuery, true) }, key = { it.id }) { tag ->
+                            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable {
+                                chosen = if (tag.id in chosen) chosen - tag.id else chosen + tag.id
+                            }, verticalAlignment = Alignment.CenterVertically) {
                                 Checkbox(tag.id in chosen, null)
                                 Text(tag.name)
                             }
@@ -2119,26 +2126,16 @@ private fun SourceFilters(
             }
         },
         confirmButton = {
-            TextButton(
-                onClick = {
-                    vm.applyFilter(
-                        filter.copy(sort = sort, tags = if (facetBrowse) emptySet() else chosen)
-                    )
-                    close()
-                }
-            ) {
-                Text("Apply")
-            }
+            TextButton(onClick = {
+                vm.applyFilter(filter.copy(sort = sort,
+                    tags = if (source in setOf("zap", "imhentai")) emptySet() else chosen,
+                    language = if (separateMetadata) "" else language,
+                    category = if (separateMetadata) "" else category))
+                close()
+            }) { Text("Apply") }
         },
         dismissButton = {
-            TextButton(
-                onClick = {
-                    vm.applyFilter(BrowseFilter())
-                    close()
-                }
-            ) {
-                Text("Reset")
-            }
+            TextButton(onClick = { vm.applyFilter(BrowseFilter()); close() }) { Text("Reset") }
         },
     )
 }

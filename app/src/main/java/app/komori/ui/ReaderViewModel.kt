@@ -237,17 +237,23 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     fun submitSearch(text: String) {
         pushScreen()
         if (text != query)
-            browseFilter.value = BrowseFilter(searchType = browseFilter.value.searchType)
+            browseFilter.value = BrowseFilter(searchType = browseFilter.value.searchType,
+                language = browseFilter.value.language, category = browseFilter.value.category)
         else browseFilter.value = browseFilter.value.copy(facetPath = "")
         search(text, null)
     }
 
     fun setSearchType(type: String) {
-        require(type in listOf("Title", "Tag", "Author"))
+        require(type in sourceSearchTypes(activeSource.value))
         creatorFilter = null
         activeCreator.value = null
         browseFilter.value =
-            browseFilter.value.copy(searchType = type, facetPath = "", tags = emptySet())
+            browseFilter.value.copy(searchType = type, facetPath = "", tags = emptySet(),
+                language = if (activeSource.value == "nhentai" || type == "Title") browseFilter.value.language else "",
+                category = if (activeSource.value == "nhentai" || type == "Title") browseFilter.value.category else "",
+                sort = browseFilter.value.sort.takeIf {
+                    it in app.source.sorts(activeSource.value, type != "Title")
+                }.orEmpty())
     }
 
     fun clearFacet() {

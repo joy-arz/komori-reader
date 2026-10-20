@@ -69,9 +69,37 @@ data class BrowseFilter(
     val tags: Set<String> = emptySet(),
     val searchType: String = "Title",
     val facetPath: String = "",
+    val language: String = "",
+    val category: String = "",
 )
 
-data class SourceTag(val id: String, val name: String)
+data class SourceTag(val id: String, val name: String, val type: String = "tag")
+
+val gallerySources = setOf("zap", "imhentai", "nhentai")
+
+fun sourceSearchTypes(key: String): List<String> =
+    if (key in gallerySources) listOf("Title", "Tag", "Author", "Parody", "Language", "Category")
+    else listOf("Title")
+
+fun sourceBrowseLanguages(key: String): List<SourceTag> = when (key) {
+    "zap", "imhentai" -> listOf("en" to "English", "jp" to "Japanese", "es" to "Spanish",
+        "fr" to "French", "kr" to "Korean", "de" to "German", "ru" to "Russian")
+    "nhentai" -> listOf("english" to "English", "japanese" to "Japanese", "chinese" to "Chinese")
+    else -> emptyList()
+}.map { SourceTag(it.first, it.second, "language") }
+
+fun sourceBrowseCategories(key: String): List<SourceTag> = when (key) {
+    "zap", "imhentai" -> listOf("m" to "Manga", "d" to "Doujinshi", "w" to "Western",
+        "i" to "Image Set", "a" to "Artist CG", "g" to "Game CG")
+    "nhentai" -> listOf("manga" to "Manga", "doujinshi" to "Doujinshi", "western" to "Western",
+        "imageset" to "Image Set", "artistcg" to "Artist CG", "gamecg" to "Game CG")
+    else -> emptyList()
+}.map { SourceTag(it.first, it.second, "category") }
+
+/** Older records omit type and remain ordinary tags; no database migration is required. */
+fun Manga.metadata(): List<SourceTag> = JSONArray(tagsJson).objects().map {
+    SourceTag(it.getString("id"), it.getString("name"), it.optString("type", "tag"))
+}
 
 data class BrowsePage(val titles: List<Manga>, val hasMore: Boolean)
 
@@ -97,8 +125,8 @@ class Sources(val client: OkHttpClient, apiClient: OkHttpClient = client) {
                 )
         }
 
-    fun sorts(key: String): List<String> =
-        when (key) {
+    fun sorts(key: String, facetBrowse: Boolean = false): List<String> =
+        if (key == "zap" && facetBrowse) listOf("Latest", "Popular") else when (key) {
             "demonic" -> listOf("Views", "Recently added", "Title")
             "weeb" ->
                 listOf("Popularity", "Subscribers", "Latest Updates", "Recently Added", "Alphabet")
@@ -218,7 +246,14 @@ class WebSource(
     suspend fun browse(
         query: String, page: Int, filter: BrowseFilter, creator: Creator? = null,
     ): BrowsePage {
-        if (key in listOf("zap", "nhentai", "imhentai")) {
+        if (key in gallerySources) {
+            require(filter.searchType in sourceSearchTypes(key)) { "Unsupported search type." }
+            require(filter.language.isEmpty() || sourceBrowseLanguages(key).any { it.id == filter.language }) {
+                "Unsupported language for ${sourceNames[key]}."
+            }
+            require(filter.category.isEmpty() || sourceBrowseCategories(key).any { it.id == filter.category }) {
+                "Unsupported category for ${sourceNames[key]}."
+            }
             val facet = when {
                 creator != null -> {
                     require(sourceKey(creator.id) == key) { "Creator belongs to another source." }
@@ -226,34 +261,39 @@ class WebSource(
                 }
                 filter.facetPath.isNotEmpty() -> filter.facetPath
                 query.isNotBlank() && filter.searchType != "Title" -> {
-                    val type = if (filter.searchType == "Author") "artist" else "tag"
+                    val type = if (filter.searchType == "Author") "artist" else filter.searchType.lowercase(Locale.ROOT)
+                    var slug = query.trim().lowercase(Locale.ROOT).replace(Regex("\\s+"), "-")
+                    if (key == "nhentai" && type == "category")
+                        slug = sourceBrowseCategories(key).firstOrNull { it.name.equals(query.trim(), true) }?.id ?: slug
                     "$base/".toHttpUrl().newBuilder().addPathSegment(type)
-                        .addPathSegment(query.trim().lowercase(Locale.ROOT).replace(' ', '-'))
-                        .addPathSegment("").build().encodedPath
+                        .addPathSegment(slug).addPathSegment("").build().encodedPath
                 }
                 else -> ""
             }
             if (facet.isNotEmpty()) {
-                require(Regex("/(?:artist|author|tag)/[^/?#]+/").matches(facet)) { "Invalid metadata path." }
-                val url = "$base$facet".toHttpUrl().newBuilder()
-                    .addQueryParameter("page", page.toString())
-                addGallerySort(url, filter.sort)
+                require(Regex("/(?:artist|author|tag|parody|language|category)/[^/?#]+/").matches(facet)) {
+                    "Invalid metadata path."
+                }
+                if (key == "nhentai" &&
+                    (filter.language.isNotEmpty() || filter.category.isNotEmpty() || filter.tags.isNotEmpty())) {
+                    return browseNhentai("", page, filter, facet)
+                }
+                require(filter.language.isEmpty() && filter.category.isEmpty()) {
+                    "${sourceNames[key]} does not combine metadata browsing with language/category filters. Clear them first."
+                }
+                val path = if (key == "zap") {
+                    require(filter.sort in listOf("", "Latest", "Popular")) {
+                        "HentaiZap metadata browsing supports Latest or Popular."
+                    }
+                    facet + if (filter.sort == "Popular") "popular/" else ""
+                } else facet
+                val url = "$base$path".toHttpUrl().newBuilder().addQueryParameter("page", page.toString())
+                if (key != "zap") addGallerySort(url, filter.sort)
                 val d = document(url.build().toString().removePrefix(base))
                 return BrowsePage(parseBrowse(d), hasNext(d, page))
             }
         }
-        if (key == "nhentai") {
-            val terms = (listOf(query) + filter.tags.map { path ->
-                val slug = path.removePrefix("/tag/").trimEnd('/')
-                "tag:" + slug
-            }).filter { it.isNotBlank() }.joinToString(" ")
-            val url = "$base${if (terms.isBlank()) "/" else "/search/"}".toHttpUrl().newBuilder()
-                .addQueryParameter("page", page.toString())
-            if (terms.isNotBlank()) url.addQueryParameter("q", terms)
-            addGallerySort(url, filter.sort)
-            val d = document(url.build().toString().removePrefix(base))
-            return BrowsePage(parseBrowse(d), hasNext(d, page))
-        }
+        if (key == "nhentai") return browseNhentai(query, page, filter)
         if (key == "zap" || key == "imhentai") return browseGallery(query, page, filter)
         val doc =
             if (key == "demonic") {
@@ -306,6 +346,31 @@ class WebSource(
                     doc.select("a[href*=list=]").any { it.text().trim().equals("Next", true) }
             else doc.selectFirst("button") != null,
         )
+    }
+
+    private suspend fun browseNhentai(
+        query: String, page: Int, filter: BrowseFilter, facet: String = "",
+    ): BrowsePage {
+        fun term(type: String, value: String): String =
+            type + ":\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+        val terms = mutableListOf<String>()
+        if (query.isNotBlank()) terms += query
+        if (facet.isNotEmpty()) {
+            val segments = "$base$facet".toHttpUrl().pathSegments
+            terms += term(segments[0], segments[1].replace('-', ' '))
+        }
+        filter.tags.forEach { path ->
+            require(Regex("/tag/[^/?#]+/").matches(path)) { "Invalid Nhentai tag path." }
+            terms += term("tag", "$base$path".toHttpUrl().pathSegments[1].replace('-', ' '))
+        }
+        if (filter.language.isNotEmpty()) terms += term("language", filter.language)
+        if (filter.category.isNotEmpty()) terms += term("category", filter.category)
+        val url = "$base${if (terms.isEmpty()) "/" else "/search/"}".toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
+        if (terms.isNotEmpty()) url.addQueryParameter("q", terms.joinToString(" "))
+        addGallerySort(url, filter.sort)
+        val d = document(url.build().toString().removePrefix(base))
+        return BrowsePage(parseBrowse(d), hasNext(d, page))
     }
 
     fun parseBrowse(doc: Document): List<Manga> {
@@ -389,8 +454,8 @@ class WebSource(
         val url = a.absUrl("href").toHttpUrlOrNull() ?: return null
         if (url.host != base.toHttpUrl().host ||
             !Regex("/$type/[^/?#]+/").matches(url.encodedPath)) return null
-        val label = a.clone().apply { select(".count, .badge").remove() }
-        val name = (a.selectFirst(".name")?.text() ?: label.text())
+        val label = a.clone().apply { select(".count, .badge, .hz-gallery-tag__count, .hz-gallery-tag__split").remove() }
+        val name = (a.selectFirst(".name, .hz-gallery-tag__name")?.text() ?: label.text())
             .replace(Regex("\\s+\\(\\d[\\d,.]*\\)$"), "").trim()
         return if (name.isBlank()) null else url.encodedPath to name
     }
@@ -399,8 +464,11 @@ class WebSource(
         val creators = JSONArray()
         val tags = JSONArray()
         val seen = mutableSetOf<String>()
-        val metadata = if (key == "zap") d.clone().apply {
-            select("header, footer, nav, aside, .hz-gallery-results, .hz-popular, .related-galleries, .hz-gallery-related").remove()
+        val metadata = if (key == "zap") {
+            (d.selectFirst(".hz-gallery-metadata") ?: d.selectFirst(".hz-gallery-details")
+                ?: d.selectFirst(".hz-gallery-overview") ?: d).clone().apply {
+                select("header, footer, nav, aside, .hz-gallery-results, .hz-popular, .hz-home-ranking, .related-galleries, .hz-gallery-related").remove()
+            }
         } else d
         val selector = when (key) {
             "nhentai" -> "#tags a[href]"
@@ -408,10 +476,11 @@ class WebSource(
             else -> ".right_details a[href]"
         }
         metadata.select(selector).forEach { a ->
-            for (type in listOf("artist", "author", "tag")) {
+            for (type in listOf("artist", "author", "tag", "parody", "language", "category")) {
                 val (path, name) = metadataLink(a, type) ?: continue
                 if (!seen.add(path)) continue
-                if (type == "tag") tags.put(JSONObject().put("id", path).put("name", name))
+                if (type !in listOf("artist", "author"))
+                    tags.put(JSONObject().put("id", path).put("name", name).put("type", type))
                 else creators.put(JSONObject().put("id", sourceId(key, path))
                     .put("name", name).put("role", type))
             }
@@ -553,7 +622,7 @@ class WebSource(
     )
 
     private suspend fun browseGallery(query: String, page: Int, filter: BrowseFilter): BrowsePage {
-        val url = if (query.isBlank() && filter.tags.isEmpty() &&
+        val url = if (query.isBlank() && filter.tags.isEmpty() && filter.category.isEmpty() && filter.language.isEmpty() &&
             (filter.sort.isEmpty() || filter.sort == "Latest")) {
             "$base/".toHttpUrl().newBuilder().addQueryParameter("page", page.toString())
         } else {
@@ -572,12 +641,14 @@ class WebSource(
                     builder.addQueryParameter(it, if (it == sort) "1" else "0")
             }
             galleryCategories.forEach {
-                val selected = filter.tags.isEmpty() || it.id in filter.tags
+                val selected = if (filter.category.isNotEmpty()) it.id == filter.category
+                    else filter.tags.isEmpty() || it.id in filter.tags
                 if (selected || key == "imhentai")
                     builder.addQueryParameter(it.id, if (selected) "1" else "0")
             }
-            listOf("en", "jp", "es", "fr", "kr", "de", "ru").forEach {
-                builder.addQueryParameter(it, "1")
+            sourceBrowseLanguages(key).forEach {
+                val selected = filter.language.isEmpty() || filter.language == it.id
+                if (selected || key == "imhentai") builder.addQueryParameter(it.id, if (selected) "1" else "0")
             }
             builder
         }
