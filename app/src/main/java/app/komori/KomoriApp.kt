@@ -18,7 +18,7 @@ class KomoriApp : Application(), ImageLoaderFactory {
 
     val settings by lazy { SettingsStore(this) }
     val sessions by lazy { SourceSessions(this) }
-    val source by lazy { Sources(sessions.client()) }
+    val source by lazy { Sources(sessions.client(), MangaDex.client()) }
 
     override fun newImageLoader() =
         ImageLoader.Builder(this)

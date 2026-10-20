@@ -69,6 +69,74 @@ class MangaDexTest {
         }
     }
 
+    @Test
+    fun `HTTP2 stream resets qualify but HTTP status and TLS errors do not`() {
+        assertTrue(isConnectionReset(IOException("stream was reset: INTERNAL_ERROR")))
+        assertFalse(isConnectionReset(IOException("MangaDex returned 403")))
+        assertFalse(isConnectionReset(javax.net.ssl.SSLHandshakeException("Certificate rejected")))
+    }
+
+    @Test
+    fun `successful compatibility recovery is reused for later requests`() = runBlocking {
+        var attempts = 0
+        val client =
+            MangaDex.client()
+                .newBuilder()
+                .addInterceptor { chain ->
+                    attempts++
+                    if (attempts == 1) throw IOException("stream was reset: INTERNAL_ERROR")
+                    okhttp3.Response.Builder()
+                        .request(chain.request())
+                        .protocol(okhttp3.Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body(
+                            okhttp3.ResponseBody.create(
+                                null,
+                                "{\"data\":[],\"offset\":0,\"total\":0}",
+                            )
+                        )
+                        .build()
+                }
+                .build()
+        val source = MangaDex(client)
+        source.chapters("one", "en")
+        source.chapters("two", "en")
+        assertEquals(3, attempts)
+        val field =
+            MangaDex::class.java.getDeclaredField("compatibilityUntil").apply {
+                isAccessible = true
+            }
+        assertTrue(field.getLong(source) > System.nanoTime())
+    }
+
+    @Test
+    fun `MangaDex uses API client independently of browser sessions`() = runBlocking {
+        var calls = 0
+        val api =
+            MangaDex.client()
+                .newBuilder()
+                .addInterceptor { chain ->
+                    calls++
+                    assertTrue(chain.request().header("User-Agent")!!.startsWith("Komori/"))
+                    okhttp3.Response.Builder()
+                        .request(chain.request())
+                        .protocol(okhttp3.Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body(okhttp3.ResponseBody.create(null, "{\"data\":[]}"))
+                        .build()
+                }
+                .build()
+        val web =
+            MangaDex.client()
+                .newBuilder()
+                .addInterceptor { throw AssertionError("Browser client reached") }
+                .build()
+        assertTrue(Sources(web, api).tags("mangadex").isEmpty())
+        assertEquals(1, calls)
+    }
+
     private fun response(offset: Int, total: Int, ids: List<String>): MockResponse =
         MockResponse()
             .setBody(

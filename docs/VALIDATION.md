@@ -190,3 +190,13 @@ Final local navigation validation: `testDebugUnitTest lintDebug assembleDebug as
 Published `v0.7.0-alpha.2` from `211c99b` (version code 113). Android checks run `38993252397` and signed release run `38993255634` succeeded. The 2,181,233-byte APK matches both `SHA256SUMS.txt` and `update.json`: SHA-256 `ae37af5bb0f3b93e0803a34a6cafcc660b3579bdeca41da9573fdeb8454c743d`. APK signature verification retained certificate SHA-256 `0f654f439d6059cf8caea9fa1d5403342cc47b1b5a8228bf90e2858ec423d5fd`.
 
 Installed the published APK over production `v0.7.0-alpha.1` without clearing data. Eleceed and Yotsuba to! remained in Library; injected taps opened Following and Settings. GitHub's contributors endpoint listed only `joy-arz`. Release notes include the navigation behavior and remaining live-source/network validation limits.
+
+## Catalogs, batch actions and reset recovery (October 20, 2026)
+
+- Development build, debug lint and JVM suite passed: 81 passed, 4 opt-in live tests skipped.
+- Four new author-catalog tests cover unsaved works, bounded round-robin pagination, duplicate/repeated-page handling, per-creator retry and cancellation propagation.
+- Following now requests the source's creator catalog, independently of Discover history. Saved works remain available as a labeled fallback when the source fails. Creator catalog support depends on the source exposing that capability.
+- MangaDex API uses its own native client, isolated from browser sessions. Reset recovery tries an alternate protocol pool once and retains a successful HTTP/1.1 preference for 15 minutes; TLS validation stays enabled.
+- Toolbar controls clip their outer touch-feedback region to a circle. The reported Android 14 square artifact and intermittent connection reset have not been reproduced on that physical device; user confirmation remains necessary.
+- Selection covers title grids, chapter lists, downloads and followed creators. Select all applies to the currently loaded/filtered list. Destructive operations require confirmation.
+- API 30 ARM64 device suite passed all 18 tests (54.937 seconds), including author filtering/manage, batch selection and confirmed/cancelled deletion, offline Downloaded Library access, navigation restoration, reader gestures, migrations, repairs and browser sessions. Following and Downloaded layouts were visually inspected using fixture screenshots.

@@ -76,8 +76,8 @@ data class SourceTag(val id: String, val name: String)
 data class BrowsePage(val titles: List<Manga>, val hasMore: Boolean)
 
 /** Existing MangaDex UUIDs stay unchanged; other source IDs encode paths safely for local files. */
-class Sources(val client: OkHttpClient) {
-    private val dex = MangaDex(client)
+class Sources(val client: OkHttpClient, apiClient: OkHttpClient = client) {
+    private val dex = MangaDex(apiClient)
     private val demonic = WebSource("demonic", "https://demonicscans.org", client)
     private val weeb = WebSource("weeb", "https://weebcentral.com", client)
     private val zap = WebSource("zap", "https://hentaizap.com", client)

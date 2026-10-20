@@ -53,31 +53,33 @@ suspend fun enqueueDownload(
     ChapterFiles.locked(chapter.id) {
         val existing = app.dao.download(chapter.id)
         if (existing?.state in setOf("Complete", "Queued", "Downloading", "Retrying")) return@locked
-        app.dao.putDownload(
-            existing?.copy(state = "Queued", error = "")
-                ?: Download(
-                    chapter.id,
-                    chapter.mangaId,
-                    chapter.label,
-                    chapter.pages.coerceAtLeast(0),
-                    dataSaver = settings.saver,
-                )
-        )
-        val request =
-            OneTimeWorkRequestBuilder<ChapterDownloadWorker>()
-                .setInputData(workDataOf("chapter" to chapter.id))
-                .setConstraints(
-                    Constraints.Builder()
-                        .setRequiredNetworkType(
-                            if (settings.wifi) NetworkType.UNMETERED else NetworkType.CONNECTED
-                        )
-                        .setRequiresStorageNotLow(true)
-                        .build()
-                )
-                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
-                .build()
-        WorkManager.getInstance(context)
-            .enqueueUniqueWork("download-${chapter.id}", ExistingWorkPolicy.KEEP, request)
+        withContext(kotlinx.coroutines.NonCancellable) {
+            app.dao.putDownload(
+                existing?.copy(state = "Queued", error = "")
+                    ?: Download(
+                        chapter.id,
+                        chapter.mangaId,
+                        chapter.label,
+                        chapter.pages.coerceAtLeast(0),
+                        dataSaver = settings.saver,
+                    )
+            )
+            val request =
+                OneTimeWorkRequestBuilder<ChapterDownloadWorker>()
+                    .setInputData(workDataOf("chapter" to chapter.id))
+                    .setConstraints(
+                        Constraints.Builder()
+                            .setRequiredNetworkType(
+                                if (settings.wifi) NetworkType.UNMETERED else NetworkType.CONNECTED
+                            )
+                            .setRequiresStorageNotLow(true)
+                            .build()
+                    )
+                    .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+                    .build()
+            WorkManager.getInstance(context)
+                .enqueueUniqueWork("download-${chapter.id}", ExistingWorkPolicy.KEEP, request)
+        }
     }
 }
 

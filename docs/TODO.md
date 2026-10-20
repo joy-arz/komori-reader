@@ -1,6 +1,14 @@
 # Komori development backlog
 
-Updated October 17, 2026. Based on CURRENT_COMPARISON_REVIEW.md; Komikku is the main behavior reference and Mihon the secondary reference. Checkboxes mean delivered and validated, not merely started.
+Updated October 20, 2026. Based on CURRENT_COMPARISON_REVIEW.md; Komikku is the main behavior reference and Mihon the secondary reference. Checkboxes mean delivered and validated, not merely started.
+
+## Current delivery: catalogs and batch actions
+- [x] Load paginated author catalogs, including unsaved works; rotate combined feeds and deduplicate titles.
+- [x] Add Downloaded Library collection with offline opening and partial-download visibility.
+- [x] Add selection/batch actions to title grids, chapters, downloads and followed creators; confirm destructive actions.
+- [x] Clip round toolbar touch feedback to prevent square highlights.
+- [x] Isolate MangaDex API transport from browser sessions and retain a successful HTTP/1.1 fallback temporarily.
+- [ ] Confirm intermittent reset recovery and toolbar rendering on the affected Android 14 phone.
 
 ## Reader, downloads and navigation follow-up
 - [x] Default image retry to 3 seconds while preserving explicit preferences.

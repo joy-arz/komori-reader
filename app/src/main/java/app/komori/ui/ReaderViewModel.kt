@@ -45,6 +45,12 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     val reader = MutableStateFlow<Release?>(null)
     val readerSession = MutableStateFlow(0)
     val bulkStatus = MutableStateFlow<String?>(null)
+    private var bulkJob: Job? = null
+
+    fun stopAddingDownloads() {
+        bulkJob?.cancel()
+    }
+
     val readerPage = MutableStateFlow(0)
     val readerScroll = MutableStateFlow(0f)
     val readerReady = MutableStateFlow(false)
@@ -120,6 +126,40 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         if (history.size > 30) history.removeFirst()
         navigationEntry.value = ++nextEntry
         canNavigateBack.value = true
+    }
+
+    val authorFeed = MutableStateFlow(AuthorFeed())
+    private var authorContext: List<Creator>? = null
+    private var authorCatalog: AuthorCatalog? = null
+    private var authorJob: Job? = null
+
+    fun showAuthorWorks(creators: List<Creator>) {
+        if (authorContext == creators) return
+        authorJob?.cancel()
+        authorContext = creators.toList()
+        authorCatalog =
+            AuthorCatalog(creators) { creator, page ->
+                val key = sourceKey(creator.id)
+                require(key in setOf("mangadex", "zap", "nhentai", "imhentai")) {
+                    "This source does not provide a creator catalog."
+                }
+                app.source.browse(key, "", page, BrowseFilter(), creator)
+            }
+        authorFeed.value = AuthorFeed(hasMore = creators.isNotEmpty())
+        loadAuthorWorks()
+    }
+
+    fun loadAuthorWorks() {
+        val catalog = authorCatalog ?: return
+        if (authorJob?.isActive == true || !catalog.hasMore) return
+        authorJob =
+            viewModelScope.launch {
+                authorFeed.value = authorFeed.value.copy(loading = true, errors = emptyList())
+                val errors = catalog.loadNext()
+                if (authorCatalog === catalog) {
+                    authorFeed.value = AuthorFeed(catalog.items, false, catalog.hasMore, errors)
+                }
+            }
     }
 
     fun browseCreator(creator: Creator) {
@@ -268,7 +308,11 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         app.settings.sources(order.joinToString(","))
     }
 
-    fun readOffline(download: Download) {
+    fun readOffline(
+        download: Download,
+        startReading: Boolean = true,
+        chooseStart: Boolean = false,
+    ) {
         detailJob?.cancel()
         detailJob = task {
             val checked =
@@ -294,7 +338,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
             val complete =
                 dao.observeDownloads()
                     .first()
-                    .filter { it.state == "Complete" }
+                    .filter { it.done > 0 }
                     .associate { it.releaseId to it.total }
             if (selected.value?.id != book.id) pushScreen()
             selected.value = book
@@ -305,10 +349,28 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                     if (checked.done > 0) complete + (checked.releaseId to checked.total)
                     else complete,
                 )
-            val release = chapters.value.find { it.id == download.releaseId } ?: return@task
+            val release =
+                if (chooseStart) {
+                    val ordered =
+                        ChapterPolicy.select(
+                            chapters.value,
+                            ChapterPreferences("*", settings.value.smart),
+                        )
+                    ChapterPolicy.start(
+                        ordered,
+                        dao.shelf(book.id)?.lastRelease,
+                        dao.observeProgress()
+                            .first()
+                            .filter { it.completed }
+                            .map { it.chapterKey }
+                            .toSet(),
+                        settings.value.reread,
+                    ) ?: ordered.firstOrNull()
+                } else chapters.value.find { it.id == download.releaseId }
+            if (release == null) return@task
             offlineLanguage = release.language
             chapterStatus.value = "Saved chapter list · Offline"
-            read(release)
+            if (startReading) read(release)
         }
     }
 
@@ -453,6 +515,113 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
             ),
             current,
         )
+    }
+
+    fun batchTitles(titles: List<Manga>, action: String) = task {
+        mutation.withLock {
+            for (title in titles.distinctBy { it.id }) {
+                dao.putManga(title)
+                val old = dao.shelf(title.id) ?: Shelf(title.id)
+                dao.putShelf(
+                    when (action) {
+                        "Save" -> old.copy(saved = true)
+                        "Remove from Library" -> old.copy(saved = false)
+                        "Like" -> old.copy(liked = true)
+                        "Unlike" -> old.copy(liked = false)
+                        "Mark completed" -> old.copy(saved = true, status = "Completed")
+                        else -> throw IllegalArgumentException("Unknown title action")
+                    }
+                )
+            }
+        }
+        notice.value = "$action · ${titles.size} titles"
+    }
+
+    fun batchCreators(ids: List<String>) = task {
+        for (id in ids.distinct()) dao.removeCreator(id)
+        notice.value = "Unfollowed ${ids.size} creators"
+    }
+
+    fun batchChapters(releases: List<Release>, completed: Boolean) = task {
+        mutation.withLock {
+            if (!completed) {
+                val keys = releases.map { it.key }.toSet()
+                for (old in dao.observeProgress().first().filter { it.chapterKey in keys }) dao
+                    .putProgress(old.copy(completed = false, page = 0, scroll = 0f))
+            }
+            for (release in releases.distinctBy { it.id }) {
+                val old = dao.progress(release.id)
+                dao.putProgress(
+                    Progress(
+                        release.id,
+                        release.mangaId,
+                        release.key,
+                        if (completed) old?.page ?: 0 else 0,
+                        completed,
+                        if (completed) old?.scroll ?: 0f else 0f,
+                    )
+                )
+            }
+        }
+    }
+
+    fun batchDownloads(ids: List<String>, action: String) = task {
+        for (id in ids.distinct()) dao.download(id)?.let {
+            when (action) {
+                "Pause" -> pause(it).join()
+                "Resume" -> resume(it).join()
+                "Delete downloads" -> deleteDownload(it).join()
+            }
+        }
+    }
+
+    fun downloadTitles(titles: List<Manga>, unread: Boolean) {
+        if (bulkStatus.value != null) return
+        bulkStatus.value = "Preparing selected titles…"
+        bulkJob = task {
+            var failed = 0
+            try {
+                val options = app.settings.flow.first()
+                for ((index, title) in titles.distinctBy { it.id }.withIndex()) {
+                    bulkStatus.value = "Preparing ${index + 1}/${titles.size}: ${title.title}"
+                    try {
+                        dao.putManga(title)
+                        val language =
+                            if (sourceKey(title.id) == "mangadex") options.language else "en"
+                        val rows = app.source.chapters(title.id, language)
+                        dao.saveFeed(title.id, language, rows)
+                        val preference = dao.titlePreferences(title.id)
+                        val releases =
+                            ChapterPolicy.select(
+                                rows.map { it.release() },
+                                ChapterPreferences(
+                                    language,
+                                    options.smart,
+                                    preference?.groupId ?: "",
+                                    preference?.strict ?: false,
+                                    options.showUnavailable,
+                                ),
+                            )
+                        val read =
+                            progress.value.filter { it.completed }.map { it.chapterKey }.toSet()
+                        for (release in
+                            releases.filter {
+                                it.readable && (!unread || it.key !in read)
+                            }) enqueueDownload(app, release, options)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        failed++
+                        error.value = "${title.title}: ${connectionMessage(e)}"
+                    }
+                }
+                notice.value =
+                    if (failed == 0) "Selected titles queued"
+                    else "$failed titles could not be queued. Other titles were processed."
+            } finally {
+                bulkStatus.value = null
+            }
+        }
     }
 
     fun toggle(manga: Manga, liked: Boolean = false) = task {
@@ -670,7 +839,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     fun downloadBatch(releases: List<Release>) {
         if (bulkStatus.value != null) return
         bulkStatus.value = "Preparing download queue…"
-        task {
+        bulkJob = task {
             try {
                 val options = app.settings.flow.first()
                 var queued = 0

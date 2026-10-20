@@ -1,4 +1,7 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(
+    androidx.compose.material3.ExperimentalMaterial3Api::class,
+    androidx.compose.foundation.ExperimentalFoundationApi::class,
+)
 
 package app.komori.ui
 
@@ -11,6 +14,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
@@ -74,6 +78,7 @@ fun KomoriScreen(vm: ReaderViewModel) {
     val error by vm.error.collectAsStateWithLifecycle()
     val notice by vm.notice.collectAsStateWithLifecycle()
     val loading by vm.loading.collectAsStateWithLifecycle()
+    val bulkStatus by vm.bulkStatus.collectAsStateWithLifecycle()
     val tab by vm.currentTab.collectAsStateWithLifecycle()
     val navigationEntry by vm.navigationEntry.collectAsStateWithLifecycle()
     val canNavigateBack by vm.canNavigateBack.collectAsStateWithLifecycle()
@@ -158,6 +163,21 @@ fun KomoriScreen(vm: ReaderViewModel) {
                 ) { padding ->
                     Column(Modifier.fillMaxSize().padding(padding)) {
                         UpdateBanner()
+                        bulkStatus?.let { status ->
+                            Row(
+                                Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    status,
+                                    Modifier.weight(1f),
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                                TextButton(onClick = vm::stopAddingDownloads) {
+                                    Text("Stop adding")
+                                }
+                            }
+                        }
                         if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
                         error?.let { message ->
                             Surface(color = MaterialTheme.colorScheme.errorContainer) {
@@ -248,6 +268,8 @@ private fun EmptyState(
 private fun Library(vm: ReaderViewModel, discover: () -> Unit) {
     val manga by vm.library.collectAsStateWithLifecycle()
     val shelf by vm.shelf.collectAsStateWithLifecycle()
+    val downloads by vm.downloads.collectAsStateWithLifecycle()
+    val downloadedIds = downloads.filter { it.done > 0 }.map { it.mangaId }.toSet()
     val settings by vm.settings.collectAsStateWithLifecycle()
     var filter by rememberSaveable { mutableStateOf("Saved") }
     var query by rememberSaveable { mutableStateOf("") }
@@ -324,15 +346,17 @@ private fun Library(vm: ReaderViewModel, discover: () -> Unit) {
             Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            listOf("Saved", "Liked", "History").forEach { label ->
+            listOf("Saved", "Liked", "History", "Downloaded").forEach { label ->
                 val count =
-                    shelf.count {
-                        when (label) {
-                            "Saved" -> it.saved
-                            "Liked" -> it.liked
-                            else -> it.lastRelease != null
+                    if (label == "Downloaded") downloadedIds.size
+                    else
+                        shelf.count {
+                            when (label) {
+                                "Saved" -> it.saved
+                                "Liked" -> it.liked
+                                else -> it.lastRelease != null
+                            }
                         }
-                    }
                 Column(
                     Modifier.weight(1f)
                         .clip(RoundedCornerShape(14.dp))
@@ -344,7 +368,7 @@ private fun Library(vm: ReaderViewModel, discover: () -> Unit) {
                             RoundedCornerShape(14.dp),
                         )
                         .selectable(filter == label, role = Role.Tab, onClick = { filter = label })
-                        .padding(12.dp)
+                        .padding(horizontal = 8.dp, vertical = 12.dp)
                 ) {
                     Text(
                         count.toString(),
@@ -355,7 +379,7 @@ private fun Library(vm: ReaderViewModel, discover: () -> Unit) {
                     )
                     Text(
                         label,
-                        style = MaterialTheme.typography.labelMedium,
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -371,8 +395,8 @@ private fun Library(vm: ReaderViewModel, discover: () -> Unit) {
                     }
                 }
             val titles =
-                entries
-                    .mapNotNull { entry -> manga.find { it.id == entry.mangaId } }
+                (if (filter == "Downloaded") manga.filter { it.id in downloadedIds }
+                    else entries.mapNotNull { entry -> manga.find { it.id == entry.mangaId } })
                     .filter { it.title.contains(query, true) }
                     .let {
                         if (settings.libraryAlphabetical)
@@ -382,16 +406,32 @@ private fun Library(vm: ReaderViewModel, discover: () -> Unit) {
             if (titles.isEmpty())
                 EmptyState(
                     KomoriIcons.MenuBook,
-                    "Your next story starts here",
-                    "Browse a source, save a title, and make it yours.",
+                    if (filter == "Downloaded") "No downloaded chapters"
+                    else "Your next story starts here",
+                    if (filter == "Downloaded")
+                        "Download chapters from a title to read them offline here."
+                    else "Browse a source, save a title, and make it yours.",
                     "Explore sources",
                     discover,
                 )
             else
                 MangaGrid(
+                    vm,
                     titles,
-                    onOpen = { vm.open(it, settings.direct) },
-                    onRead = { vm.open(it, true) },
+                    onOpen = { title ->
+                        if (filter == "Downloaded")
+                            downloads
+                                .firstOrNull { it.mangaId == title.id && it.done > 0 }
+                                ?.let { vm.readOffline(it, settings.direct, chooseStart = true) }
+                        else vm.open(title, settings.direct)
+                    },
+                    onRead = { title ->
+                        if (filter == "Downloaded")
+                            downloads
+                                .firstOrNull { it.mangaId == title.id && it.done > 0 }
+                                ?.let { vm.readOffline(it, chooseStart = true) }
+                        else vm.open(title, true)
+                    },
                     subtitle = { title -> shelf.find { it.mangaId == title.id }?.status ?: "" },
                 )
         }
@@ -408,9 +448,10 @@ private fun Authors(vm: ReaderViewModel, browseCreator: (Creator) -> Unit) {
     var query by rememberSaveable { mutableStateOf("") }
     val selected = creators.find { it.id == selectedId }
     val visible = creators.filter { it.name.contains(query, true) }
+    val creatorSelection = rememberMultiSelection(visible.map { it.id })
     val followedIds = creators.map { it.id }.toSet()
     val savedIds = shelf.filter { it.saved || it.liked }.map { it.mangaId }.toSet()
-    val works =
+    val cachedWorks =
         remember(library, savedIds, followedIds, selected) {
             library.filter { manga ->
                 manga.id in savedIds &&
@@ -423,6 +464,11 @@ private fun Authors(vm: ReaderViewModel, browseCreator: (Creator) -> Unit) {
                         .getOrDefault(false)
             }
         }
+    val feed by vm.authorFeed.collectAsStateWithLifecycle()
+    LaunchedEffect(creators, selected) {
+        vm.showAuthorWorks(selected?.let { listOf(it) } ?: creators)
+    }
+    val works = (feed.items + cachedWorks).distinctBy { it.id }
     Column(Modifier.fillMaxSize()) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 20.dp),
@@ -436,6 +482,7 @@ private fun Authors(vm: ReaderViewModel, browseCreator: (Creator) -> Unit) {
             TextButton(
                 onClick = {
                     manage = !manage
+                    creatorSelection.clear()
                     query = ""
                 }
             ) {
@@ -446,9 +493,14 @@ private fun Authors(vm: ReaderViewModel, browseCreator: (Creator) -> Unit) {
             EmptyState(
                 KomoriIcons.PersonOutline,
                 "Follow your favorite creators",
-                "Follow an author or artist from a title. Their saved works will appear here.",
+                "Follow an author or artist from a title. Explore their works here, including titles outside your Library.",
             )
         } else if (manage) {
+            SelectionBar(
+                creatorSelection,
+                visible.map { it.id },
+                listOf(BatchAction("Unfollow selected", true) { vm.batchCreators(it) }),
+            )
             OutlinedTextField(
                 query,
                 { query = it },
@@ -463,13 +515,27 @@ private fun Authors(vm: ReaderViewModel, browseCreator: (Creator) -> Unit) {
                         headlineContent = { Text(creator.name) },
                         supportingContent = { Text("${sourceName(creator.id)} · ${creator.role}") },
                         trailingContent = {
-                            TextButton(onClick = { vm.follow(creator) }) { Text("Unfollow") }
+                            if (creatorSelection.active)
+                                Checkbox(
+                                    creator.id in creatorSelection.ids,
+                                    { creatorSelection.toggle(creator.id) },
+                                    Modifier.semantics {
+                                        contentDescription = "Select ${creator.name}"
+                                    },
+                                )
+                            else TextButton(onClick = { vm.follow(creator) }) { Text("Unfollow") }
                         },
                         modifier =
-                            Modifier.clickable {
-                                selectedId = creator.id
-                                manage = false
-                            },
+                            Modifier.combinedClickable(
+                                onLongClick = { creatorSelection.toggle(creator.id) },
+                                onClick = {
+                                    if (creatorSelection.active) creatorSelection.toggle(creator.id)
+                                    else {
+                                        selectedId = creator.id
+                                        manage = false
+                                    }
+                                },
+                            ),
                     )
                 }
             }
@@ -491,12 +557,12 @@ private fun Authors(vm: ReaderViewModel, browseCreator: (Creator) -> Unit) {
             ) {
                 Column(Modifier.weight(1f)) {
                     Text(
-                        selected?.name ?: "From your library",
+                        selected?.name ?: "All works",
                         style = MaterialTheme.typography.titleMedium,
                     )
                     Text(
                         if (selected != null) "${sourceName(selected.id)} · ${selected.role}"
-                        else "Saved works by creators you follow",
+                        else "From the creators you follow",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -504,15 +570,56 @@ private fun Authors(vm: ReaderViewModel, browseCreator: (Creator) -> Unit) {
                 if (selected != null)
                     TextButton(onClick = { browseCreator(selected) }) { Text("All works") }
             }
-            if (works.isEmpty())
-                EmptyState(
-                    KomoriIcons.PersonOutline,
-                    "No saved works yet",
-                    if (selected != null) "Open All works to explore this creator on their source."
-                    else
-                        "Choose a creator above to explore their works and add titles to your library.",
+            key(selectedId) {
+                val grid = rememberLazyGridState()
+                val nearEnd by remember {
+                    derivedStateOf {
+                        val info = grid.layoutInfo
+                        info.totalItemsCount > 0 &&
+                            (info.visibleItemsInfo.lastOrNull()?.index ?: -1) >=
+                                info.totalItemsCount - 5
+                    }
+                }
+                LaunchedEffect(nearEnd, feed) {
+                    if (
+                        nearEnd && feed.items.isNotEmpty() && !feed.loading && feed.errors.isEmpty()
+                    )
+                        vm.loadAuthorWorks()
+                }
+                MangaGrid(
+                    vm,
+                    works,
+                    { vm.open(it) },
+                    { vm.open(it, true) },
+                    subtitle = { if (it.id in savedIds) "In your Library" else "" },
+                    gridState = grid,
+                    footer = {
+                        Column(
+                            Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            if (feed.loading) CircularProgressIndicator(Modifier.padding(16.dp))
+                            if (feed.errors.isNotEmpty()) {
+                                Text(
+                                    feed.errors.joinToString("\n"),
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                                if (feed.items.isEmpty() && cachedWorks.isNotEmpty())
+                                    Text("Showing saved works while the source is unavailable.")
+                            }
+                            if (!feed.loading && feed.hasMore)
+                                TextButton(onClick = vm::loadAuthorWorks) {
+                                    Text(
+                                        if (feed.errors.isEmpty()) "Load more works"
+                                        else "Retry / load more"
+                                    )
+                                }
+                            if (!feed.loading && !feed.hasMore && works.isEmpty())
+                                Text("No works found.")
+                        }
+                    },
                 )
-            else MangaGrid(works, { vm.open(it) }, { vm.open(it, true) })
+            }
         }
     }
 }
@@ -809,6 +916,7 @@ private fun Discover(vm: ReaderViewModel) {
                 )
             else
                 MangaGrid(
+                    vm,
                     results,
                     gridState = grid,
                     onOpen = { vm.open(it) },
@@ -840,6 +948,7 @@ private fun Discover(vm: ReaderViewModel) {
 
 @Composable
 private fun MangaGrid(
+    vm: ReaderViewModel,
     manga: List<Manga>,
     onOpen: (Manga) -> Unit,
     onRead: (Manga) -> Unit,
@@ -847,60 +956,109 @@ private fun MangaGrid(
     footer: @Composable () -> Unit = {},
     gridState: LazyGridState = rememberLazyGridState(),
 ) {
-    LazyVerticalGrid(
-        GridCells.Adaptive(140.dp),
-        state = gridState,
-        contentPadding = PaddingValues(16.dp, 12.dp, 16.dp, 24.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp),
-    ) {
-        items(manga, key = { it.id }) { title ->
-            Column {
-                Box {
-                    AsyncImage(
-                        coverRequest(title),
-                        title.title,
-                        Modifier.fillMaxWidth()
-                            .aspectRatio(0.7f)
-                            .clip(RoundedCornerShape(16.dp))
-                            .border(
-                                1.dp,
-                                MaterialTheme.colorScheme.outlineVariant,
-                                RoundedCornerShape(16.dp),
-                            )
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .clickable { onOpen(title) },
-                        contentScale = ContentScale.Crop,
-                    )
-                    FilledIconButton(
-                        onClick = { onRead(title) },
-                        modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp).size(48.dp),
-                        colors =
-                            IconButtonDefaults.filledIconButtonColors(
-                                containerColor =
-                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
-                                contentColor = MaterialTheme.colorScheme.primary,
-                            ),
-                    ) {
-                        Icon(KomoriIcons.PlayArrow, "Read ${title.title}")
-                    }
-                }
-                Text(
-                    title.title,
-                    Modifier.padding(top = 8.dp).clickable { onOpen(title) },
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.titleSmall,
-                )
-                if (subtitle(title).isNotEmpty())
-                    Text(
-                        subtitle(title),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
+    val available = manga.map { it.id }
+    val selection = rememberMultiSelection(available)
+    val actions =
+        listOf("Save", "Like", "Unlike", "Remove from Library", "Mark completed").map { label ->
+            BatchAction(label, label == "Remove from Library") { ids ->
+                vm.batchTitles(manga.filter { it.id in ids }, label)
             }
+        } +
+            listOf(
+                BatchAction("Download all chapters") { ids ->
+                    vm.downloadTitles(manga.filter { it.id in ids }, false)
+                },
+                BatchAction("Download unread") { ids ->
+                    vm.downloadTitles(manga.filter { it.id in ids }, true)
+                },
+                BatchAction("Delete downloads", true) { ids ->
+                    vm.batchDownloads(
+                        vm.downloads.value.filter { it.mangaId in ids }.map { it.releaseId },
+                        "Delete downloads",
+                    )
+                },
+            )
+    Column(Modifier.fillMaxSize()) {
+        SelectionBar(selection, available, actions)
+        LazyVerticalGrid(
+            GridCells.Adaptive(140.dp),
+            state = gridState,
+            modifier = Modifier.weight(1f),
+            contentPadding = PaddingValues(16.dp, 12.dp, 16.dp, 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp),
+        ) {
+            items(manga, key = { it.id }) { title ->
+                Column {
+                    Box {
+                        AsyncImage(
+                            coverRequest(title),
+                            title.title,
+                            Modifier.fillMaxWidth()
+                                .aspectRatio(0.7f)
+                                .clip(RoundedCornerShape(16.dp))
+                                .border(
+                                    1.dp,
+                                    MaterialTheme.colorScheme.outlineVariant,
+                                    RoundedCornerShape(16.dp),
+                                )
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .combinedClickable(
+                                    onLongClick = { selection.toggle(title.id) },
+                                    onClick = {
+                                        if (selection.active) selection.toggle(title.id)
+                                        else onOpen(title)
+                                    },
+                                ),
+                            contentScale = ContentScale.Crop,
+                        )
+                        if (selection.active)
+                            Checkbox(
+                                title.id in selection.ids,
+                                { selection.toggle(title.id) },
+                                Modifier.align(Alignment.TopEnd).semantics {
+                                    contentDescription = "Select ${title.title}"
+                                },
+                            )
+                        else
+                            FilledIconButton(
+                                onClick = { onRead(title) },
+                                modifier =
+                                    Modifier.align(Alignment.BottomEnd).padding(8.dp).size(48.dp),
+                                colors =
+                                    IconButtonDefaults.filledIconButtonColors(
+                                        containerColor =
+                                            MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+                                        contentColor = MaterialTheme.colorScheme.primary,
+                                    ),
+                            ) {
+                                Icon(KomoriIcons.PlayArrow, "Read ${title.title}")
+                            }
+                    }
+                    Text(
+                        title.title,
+                        Modifier.padding(top = 8.dp)
+                            .combinedClickable(
+                                onLongClick = { selection.toggle(title.id) },
+                                onClick = {
+                                    if (selection.active) selection.toggle(title.id)
+                                    else onOpen(title)
+                                },
+                            ),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    if (subtitle(title).isNotEmpty())
+                        Text(
+                            subtitle(title),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                }
+            }
+            item(span = { GridItemSpan(maxLineSpan) }) { footer() }
         }
-        item(span = { GridItemSpan(maxLineSpan) }) { footer() }
     }
 }
 
@@ -972,6 +1130,8 @@ private fun Details(
                 }
             }
             .let { if (settings.newestFirst) it.reversed() else it }
+    val chapterIds = visibleChapters.map { it.id }
+    val chapterSelection = rememberMultiSelection(chapterIds)
     var showGroups by remember { mutableStateOf(false) }
     var showStatus by remember { mutableStateOf(false) }
     val uri = LocalUriHandler.current
@@ -1155,6 +1315,26 @@ private fun Details(
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
+        stickyHeader {
+            SelectionBar(
+                chapterSelection,
+                chapterIds,
+                listOf(
+                    BatchAction("Download selected") { ids ->
+                        vm.downloadBatch(visibleChapters.filter { it.id in ids })
+                    },
+                    BatchAction("Mark read") { ids ->
+                        vm.batchChapters(visibleChapters.filter { it.id in ids }, true)
+                    },
+                    BatchAction("Mark unread") { ids ->
+                        vm.batchChapters(visibleChapters.filter { it.id in ids }, false)
+                    },
+                    BatchAction("Delete downloads", true) { ids ->
+                        vm.batchDownloads(ids, "Delete downloads")
+                    },
+                ),
+            )
+        }
         items(visibleChapters, key = { it.id }) { chapter ->
             val downloaded = downloads.find { it.releaseId == chapter.id }
             val read = progress.any { it.chapterKey == chapter.key && it.completed }
@@ -1167,15 +1347,19 @@ private fun Details(
                         MaterialTheme.colorScheme.outlineVariant,
                         RoundedCornerShape(12.dp),
                     )
-                    .clickable {
-                        if (
-                            !chapter.local &&
-                                !chapter.unavailable &&
-                                chapter.externalUrl?.startsWith("https://") == true
-                        )
-                            uri.openUri(chapter.externalUrl)
-                        else vm.read(chapter)
-                    }
+                    .combinedClickable(
+                        onLongClick = { chapterSelection.toggle(chapter.id) },
+                        onClick = {
+                            if (chapterSelection.active) chapterSelection.toggle(chapter.id)
+                            else if (
+                                !chapter.local &&
+                                    !chapter.unavailable &&
+                                    chapter.externalUrl?.startsWith("https://") == true
+                            )
+                                uri.openUri(chapter.externalUrl)
+                            else vm.read(chapter)
+                        },
+                    )
                     .padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -1212,7 +1396,13 @@ private fun Details(
                                 else MaterialTheme.colorScheme.primary,
                         )
                 }
-                ChapterDownloadControl(vm, chapter, downloaded)
+                if (chapterSelection.active)
+                    Checkbox(
+                        chapter.id in chapterSelection.ids,
+                        { chapterSelection.toggle(chapter.id) },
+                        Modifier.semantics { contentDescription = "Select ${chapter.label}" },
+                    )
+                else ChapterDownloadControl(vm, chapter, downloaded)
             }
         }
         item {
@@ -1322,6 +1512,8 @@ private fun Downloads(vm: ReaderViewModel) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val downloads by vm.downloads.collectAsStateWithLifecycle()
     val manga by vm.library.collectAsStateWithLifecycle()
+    val downloadIds = downloads.map { it.releaseId }
+    val selection = rememberMultiSelection(downloadIds)
     var deleting by remember { mutableStateOf<Download?>(null) }
     if (downloads.isEmpty())
         EmptyState(
@@ -1334,6 +1526,19 @@ private fun Downloads(vm: ReaderViewModel) {
             contentPadding = PaddingValues(18.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            stickyHeader {
+                SelectionBar(
+                    selection,
+                    downloadIds,
+                    listOf(
+                        BatchAction("Pause selected") { vm.batchDownloads(it, "Pause") },
+                        BatchAction("Resume selected") { vm.batchDownloads(it, "Resume") },
+                        BatchAction("Delete downloads", true) {
+                            vm.batchDownloads(it, "Delete downloads")
+                        },
+                    ),
+                )
+            }
             item {
                 val active = downloads.count { it.state in DownloadPolicy.activeStates }
                 val complete = downloads.count { it.state == "Complete" }
@@ -1367,6 +1572,11 @@ private fun Downloads(vm: ReaderViewModel) {
                 key = { it.releaseId },
             ) { download ->
                 OutlinedCard(
+                    modifier =
+                        Modifier.combinedClickable(
+                            onLongClick = { selection.toggle(download.releaseId) },
+                            onClick = { if (selection.active) selection.toggle(download.releaseId) },
+                        ),
                     colors =
                         CardDefaults.outlinedCardColors(
                             containerColor = MaterialTheme.colorScheme.surface
@@ -1374,6 +1584,14 @@ private fun Downloads(vm: ReaderViewModel) {
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 ) {
                     Column(Modifier.padding(16.dp)) {
+                        if (selection.active)
+                            Checkbox(
+                                download.releaseId in selection.ids,
+                                { selection.toggle(download.releaseId) },
+                                Modifier.semantics {
+                                    contentDescription = "Select download ${download.label}"
+                                },
+                            )
                         Text(
                             manga.find { it.id == download.mangaId }?.title ?: download.label,
                             style = MaterialTheme.typography.titleMedium,

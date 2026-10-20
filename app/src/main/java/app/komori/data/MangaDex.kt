@@ -31,6 +31,7 @@ class MangaDex(val client: OkHttpClient, private val baseUrl: String = "https://
             .connectionPool(okhttp3.ConnectionPool())
             .build()
     }
+    private var compatibilityUntil = 0L
     private val throttle = Mutex()
     private var lastRequest = 0L
 
@@ -69,14 +70,19 @@ class MangaDex(val client: OkHttpClient, private val baseUrl: String = "https://
                             )
                         JSONObject(response.body?.string() ?: throw IOException("Empty response"))
                     }
+                val usingCompatibility = System.nanoTime() < compatibilityUntil
                 try {
-                    fetch(client)
+                    fetch(if (usingCompatibility) compatibilityClient else client)
                 } catch (e: IOException) {
                     if (!isConnectionReset(e)) throw e
                     // One safe GET retry on a separate HTTP/1.1 pool, without weakening TLS.
                     // HTTP errors, verification and rate limits never enter this path.
-                    delay(300)
-                    fetch(compatibilityClient)
+                    delay(1000)
+                    fetch(if (usingCompatibility) client else compatibilityClient).also {
+                        compatibilityUntil =
+                            if (usingCompatibility) 0L
+                            else System.nanoTime() + TimeUnit.MINUTES.toNanos(15)
+                    }
                 }
             }
         }

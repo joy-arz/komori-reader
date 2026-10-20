@@ -21,6 +21,7 @@ fun connectionMessage(error: Exception): String =
 
 internal fun isConnectionReset(error: IOException): Boolean =
     error is EOFException ||
+        error.message.orEmpty().startsWith("stream was reset", ignoreCase = true) ||
         (error is SocketException &&
             (error.message.orEmpty().contains("reset", true) ||
                 error.message.orEmpty().contains("broken pipe", true)))

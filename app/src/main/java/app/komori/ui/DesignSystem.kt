@@ -172,7 +172,7 @@ internal fun RoundControl(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    IconButton(onClick, modifier.size(48.dp)) {
+    IconButton(onClick, modifier.size(48.dp).clip(CircleShape)) {
         Box(
             Modifier.size(36.dp)
                 .clip(CircleShape)
