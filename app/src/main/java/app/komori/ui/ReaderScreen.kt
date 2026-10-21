@@ -56,7 +56,7 @@ fun ReaderScreen(vm: ReaderViewModel, chapter: Release) {
     var controls by rememberSaveable { mutableStateOf(true) }
     var options by rememberSaveable { mutableStateOf(false) }
     var jump by rememberSaveable { mutableStateOf(false) }
-    var gapTarget by remember { mutableStateOf<Release?>(null) }
+    val gapTarget by vm.readerGapTarget.collectAsStateWithLifecycle()
     val view = LocalView.current
     val window = (view.context as? Activity)?.window
     LaunchedEffect(mode, ready) {
@@ -76,24 +76,7 @@ fun ReaderScreen(vm: ReaderViewModel, chapter: Release) {
         onDispose { view.keepScreenOn = before }
     }
     BackHandler { if (!controls) controls = true else vm.closeReader() }
-    fun navigate(delta: Int) {
-        if (!ready || count <= 0) return
-        if (delta < 0 && page == 0) vm.previousChapter()
-        else if (delta > 0 && page + 1 >= count) {
-            val next = vm.nextChapter(chapter)
-            if (settings.gapWarnings && next != null && ReaderContinuity.gap(chapter, next) != null)
-                gapTarget = next
-            else vm.finishChapter()
-        } else if (mode == ReadingMode.WEBTOON) vm.jumpTo(chapter, page + delta)
-        else vm.page(page + delta)
-    }
-    val latestNavigate by rememberUpdatedState<(Int) -> Unit>({ navigate(it) })
-    DisposableEffect(view, settings.volumeKeys) {
-        val activity = view.context as? MainActivity
-        val handler: (Int) -> Unit = { latestNavigate(it) }
-        if (settings.volumeKeys) activity?.volumeNavigation = handler
-        onDispose { if (activity?.volumeNavigation === handler) activity?.volumeNavigation = null }
-    }
+    fun navigate(delta: Int) = vm.navigateReader(delta)
     Box(Modifier.fillMaxSize().background(Color.Black).safeDrawingPadding()) {
         Column(Modifier.fillMaxSize()) {
             if (controls)
@@ -245,10 +228,10 @@ fun ReaderScreen(vm: ReaderViewModel, chapter: Release) {
             }
     }
     gapTarget?.let { next ->
-        AlertDialog(onDismissRequest = { gapTarget = null }, title = { Text("Chapter gap") },
+        AlertDialog(onDismissRequest = { vm.readerGapTarget.value = null }, title = { Text("Chapter gap") },
             text = { Text(ReaderContinuity.gap(chapter, next).orEmpty()) },
-            confirmButton = { TextButton(onClick = { gapTarget = null; vm.finishChapter() }) { Text("Continue") } },
-            dismissButton = { TextButton(onClick = { gapTarget = null }) { Text("Stay here") } })
+            confirmButton = { TextButton(onClick = { vm.readerGapTarget.value = null; vm.finishChapter() }) { Text("Continue") } },
+            dismissButton = { TextButton(onClick = { vm.readerGapTarget.value = null }) { Text("Stay here") } })
     }
     if (jump) ReaderJumpDialog(vm, chapter, page, count) { jump = false }
     if (options)

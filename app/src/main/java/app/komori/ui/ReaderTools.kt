@@ -123,3 +123,13 @@ internal fun ReaderWindowEffects(enabled: Boolean, settings: Settings) {
         }
     }
 }
+
+@Composable
+internal fun ReaderVolumeKeys(vm: ReaderViewModel, enabled: Boolean) {
+    val activity = androidx.compose.ui.platform.LocalView.current.context as? app.komori.MainActivity
+    DisposableEffect(activity, enabled, vm) {
+        val handler: (Int) -> Unit = vm::navigateReader
+        if (enabled) activity?.volumeNavigation = handler
+        onDispose { if (activity?.volumeNavigation === handler) activity?.volumeNavigation = null }
+    }
+}

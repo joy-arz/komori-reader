@@ -62,6 +62,7 @@ class ReaderViewModel(
     val notice = MutableStateFlow<String?>(null)
     val reader = MutableStateFlow<Release?>(null)
     val readerSession = MutableStateFlow(0)
+    val readerGapTarget = MutableStateFlow<Release?>(null)
     val bulkStatus = MutableStateFlow<String?>(null)
     val updatesVisible = MutableStateFlow(false)
     val sourceStatus = MutableStateFlow<Map<String, String>>(emptyMap())
@@ -838,6 +839,7 @@ class ReaderViewModel(
         pageJob?.cancel()
         readerReady.value = false
         if (!preserveRetries) pageRetries.clear()
+        readerGapTarget.value = null
         readerSession.value += 1
         reader.value = chapter
         readerFile.value = null
@@ -1318,7 +1320,26 @@ class ReaderViewModel(
         }
     }
 
+    fun navigateReader(delta: Int) {
+        val chapter = reader.value ?: return
+        val count = pageCount.value
+        val page = readerPage.value
+        if (!readerReady.value || count <= 0 || readerGapTarget.value != null) return
+        if (delta < 0 && page == 0) previousChapter()
+        else if (delta > 0 && page + 1 >= count) {
+            val next = nextChapter(chapter)
+            if (settings.value.gapWarnings && next != null && ReaderContinuity.gap(chapter, next) != null)
+                readerGapTarget.value = next
+            else finishChapter()
+        } else {
+            val override = preferences.value.find { it.mangaId == chapter.mangaId }?.readerMode.orEmpty()
+            val mode = ReadingMode.resolve(override, settings.value.webtoon, settings.value.rtl)
+            if (mode == ReadingMode.WEBTOON) jumpTo(chapter, page + delta) else page(page + delta)
+        }
+    }
+
     fun closeReader() {
+        readerGapTarget.value = null
         pageJob?.cancel()
         reader.value = null
         readerFile.value = null

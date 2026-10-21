@@ -115,6 +115,7 @@ fun KomoriScreen(vm: ReaderViewModel) {
         UpdateDialog()
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             ReaderWindowEffects(reader != null, settings)
+            ReaderVolumeKeys(vm, reader != null && settings.volumeKeys)
             if (reader != null)
                 key(readerSession) {
                     MaterialTheme(colorScheme = Night) {
