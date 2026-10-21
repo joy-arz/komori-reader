@@ -63,4 +63,84 @@ class AuthorCatalogTest {
     fun cancellationIsNotShownAsSourceFailure() {
         runBlocking { AuthorCatalog(creators) { _, _ -> throw CancellationException() }.loadNext() }
     }
+
+    @Test
+    fun sourceSortsAreExplicitForLatestAndPopularity() {
+        assertEquals("Latest updates", AuthorSort.LATEST.sourceSort("mangadex"))
+        for (key in listOf("zap", "nhentai", "imhentai")) assertEquals(
+            "Latest",
+            AuthorSort.LATEST.sourceSort(key),
+        )
+        assertEquals("Popularity", AuthorSort.POPULAR.sourceSort("mangadex"))
+        assertEquals("Popular all time", AuthorSort.POPULAR.sourceSort("nhentai"))
+        assertEquals("Popular", AuthorSort.POPULAR.sourceSort("zap"))
+        assertEquals("Popular", AuthorSort.POPULAR.sourceSort("imhentai"))
+    }
+
+    @Test
+    fun blendsSourceRanksInsteadOfAppendingOneCreatorFirst() = runBlocking {
+        val catalog =
+            AuthorCatalog(creators.take(2)) { creator, page ->
+                BrowsePage(
+                    listOf(
+                        title("${creator.id}-${page}-first"),
+                        title("${creator.id}-${page}-second"),
+                    ),
+                    page < 2,
+                )
+            }
+        catalog.loadNext()
+        assertEquals(
+            listOf("1-1-first", "2-1-first", "1-1-second", "2-1-second"),
+            catalog.items.map { it.id },
+        )
+        catalog.loadNext()
+        assertEquals(
+            listOf("1-2-first", "2-2-first", "1-2-second", "2-2-second"),
+            catalog.items.takeLast(4).map { it.id },
+        )
+    }
+
+    @Test
+    fun alphabeticalAndAuthorOrderUseEveryLoadedWorkAndDeduplicateOwners() = runBlocking {
+        for (sort in listOf(AuthorSort.ALPHABETICAL, AuthorSort.AUTHOR)) {
+            val catalog =
+                AuthorCatalog(creators.take(2).reversed(), sort) { creator, _ ->
+                    BrowsePage(
+                        if (creator.id == "1") listOf(title("zebra"), title("shared"))
+                        else listOf(title("apple"), title("shared")),
+                        false,
+                    )
+                }
+            catalog.loadNext()
+            assertEquals(
+                if (sort == AuthorSort.ALPHABETICAL) listOf("apple", "shared", "zebra")
+                else listOf("shared", "zebra", "apple"),
+                catalog.items.map { it.id },
+            )
+            assertFalse(catalog.hasMore)
+        }
+    }
+
+    @Test
+    fun localReorderingPreservesLoadedPagesWithoutRefetching() = runBlocking {
+        var calls = 0
+        val catalog =
+            AuthorCatalog(creators.take(1)) { _, page ->
+                calls++
+                BrowsePage(listOf(title(if (page == 1) "zebra" else "apple")), page < 2)
+            }
+        catalog.loadNext()
+        catalog.loadNext()
+        catalog.reorder(AuthorSort.ALPHABETICAL)
+        assertEquals(listOf("apple", "zebra"), catalog.items.map { it.id })
+        catalog.reorder(AuthorSort.LATEST)
+        assertEquals(listOf("zebra", "apple"), catalog.items.map { it.id })
+        assertEquals(2, calls)
+        assertFalse(catalog.hasMore)
+        try {
+            catalog.reorder(AuthorSort.POPULAR)
+            fail("A different source ranking needs new pages")
+        } catch (_: IllegalArgumentException) {}
+    }
 }

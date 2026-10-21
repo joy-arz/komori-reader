@@ -445,14 +445,19 @@ private fun Authors(vm: ReaderViewModel) {
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
     var manage by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
+    var sortName by rememberSaveable { mutableStateOf(AuthorSort.LATEST.name) }
+    val sort = AuthorSort.valueOf(sortName)
+    var sortMenu by remember { mutableStateOf(false) }
     val selected = creators.find { it.id == selectedId }
     val visible = creators.filter { it.name.contains(query, true) }
     val creatorSelection = rememberMultiSelection(visible.map { it.id })
     val context = (selected?.let { listOf(it) } ?: creators).map { it.id }
     val currentFeed by vm.authorFeed.collectAsStateWithLifecycle()
-    val feed = if (currentFeed.context == context) currentFeed else AuthorFeed(loading = true)
-    LaunchedEffect(creators, selected) {
-        vm.showAuthorWorks(selected?.let { listOf(it) } ?: creators)
+    val feed =
+        if (currentFeed.context == context && currentFeed.sort == sort) currentFeed
+        else AuthorFeed(loading = true)
+    LaunchedEffect(creators, selected, sort) {
+        vm.showAuthorWorks(selected?.let { listOf(it) } ?: creators, sort)
     }
     val works = feed.items
     Column(Modifier.fillMaxSize()) {
@@ -460,7 +465,37 @@ private fun Authors(vm: ReaderViewModel) {
             Modifier.fillMaxWidth().padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Following", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+            Column(Modifier.weight(1f)) {
+                Text("Following", style = MaterialTheme.typography.titleMedium)
+                if (!manage)
+                    Text(
+                        sort.label,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+            }
+            if (!manage && creators.isNotEmpty())
+                Box {
+                    RoundControl(KomoriIcons.FilterList, "Sort author works", { sortMenu = true })
+                    DropdownMenu(sortMenu, { sortMenu = false }) {
+                        AuthorSort.entries.forEach { order ->
+                            DropdownMenuItem(
+                                text = { Text(order.label) },
+                                onClick = {
+                                    sortName = order.name
+                                    sortMenu = false
+                                },
+                                trailingIcon = { if (sort == order) Text("✓") },
+                            )
+                        }
+                        Text(
+                            "Latest and popularity blend each creator’s source ranking. All orders update as more works load.",
+                            Modifier.widthIn(max = 260.dp).padding(16.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             TextButton(
                 onClick = {
                     manage = !manage
@@ -535,7 +570,7 @@ private fun Authors(vm: ReaderViewModel) {
                     )
                 }
             }
-            key(context) {
+            key(context, sort) {
                 val grid = rememberLazyGridState()
                 val nearEnd by remember {
                     derivedStateOf {

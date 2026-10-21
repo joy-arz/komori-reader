@@ -1,12 +1,14 @@
 package app.komori.ui
 
 import android.graphics.BitmapFactory
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -15,6 +17,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.komori.data.connectionMessage
@@ -30,6 +36,36 @@ private const val STRIP_HEIGHT = 1024
 private data class ScrollImage(val file: File, val width: Int, val height: Int) {
     val strips
         get() = (height + STRIP_HEIGHT - 1) / STRIP_HEIGHT
+}
+
+@Composable
+internal fun ChapterSeparator(label: String) {
+    Row(
+        Modifier.fillMaxWidth()
+            .background(Color.Black)
+            .padding(horizontal = 24.dp, vertical = 24.dp)
+            .semantics(mergeDescendants = true) { heading() },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        HorizontalDivider(Modifier.weight(1f), color = Color(0xFF29382F))
+        Surface(
+            shape = RoundedCornerShape(50),
+            color = Color(0xFF101713),
+            border = BorderStroke(1.dp, Color(0xFF29382F)),
+        ) {
+            Text(
+                label,
+                Modifier.widthIn(max = 240.dp).padding(horizontal = 16.dp, vertical = 8.dp),
+                style = MaterialTheme.typography.labelLarge,
+                color = Color(0xFFD7DFD8),
+                maxLines = 2,
+                textAlign = TextAlign.Center,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        HorizontalDivider(Modifier.weight(1f), color = Color(0xFF29382F))
+    }
 }
 
 /** A bounded previous/current/next window. Only visible strips allocate image decoders. */
@@ -155,14 +191,7 @@ fun WebtoonReader(
         LazyColumn(state = list, modifier = Modifier.fillMaxSize().background(Color.Black)) {
             window.forEach { release ->
                 if (release.id != initialChapter.id)
-                    item(key = "chapter-${release.id}") {
-                        Text(
-                            release.label,
-                            Modifier.fillMaxWidth().padding(20.dp),
-                            color = Color.LightGray,
-                            style = MaterialTheme.typography.titleMedium,
-                        )
-                    }
+                    item(key = "chapter-${release.id}") { ChapterSeparator(release.label) }
                 repeat(release.pages.coerceAtLeast(0)) { page ->
                     val imageKey = "${release.id}|$page"
                     val image = images[imageKey]
@@ -257,7 +286,9 @@ fun WebtoonReader(
                                 val stripWidth = maxWidth
                                 Box(
                                     Modifier.fillMaxWidth()
-                                        .height(stripWidth * ((bottom - top).toFloat() / image.width))
+                                        .height(
+                                            stripWidth * ((bottom - top).toFloat() / image.width)
+                                        )
                                 ) {
                                     availableFile?.let { file ->
                                         val displayWidth =

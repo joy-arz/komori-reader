@@ -1,11 +1,31 @@
 package app.komori.ui
 
 import app.komori.data.*
+import java.util.Locale
 import kotlinx.coroutines.CancellationException
+
+enum class AuthorSort(val label: String) {
+    LATEST("Latest"),
+    POPULAR("Popularity / views"),
+    ALPHABETICAL("Alphabetical"),
+    AUTHOR("Author");
+
+    fun sourceSort(source: String): String =
+        when (this) {
+            POPULAR ->
+                when (source) {
+                    "mangadex" -> "Popularity"
+                    "nhentai" -> "Popular all time"
+                    else -> "Popular"
+                }
+            else -> if (source == "mangadex") "Latest updates" else "Latest"
+        }
+}
 
 /** Round-robin paging keeps a prolific creator from hiding everyone else. */
 class AuthorCatalog(
     creators: List<Creator>,
+    sort: AuthorSort = AuthorSort.LATEST,
     private val fetch: suspend (Creator, Int) -> BrowsePage,
 ) {
     private data class Cursor(
@@ -13,13 +33,42 @@ class AuthorCatalog(
         var page: Int = 1,
         var done: Boolean = false,
         val seen: MutableSet<String> = mutableSetOf(),
+        var rank: Int = 0,
     )
+
+    var sort: AuthorSort = sort
+        private set
+
+    fun reorder(order: AuthorSort) {
+        require((sort == AuthorSort.POPULAR) == (order == AuthorSort.POPULAR)) {
+            "Changing source ranking requires a new catalog."
+        }
+        sort = order
+    }
 
     private val cursors = creators.distinctBy { it.id }.map { Cursor(it) }
     private var next = 0
     private val titles = linkedMapOf<String, Manga>()
+    private val ranks = mutableMapOf<String, Int>()
+    private val owners = mutableMapOf<String, MutableSet<Creator>>()
+
+    private fun owner(id: String) =
+        owners[id].orEmpty().minOfOrNull { it.name.lowercase(Locale.ROOT) }.orEmpty()
+
     val items: List<Manga>
-        get() = titles.values.toList()
+        get() {
+            val alphabetical = compareBy<Manga> { it.title.lowercase(Locale.ROOT) }.thenBy { it.id }
+            val ordering =
+                when (sort) {
+                    AuthorSort.ALPHABETICAL -> alphabetical
+                    AuthorSort.AUTHOR -> compareBy<Manga> { owner(it.id) }.then(alphabetical)
+                    else ->
+                        compareBy<Manga> { ranks[it.id] ?: Int.MAX_VALUE }
+                            .thenBy { owner(it.id) }
+                            .then(alphabetical)
+                }
+            return titles.values.sortedWith(ordering)
+        }
 
     val hasMore: Boolean
         get() = cursors.any { !it.done }
@@ -38,7 +87,10 @@ class AuthorCatalog(
                 val result = fetch(cursor.creator, cursor.page)
                 val fresh = result.titles.any { it.id !in cursor.seen }
                 result.titles.forEach {
-                    cursor.seen.add(it.id)
+                    if (cursor.seen.add(it.id)) {
+                        ranks[it.id] = minOf(ranks[it.id] ?: Int.MAX_VALUE, cursor.rank++)
+                    }
+                    owners.getOrPut(it.id) { mutableSetOf() }.add(cursor.creator)
                     titles[it.id] = it
                 }
                 cursor.page++
@@ -59,4 +111,5 @@ data class AuthorFeed(
     val hasMore: Boolean = false,
     val errors: List<String> = emptyList(),
     val context: List<String> = emptyList(),
+    val sort: AuthorSort = AuthorSort.LATEST,
 )

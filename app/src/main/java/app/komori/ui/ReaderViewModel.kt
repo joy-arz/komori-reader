@@ -18,7 +18,7 @@ import kotlinx.coroutines.sync.withPermit
 
 class ReaderViewModel(
     application: Application,
-    private val authorPage: (suspend (Creator, Int) -> BrowsePage)?,
+    private val authorPage: (suspend (Creator, Int, BrowseFilter) -> BrowsePage)?,
 ) : AndroidViewModel(application) {
     constructor(application: Application) : this(application, null)
 
@@ -136,23 +136,41 @@ class ReaderViewModel(
     val authorFeed = MutableStateFlow(AuthorFeed())
     private var authorContext: List<Creator>? = null
     private var authorCatalog: AuthorCatalog? = null
+    private var authorSort = AuthorSort.LATEST
     private var authorJob: Job? = null
 
-    fun showAuthorWorks(creators: List<Creator>) {
-        if (authorContext == creators) return
+    fun showAuthorWorks(creators: List<Creator>, sort: AuthorSort = AuthorSort.LATEST) {
+        if (authorContext == creators && authorSort == sort) return
+        val current = authorCatalog
+        if (
+            authorContext == creators &&
+                current != null &&
+                (authorSort == AuthorSort.POPULAR) == (sort == AuthorSort.POPULAR)
+        ) {
+            authorSort = sort
+            current.reorder(sort)
+            authorFeed.value = authorFeed.value.copy(items = current.items, sort = sort)
+            return
+        }
         authorJob?.cancel()
         authorContext = creators.toList()
+        authorSort = sort
         authorCatalog =
-            AuthorCatalog(creators) { creator, page ->
+            AuthorCatalog(creators, sort) { creator, page ->
                 val key = sourceKey(creator.id)
                 require(key in setOf("mangadex", "zap", "nhentai", "imhentai")) {
                     "This source does not provide a creator catalog."
                 }
-                authorPage?.invoke(creator, page)
-                    ?: app.source.browse(key, "", page, BrowseFilter(), creator)
+                val filter = BrowseFilter(sort = sort.sourceSort(key))
+                authorPage?.invoke(creator, page, filter)
+                    ?: app.source.browse(key, "", page, filter, creator)
             }
         authorFeed.value =
-            AuthorFeed(hasMore = creators.isNotEmpty(), context = creators.map { it.id })
+            AuthorFeed(
+                hasMore = creators.isNotEmpty(),
+                context = creators.map { it.id },
+                sort = sort,
+            )
         loadAuthorWorks()
     }
 
@@ -171,6 +189,7 @@ class ReaderViewModel(
                             catalog.hasMore,
                             errors,
                             authorContext.orEmpty().map { it.id },
+                            catalog.sort,
                         )
                 }
             }

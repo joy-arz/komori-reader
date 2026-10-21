@@ -6,7 +6,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
-import androidx.test.uiautomator.Direction
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.Until
 import app.komori.data.*
@@ -60,21 +59,27 @@ class AuthorsInteractionTest {
                 object : ViewModelProvider.Factory {
                     override fun <T : ViewModel> create(modelClass: Class<T>): T {
                         @Suppress("UNCHECKED_CAST")
-                        return ReaderViewModel(app) { creator, _ ->
+                        return ReaderViewModel(app) { creator, _, filter ->
                             ready.await()
+                            assertTrue(filter.sort in listOf("Latest", "Popular all time"))
                             val index = creators.indexOf(creator)
                             BrowsePage(
-                                (0 until 8).map { order ->
-                                    Manga(
-                                        if (order == 7) "authors-test-title-$index"
-                                        else "authors-test-$index-$order",
-                                        if (order == 7)
-                                            (if (index == 0) "Forest letters" else "The quiet city")
-                                        else "Catalog $index page $order",
-                                        "UI fixture",
-                                        "",
-                                    )
-                                },
+                                (0 until 8)
+                                    .map { order ->
+                                        Manga(
+                                            if (order == 7) "authors-test-title-$index"
+                                            else "authors-test-$index-$order",
+                                            if (order == 7)
+                                                (if (index == 0) "Forest letters"
+                                                else "The quiet city")
+                                            else "Catalog $index page $order",
+                                            "UI fixture",
+                                            "",
+                                        )
+                                    }
+                                    .let {
+                                        if (filter.sort == "Popular all time") it.reversed() else it
+                                    },
                                 false,
                             )
                         }
@@ -97,9 +102,18 @@ class AuthorsInteractionTest {
             val creatorFilter = device.findObject(By.text("Aki Mori"))
             assertTrue(creatorFilter.visibleBounds.bottom < device.displayHeight / 4)
             device.takeScreenshot(File(app.getExternalFilesDir(null), "authors-subscriptions.png"))
-            device
-                .findObject(By.scrollable(true))
-                .scrollUntil(Direction.DOWN, Until.hasObject(By.text("Forest letters")))
+            repeat(10) {
+                if (!device.hasObject(By.text("Forest letters"))) {
+                    device.swipe(
+                        device.displayWidth / 2,
+                        device.displayHeight * 3 / 4,
+                        device.displayWidth / 2,
+                        device.displayHeight / 3,
+                        24,
+                    )
+                    device.waitForIdle()
+                }
+            }
             assertTrue(device.hasObject(By.text("Forest letters")))
             assertFalse(device.hasObject(By.text("In your Library")))
             device.findObject(By.text("Ren Sato")).click()
@@ -107,6 +121,20 @@ class AuthorsInteractionTest {
             assertFalse(device.hasObject(By.text("Catalog 0 page 0")))
             device.findObject(By.text("All")).click()
             assertTrue(device.wait(Until.hasObject(By.text("Catalog 0 page 0")), 5000))
+            fun sortBy(label: String) {
+                device.findObject(By.desc("Sort author works")).click()
+                assertTrue(device.wait(Until.hasObject(By.text(label)), 5000))
+                device.findObject(By.text(label)).click()
+            }
+            sortBy("Popularity / views")
+            assertTrue(device.wait(Until.hasObject(By.text("Forest letters")), 5000))
+            sortBy("Alphabetical")
+            assertTrue(device.wait(Until.hasObject(By.text("Catalog 0 page 0")), 5000))
+            sortBy("Author")
+            assertTrue(device.wait(Until.hasObject(By.text("Catalog 0 page 0")), 5000))
+            assertFalse(device.hasObject(By.text("Catalog 1 page 0")))
+            sortBy("Latest")
+            assertTrue(device.wait(Until.hasObject(By.text("Catalog 1 page 0")), 5000))
             assertFalse(device.hasObject(By.text("Select")))
             device.findObject(By.desc("Catalog 0 page 0")).longClick()
             assertTrue(device.wait(Until.hasObject(By.text("1 selected")), 5000))
