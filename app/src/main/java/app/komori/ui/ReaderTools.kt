@@ -36,14 +36,21 @@ internal fun ReaderTools(vm: ReaderViewModel, settings: Settings) {
                 { Text(value.replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.labelSmall) })
         }
     }
-    Text("Preload pages: ${settings.preloadPages}")
-    SettingSlider(settings.preloadPages, 0..2, "Pages to preload", steps = 1) { vm.numberSetting("preloadPages", it) }
-    Text("Reader disk cache: ${settings.readerCacheMb} MB")
-    SettingSlider(settings.readerCacheMb, 32..256, "Reader disk cache in megabytes", steps = 6) { vm.numberSetting("readerCacheMb", it) }
-    val reader by vm.reader.collectAsStateWithLifecycle()
-    val clearing by vm.clearingCache.collectAsStateWithLifecycle()
-    TextButton(enabled = reader == null && !clearing, onClick = vm::clearReaderCache) { Text(if (clearing) "Clearing cached pages…" else "Clear cached pages") }
-    Text(if (reader != null) "Close the reader to clear its temporary cache." else "Downloaded chapters and imported comics are kept.", style = MaterialTheme.typography.bodySmall)
+    ReaderCacheSettings(vm, settings)
+}
+
+@Composable
+internal fun ReaderCacheSettings(vm: ReaderViewModel, settings: Settings) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text("Preload pages: ${settings.preloadPages}")
+        SettingSlider(settings.preloadPages, 0..2, "Pages to preload", steps = 1) { vm.numberSetting("preloadPages", it) }
+        Text("Reader disk cache: ${settings.readerCacheMb} MB")
+        SettingSlider(settings.readerCacheMb, 32..256, "Reader disk cache in megabytes", steps = 6) { vm.numberSetting("readerCacheMb", it) }
+        val reader by vm.reader.collectAsStateWithLifecycle()
+        val clearing by vm.clearingCache.collectAsStateWithLifecycle()
+        TextButton(enabled = reader == null && !clearing, onClick = vm::clearReaderCache) { Text(if (clearing) "Clearing cached pages…" else "Clear cached pages") }
+        Text(if (reader != null) "Close the reader to clear its temporary cache." else "Downloaded chapters and imported comics are kept.", style = MaterialTheme.typography.bodySmall)
+    }
 }
 
 @Composable

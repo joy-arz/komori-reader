@@ -10,6 +10,8 @@ import androidx.test.uiautomator.Until
 import app.komori.ui.ReaderViewModel
 import app.komori.ui.UpdateViewModel
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -41,11 +43,16 @@ class MaintenanceSettingsUiTest {
             device.executeShellCommand("screencap -p /data/local/tmp/komori-download-maintenance.png")
             clickText("Close")
             instrumentation.runOnMainSync { vm.currentTab.value = 4 }
+            val cacheControl = device.wait(Until.findObject(By.text("Clear cached pages")), 8000)
+                ?: throw AssertionError("Cache clearing must be reachable in Settings → Reading")
+            assertTrue("Cache clearing must be enabled outside the reader", cacheControl.isEnabled)
+            cacheControl.click()
+            withTimeout(5000) { while (vm.clearingCache.value) delay(25) }
             clickText("App")
             assertTrue(device.wait(Until.hasObject(By.text("Export backup")), 8000))
             repeat(5) {
                 if (!device.hasObject(By.text("Keep recent backups"))) {
-                    device.findObject(By.scrollable(true))?.scroll(Direction.DOWN, .6f)
+                    device.findObjects(By.scrollable(true)).lastOrNull()?.scroll(Direction.DOWN, .6f)
                     device.waitForIdle()
                 }
             }

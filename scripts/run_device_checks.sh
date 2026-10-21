@@ -13,7 +13,7 @@ adb shell dumpsys window > device-diagnostics/windows-before.txt
 
 test_status=0
 ./gradlew connectedDebugAndroidTest --no-daemon || test_status=$?
-for capture in download-maintenance scheduled-backup-settings reader-manual-refresh; do
+for capture in download-maintenance scheduled-backup-settings reader-manual-refresh navigation-failure facet-failure; do
     adb pull "/data/local/tmp/komori-$capture.png" "device-diagnostics/$capture.png" || true
 done
 adb shell dumpsys power > device-diagnostics/power-after.txt || true

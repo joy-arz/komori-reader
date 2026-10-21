@@ -116,7 +116,8 @@ class NavigationHistoryTest {
             device.waitForIdle()
             val cover =
                 device.findObjects(By.descStartsWith("History title ")).first {
-                    it.visibleBounds.height() > 200
+                    val visible = it.visibleBounds
+                    visible.height() > 200 && visible.centerY() in (device.displayHeight / 3)..(device.displayHeight * 4 / 5)
                 }
             val description = cover.contentDescription
             val bounds = cover.visibleBounds
@@ -158,6 +159,9 @@ class NavigationHistoryTest {
             device.findObject(By.desc("Back")).click()
             assertTrue(device.wait(Until.hasObject(By.desc(description)), 5000))
             assertEquals(bounds, device.findObject(By.desc(description)).visibleBounds)
+        } catch (error: Throwable) {
+            device.executeShellCommand("screencap -p /data/local/tmp/komori-navigation-failure.png")
+            throw error
         } finally {
             instrumentation.runOnMainSync { activity.finish() }
         }

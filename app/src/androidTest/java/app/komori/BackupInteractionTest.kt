@@ -5,6 +5,7 @@ import android.os.SystemClock
 import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.uiautomator.Direction
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.Until
@@ -88,16 +89,23 @@ class BackupInteractionTest {
             assertEquals("Completed", app.dao.shelf(id)!!.status)
             instrumentation.runOnMainSync { vm.inspect(uri) }
             settled()
-            device.wait(Until.hasObject(By.text("Restore Library")), 5000)
-            device.findObject(By.text("Restore Library")).click()
+            (device.wait(Until.findObject(By.text("Restore Library")), 8000)
+                ?: throw AssertionError("Restore confirmation did not appear")).click()
             settled()
             assertEquals("Completed", app.dao.shelf(id)!!.status)
             assertFalse(app.dao.shelf(id)!!.liked)
 
             instrumentation.runOnMainSync { vm.inspect(uri) }
             settled()
-            device.wait(Until.hasObject(By.text("Use backup values for matching entries")), 5000)
-            device.findObject(By.text("Use backup values for matching entries")).click()
+            val choice = By.text("Use backup values for matching entries")
+            repeat(3) {
+                if (!device.hasObject(choice)) {
+                    device.findObjects(By.scrollable(true)).lastOrNull()?.scroll(Direction.DOWN, .6f)
+                    device.waitForIdle()
+                }
+            }
+            (device.wait(Until.findObject(choice), 8000)
+                ?: throw AssertionError("Restore merge choice did not become visible")).click()
             assertTrue(device.findObject(By.checkable(true)).isChecked)
             device.findObject(By.text("Restore Library")).click()
             settled()

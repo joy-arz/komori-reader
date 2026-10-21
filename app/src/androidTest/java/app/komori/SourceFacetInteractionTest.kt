@@ -58,10 +58,12 @@ class SourceFacetInteractionTest {
         }
         fun openFilters() {
             repeat(3) {
-                tap(By.pkg(instrumentation.targetContext.packageName).desc("Filters and sorting"))
-                if (device.wait(Until.hasObject(By.text("Browse filters")), 1500)) return
+                if (device.hasObject(By.text("Reset"))) return
+                val control = device.wait(Until.findObject(By.pkg(instrumentation.targetContext.packageName).desc("Filters and sorting")), 3000)
+                control?.click()
+                if (device.wait(Until.hasObject(By.text("Reset")), 5000)) return
             }
-            fail("Filter dialog did not open after the toolbar settled")
+            fail("Filter dialog did not expose its Reset action")
         }
         lateinit var vm: ReaderViewModel
         instrumentation.runOnMainSync {
@@ -117,6 +119,7 @@ class SourceFacetInteractionTest {
             val folder = java.io.File(instrumentation.targetContext.getExternalFilesDir(null), "device-diagnostics").apply { mkdirs() }
             device.takeScreenshot(java.io.File(folder, "facet-failure.png"))
             device.dumpWindowHierarchy(java.io.File(folder, "facet-failure.xml"))
+            device.executeShellCommand("screencap -p /data/local/tmp/komori-facet-failure.png")
             throw error
         } finally {
             instrumentation.runOnMainSync { activity.finish() }

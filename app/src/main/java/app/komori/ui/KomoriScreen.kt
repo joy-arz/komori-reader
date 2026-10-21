@@ -1987,6 +1987,7 @@ private fun SettingsScreen(vm: ReaderViewModel, settings: Settings) {
                 }
                 if (section == "Reading") {
                     item { Text("Reading", style = MaterialTheme.typography.titleLarge) }
+                    item { ReaderCacheSettings(vm, settings) }
                     item {
                         Toggle(
                             "Continuous chapters",
