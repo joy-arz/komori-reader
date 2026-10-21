@@ -53,15 +53,12 @@ jobs:
           profile: pixel_2
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: python3 scripts/device_acceptance.py --serial emulator-5554 --package app.komori.reader --baseline baseline/*.apk --candidate candidate/*.apk --seed-disposable-fixture
-      - name: Save emulator diagnostics
-        if: always()
-        run: adb logcat -d > device-log.txt || true
+          script: bash scripts/run_signed_upgrade.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: signed-upgrade-api-${{ matrix.api }}
           path: |
-            device-log.txt
+            device-diagnostics/
             baseline/certificate.txt
             candidate/certificate.txt
