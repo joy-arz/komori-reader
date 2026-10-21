@@ -37,13 +37,15 @@ fun ReaderScreen(vm: ReaderViewModel, chapter: Release) {
     val file by vm.readerFile.collectAsStateWithLifecycle()
     val error by vm.readerError.collectAsStateWithLifecycle()
     val retryAllowed by vm.readerRetryAllowed.collectAsStateWithLifecycle()
+    val retryAt by vm.readerRetryAt.collectAsStateWithLifecycle()
+    val sourceAction by vm.readerSourceAction.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
     val preferences by vm.preferences.collectAsStateWithLifecycle()
     val ready by vm.readerReady.collectAsStateWithLifecycle()
     val retryCountdown =
         key(chapter.id, page) {
-            imageRetryCountdown(error != null && retryAllowed, settings.retrySeconds) {
-                vm.retryPage()
+            imageRetryCountdown(error != null && retryAllowed, settings.retrySeconds, retryAt) {
+                vm.retryPage(manual = false)
             }
         }
     val override = preferences.find { it.mangaId == chapter.mangaId }?.readerMode.orEmpty()
@@ -108,7 +110,7 @@ fun ReaderScreen(vm: ReaderViewModel, chapter: Release) {
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             Text(error!!)
-                            if (!retryAllowed)
+                            if (sourceAction)
                                 VerifySourceButton(vm, app.komori.data.sourceKey(chapter.mangaId))
                             if (retryCountdown > 0) Text("Retrying this page in ${retryCountdown}s")
                             Button(onClick = { vm.retryPage() }) { Text("Retry") }
@@ -128,6 +130,9 @@ fun ReaderScreen(vm: ReaderViewModel, chapter: Release) {
                                             object :
                                                 SubsamplingScaleImageView.DefaultOnImageEventListener() {
                                                 override fun onImageLoadError(e: Exception) {
+                                                    vm.readerRetryAllowed.value = false
+                                                    vm.readerSourceAction.value = false
+                                                    vm.readerRetryAt.value = 0L
                                                     vm.readerError.value =
                                                         "Could not decode this page. Retry or use another release."
                                                 }

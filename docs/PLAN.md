@@ -4,11 +4,11 @@
 
 An Android-first personal bookshelf and reader, optimized for small devices and unreliable connections. Native Kotlin, Compose, Room, DataStore, OkHttp, WorkManager and a dedicated tiled reader. No backend is needed for the first release.
 
-Visual tokens: jade #1F6256, pale jade #D8ECE1, paper #F6F8F5, muted gray-green #56665D, charcoal #121713. System sans typography keeps the package small. Cover artwork is the visual focus; controls use consistent Material touch targets. Left-aligned layouts, adaptive cover grid, compact chapter list. Avoid ornamental animations and blur.
+Visual direction: black surfaces, green/lime accents and bundled Outfit typography, as shipped in 0.7.x. Cover artwork is the visual focus; controls use consistent Material touch targets. Left-aligned layouts, adaptive cover grid, compact chapter list. Avoid ornamental animations and blur.
 
 Review of the initial design: a separate empty home/dashboard adds navigation without helping reading. The first alpha opens directly to Library. Downloads gets its own tab until the real Updates feed is implemented. This makes available behavior explicit rather than presenting unfinished tabs.
 
-## Milestone 1: end-to-end alpha (current)
+## Milestone 1: end-to-end alpha (delivered)
 
 - [x] Native Android project and reproducible Gradle wrapper.
 - [x] MangaDex discovery, search, creator filtering and chapter pagination.
@@ -18,6 +18,8 @@ Review of the initial design: a separate empty home/dashboard adds navigation wi
 - [x] Durable downloads with page checkpoints, retry and offline loading.
 - [x] Unit tests for chapter policy, lint and debug/release CI.
 - [x] Private GitHub repository and tag-driven signed APK releases.
+
+Current delivery and remaining work are tracked in [TODO.md](TODO.md). Published release validation is recorded in the release review documents.
 
 ## Milestone 2: reader quality
 

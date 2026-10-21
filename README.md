@@ -9,7 +9,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 
 <br>
 
-[![Release](https://img.shields.io/badge/release-0.7.2-A3E635?style=for-the-badge&labelColor=0A0A0A)](https://github.com/joy-arz/komori-reader/releases/latest)
+[![Release](https://img.shields.io/badge/release-0.7.3-A3E635?style=for-the-badge&labelColor=0A0A0A)](https://github.com/joy-arz/komori-reader/releases/latest)
 [![Android](https://img.shields.io/badge/Android-8.0%2B-A3E635?style=for-the-badge&logo=android&logoColor=A3E635&labelColor=0A0A0A)](#install)
 [![Kotlin](https://img.shields.io/badge/Kotlin-Compose-A3E635?style=for-the-badge&logo=kotlin&logoColor=A3E635&labelColor=0A0A0A)](#build)
 [![No ads](https://img.shields.io/badge/no%20ads-no%20analytics-A3E635?style=for-the-badge&labelColor=0A0A0A)](#features)
@@ -28,7 +28,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 
 <br>
 
-> **Current release: 0.7.2.** Signed APK for Android 8.0 and newer. This is a full GitHub release. Source-specific limitations and planned features are listed below.
+> **Current release: 0.7.3.** Signed APK for Android 8.0 and newer. This is a full GitHub release. Source-specific limitations and planned features are listed below.
 
 ---
 
@@ -111,6 +111,8 @@ Built with Kotlin and Compose. Native online and offline reading.
 ### <img src="https://api.iconify.design/lucide/shield-check.svg?color=%23A3E635" width="22" height="22" align="absmiddle"> Source verification and network
 
 - The user-operated **Verify source** screen shares source cookies and user agent with native requests and cover loading.
+- Reader retries stop automatically for missing pages, invalid content, storage failures and TLS errors. Transient failures have a page-specific session budget; manual retry resets it.
+- HTTP 429 and HTTP 503 honor `Retry-After` (seconds or HTTP date). Rate-limited downloads schedule a durable continuation instead of holding the queue; pause/delete cancels the same work chain.
 - HTTP 403 stays distinct from a detected verification challenge. Blocked downloads wait for user action instead of retrying repeatedly.
 - Cookies are isolated from unrelated image hosts and excluded from app backup.
 - Nhentai catalog and reader-manifest GETs retry reset and EOF failures once through a separate HTTP/1.1 connection pool. The browser session and TLS checks stay in place.
@@ -149,7 +151,7 @@ MangaDex and scanlation groups are credited in the application. This is an indep
 
 <div align="center">
 
-### [Download komori-0.7.2.apk](https://github.com/joy-arz/komori-reader/releases/download/v0.7.2/komori-0.7.2.apk)
+### [Download komori-0.7.3.apk](https://github.com/joy-arz/komori-reader/releases/download/v0.7.3/komori-0.7.3.apk)
 
 </div>
 
@@ -183,14 +185,14 @@ Local signing is automated through JVM `keytool` validation and Gradle. See [rel
 
 Every push to `main` and every pull request runs unit tests, lint and a debug APK build.
 
-A version tag such as `v0.7.2` automatically tests, builds, signs and publishes a release APK plus a SHA-256 checksum and updater metadata (`update.json`).
+A version tag such as `v0.7.3` automatically tests, builds, signs and publishes a release APK plus a SHA-256 checksum and updater metadata (`update.json`).
 
 - Plain version tags publish full releases and mark them as **Latest**.
 - Tags containing a suffix remain prereleases.
 
 ```sh
-git tag v0.7.2
-git push origin v0.7.2
+git tag v0.7.3
+git push origin v0.7.3
 ```
 
 Signing secrets are already configured in repository Actions secrets. No signing material is committed. See [RELEASING.md](docs/RELEASING.md) for key backup and release details.

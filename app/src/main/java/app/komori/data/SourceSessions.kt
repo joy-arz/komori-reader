@@ -65,17 +65,28 @@ class SourceCookieJar(private val store: SourceCookieStore) : CookieJar {
 
 class SourceVerificationRequired(val source: String) :
     IOException(
-        "${sourceNames[source]} requires browser verification. Choose Verify source, complete verification, then retry."
+        "${sourceNames[source] ?: "The source"} requires browser verification. Choose Verify source, complete verification, then retry."
     )
 
-class SourceHttpException(val status: Int, source: String) :
+class SourceHttpException(
+    val status: Int,
+    source: String,
+    val retryAtMillis: Long? = null,
+    val deferred: Boolean = false,
+) :
     IOException(
         when (status) {
             403 ->
-                "${sourceNames[source]} denied access (HTTP 403). Try Verify source. The site may still restrict native access."
+                "${sourceNames[source] ?: "The source"} denied access (HTTP 403). Try Verify source. The site may still restrict native access."
             429 ->
-                "${sourceNames[source]} is rate limiting requests (HTTP 429). Wait before retrying."
-            else -> "${sourceNames[source]} returned HTTP $status. Please retry later."
+                "${sourceNames[source] ?: "The source"} is rate limiting requests (HTTP 429). Wait before retrying."
+            404,
+            410 ->
+                "${sourceNames[source] ?: "The source"} no longer has this page (HTTP $status). Refresh the chapter or try another release."
+            503 ->
+                "${sourceNames[source] ?: "The source"} is temporarily unavailable (HTTP 503). Wait before retrying."
+            else ->
+                "${sourceNames[source] ?: "The source"} returned HTTP $status. Please retry later."
         }
     )
 
@@ -108,6 +119,7 @@ class SourceSessions(context: Context) {
                         .newBuilder()
                         .header("User-Agent", chain.request().header("User-Agent") ?: userAgent)
                         .build()
+                SourceCooldowns.check(request)
                 val response = chain.proceed(request)
                 val refererHost = response.request.header("Referer")?.toHttpUrlOrNull()?.host
                 val source =
@@ -125,6 +137,11 @@ class SourceSessions(context: Context) {
                     val status = response.code
                     response.close()
                     throw SourceHttpException(status, source)
+                }
+                if (response.code in listOf(429, 503)) {
+                    val failure = httpFailure(response, source ?: "source")
+                    response.close()
+                    throw failure
                 }
                 response
             }

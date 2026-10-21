@@ -4,13 +4,13 @@ import android.content.Context
 import androidx.work.*
 import app.komori.KomoriApp
 import java.io.File
-import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -64,24 +64,39 @@ suspend fun enqueueDownload(
                         dataSaver = settings.saver,
                     )
             )
-            val request =
-                OneTimeWorkRequestBuilder<ChapterDownloadWorker>()
-                    .setInputData(workDataOf("chapter" to chapter.id))
-                    .setConstraints(
-                        Constraints.Builder()
-                            .setRequiredNetworkType(
-                                if (settings.wifi) NetworkType.UNMETERED else NetworkType.CONNECTED
-                            )
-                            .setRequiresStorageNotLow(true)
-                            .build()
-                    )
-                    .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
-                    .build()
+            val request = downloadRequest(chapter.id, settings)
             WorkManager.getInstance(context)
                 .enqueueUniqueWork("download-${chapter.id}", ExistingWorkPolicy.KEEP, request)
         }
     }
 }
+
+/** A delayed continuation shares the original unique chain so pause/delete cancels both. */
+internal fun downloadRequest(
+    id: String,
+    settings: Settings,
+    attemptBase: Int = 0,
+    delayMillis: Long = 0,
+) =
+    OneTimeWorkRequestBuilder<ChapterDownloadWorker>()
+        .setInputData(workDataOf("chapter" to id, "attemptBase" to attemptBase))
+        .setInitialDelay(
+            delayMillis.coerceIn(
+                0,
+                Long.MAX_VALUE - System.currentTimeMillis() - TimeUnit.DAYS.toMillis(1),
+            ),
+            TimeUnit.MILLISECONDS,
+        )
+        .setConstraints(
+            Constraints.Builder()
+                .setRequiredNetworkType(
+                    if (settings.wifi) NetworkType.UNMETERED else NetworkType.CONNECTED
+                )
+                .setRequiresStorageNotLow(true)
+                .build()
+        )
+        .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+        .build()
 
 class ChapterDownloadWorker(context: Context, params: WorkerParameters) :
     CoroutineWorker(context, params) {
@@ -97,13 +112,16 @@ class ChapterDownloadWorker(context: Context, params: WorkerParameters) :
                     var record = app.dao.download(id) ?: return@chapter Result.failure()
                     if (record.state !in setOf("Queued", "Downloading", "Retrying"))
                         return@chapter Result.failure()
+                    val attempt =
+                        inputData.getInt("attemptBase", 0).coerceAtLeast(0).toLong() +
+                            runAttemptCount
                     try {
                         record = record.copy(state = "Downloading", error = "")
                         app.dao.putDownload(record)
                         DownloadTransfers.report(id, DownloadTransfer(resolving = true))
                         val urls = source.pages(id, record.dataSaver)
                         if (urls.isEmpty())
-                            throw IOException("This release has no downloadable pages.")
+                            throw ContentFailure("This release has no downloadable pages.")
                         kotlinx.coroutines.currentCoroutineContext().ensureActive()
                         val directory = chapterDirectory(app, id).apply { mkdirs() }
                         // The manifest tracks image identity, not expiring delivery-host URLs.
@@ -117,7 +135,7 @@ class ChapterDownloadWorker(context: Context, params: WorkerParameters) :
                         val manifest = File(directory, "manifest")
                         if (!manifest.exists() || manifest.readText() != identity) {
                             directory.listFiles()?.forEach { it.delete() }
-                            manifest.writeText(identity)
+                            storageOperation { manifest.writeText(identity) }
                         }
                         record =
                             record.copy(
@@ -141,11 +159,12 @@ class ChapterDownloadWorker(context: Context, params: WorkerParameters) :
                             val file = pageFile(app, id, index)
                             if (repairMarker(app, id, index).exists() || !validImage(file)) {
                                 if (directory.usableSpace < 64L * 1024 * 1024)
-                                    throw IOException(
+                                    throw StorageFailure(
                                         "Free at least 64 MB to continue downloading."
                                     )
-                                val temporary =
+                                val temporary = storageOperation {
                                     File.createTempFile("page-$index-", ".part", directory)
+                                }
                                 try {
                                     DownloadTransfers.report(
                                         id,
@@ -176,7 +195,7 @@ class ChapterDownloadWorker(context: Context, params: WorkerParameters) :
                                     }
                                     kotlinx.coroutines.currentCoroutineContext().ensureActive()
                                     if (!temporary.renameTo(file))
-                                        throw IOException("Could not save page ${index + 1}")
+                                        throw StorageFailure("Could not save page ${index + 1}")
                                     repairMarker(app, id, index).delete()
                                     record = record.copy(done = record.done + 1)
                                 } finally {
@@ -194,16 +213,35 @@ class ChapterDownloadWorker(context: Context, params: WorkerParameters) :
                     } catch (e: Exception) {
                         kotlinx.coroutines.currentCoroutineContext().ensureActive()
                         val needsAction = requiresSourceAction(e)
+                        val retry = automaticRetryAllowed(e) && attempt < 3
                         app.dao.putDownload(
                             record.copy(
                                 state =
                                     if (needsAction) "Verification required"
-                                    else if (runAttemptCount < 3) "Retrying" else "Failed",
+                                    else if (retry) "Retrying" else "Failed",
                                 error = connectionMessage(e),
                             )
                         )
-                        if (!needsAction && runAttemptCount < 3) Result.retry()
-                        else Result.failure()
+                        if (retry) {
+                            val delayMillis =
+                                (retryAtMillis(e) - System.currentTimeMillis()).coerceAtLeast(0)
+                            if (delayMillis > 0) {
+                                WorkManager.getInstance(app)
+                                    .enqueueUniqueWork(
+                                        "download-$id",
+                                        ExistingWorkPolicy.APPEND_OR_REPLACE,
+                                        downloadRequest(
+                                            id,
+                                            app.settings.flow.first(),
+                                            (attempt + 1).toInt(),
+                                            delayMillis,
+                                        ),
+                                    )
+                                    .result
+                                    .get()
+                                Result.success()
+                            } else Result.retry()
+                        } else Result.failure()
                     } finally {
                         DownloadTransfers.clear(id)
                     }

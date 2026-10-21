@@ -64,6 +64,9 @@ class ReaderViewModel(
     val downloadTransfers = DownloadTransfers.progress
     val readerFile = MutableStateFlow<File?>(null)
     val readerError = MutableStateFlow<String?>(null)
+    private val pageRetries = PageRetryBudget()
+    val readerRetryAt = MutableStateFlow(0L)
+    val readerSourceAction = MutableStateFlow(false)
     val readerRetryAllowed = MutableStateFlow(true)
     val pageCount = MutableStateFlow(0)
     var canLoadMore = true
@@ -739,7 +742,7 @@ class ReaderViewModel(
         read(next, restart = fromBeginning || next.key in completed)
     }
 
-    fun read(chapter: Release, restart: Boolean = false) {
+    fun read(chapter: Release, restart: Boolean = false, preserveRetries: Boolean = false) {
         if (!chapter.readable) {
             notice.value =
                 if (chapter.unavailable)
@@ -751,11 +754,14 @@ class ReaderViewModel(
         if (offlineLanguage != null) offlineLanguage = chapter.language
         pageJob?.cancel()
         readerReady.value = false
+        if (!preserveRetries) pageRetries.clear()
         readerSession.value += 1
         reader.value = chapter
         readerFile.value = null
         readerError.value = null
         readerRetryAllowed.value = true
+        readerRetryAt.value = 0L
+        readerSourceAction.value = false
         pageCount.value = chapter.pages
         pageJob =
             viewModelScope.launch {
@@ -782,7 +788,9 @@ class ReaderViewModel(
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    readerRetryAllowed.value = !requiresSourceAction(e)
+                    readerRetryAllowed.value = automaticRetryAllowed(e)
+                    readerRetryAt.value = retryAtMillis(e)
+                    readerSourceAction.value = requiresSourceAction(e)
                     readerError.value = connectionMessage(e)
                 }
             }
@@ -802,11 +810,30 @@ class ReaderViewModel(
         val key = "${chapter.id}-${settings.value.saver}"
         val urls =
             pageManifests[key]
-                ?: app.source.pages(chapter.id, settings.value.saver).also {
-                    rememberPages(key, it)
+                ?: run {
+                    pageRetries.check("manifest-$key")
+                    try {
+                        app.source.pages(chapter.id, settings.value.saver).also {
+                            if (it.isEmpty())
+                                throw ContentFailure("This chapter has no available pages.")
+                            rememberPages(key, it)
+                        }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        throw pageRetries.failed("manifest-$key", e)
+                    }
                 }
-        if (urls.isEmpty()) throw IOException("This chapter has no available pages.")
         return chapter.copy(pages = urls.size)
+    }
+
+    fun resetPageRetries(chapter: Release, page: Int) {
+        pageRetries.reset("${chapter.id}-$page-${settings.value.saver}")
+        resetChapterRetries(chapter)
+    }
+
+    fun resetChapterRetries(chapter: Release) {
+        pageRetries.reset("manifest-${chapter.id}-${settings.value.saver}")
     }
 
     fun nextChapter(chapter: Release): Release? =
@@ -826,6 +853,8 @@ class ReaderViewModel(
             readerFile.value = null
             readerError.value = null
             readerRetryAllowed.value = true
+            readerRetryAt.value = 0L
+            readerSourceAction.value = false
         }
         readerPage.value = page
         readerScroll.value = fraction.coerceIn(0f, 1f)
@@ -852,13 +881,14 @@ class ReaderViewModel(
             Unit
         }
 
-    fun retryPage() {
+    fun retryPage(manual: Boolean = true) {
         val chapter = reader.value ?: return
         val index = readerPage.value
+        if (manual) resetPageRetries(chapter, index)
         task {
             invalidateCachedPage(chapter, index)
             if (reader.value?.id == chapter.id && readerPage.value == index) {
-                if (readerReady.value) page(index) else read(chapter)
+                if (readerReady.value) page(index) else read(chapter, preserveRetries = true)
             }
         }
     }
@@ -974,63 +1004,84 @@ class ReaderViewModel(
                     target.setLastModified(System.currentTimeMillis())
                     return@withContext target
                 }
-                val manifestKey = "${chapter.id}-${settings.value.saver}"
-                val pageUrls =
-                    pageManifests[manifestKey]
-                        ?: app.source.pages(chapter.id, settings.value.saver).also {
-                            rememberPages(manifestKey, it)
-                        }
-                if (reader.value?.id == chapter.id) pageCount.value = pageUrls.size
-                val url =
-                    pageUrls.getOrNull(page)
-                        ?: throw IOException("Page is no longer available. Reopen the chapter.")
-                val temporary = File.createTempFile("page-", ".part", cacheDir)
+                val retryKey = "$key-${settings.value.saver}"
+                pageRetries.check(retryKey)
                 try {
-                    imageConnections.withPermit {
-                        transferImage(
-                            app.source.client,
-                            app.source.imageRequest(url, chapter.id),
-                            temporary,
-                        )
+                    val manifestKey = "${chapter.id}-${settings.value.saver}"
+                    val pageUrls =
+                        pageManifests[manifestKey]
+                            ?: app.source.pages(chapter.id, settings.value.saver).also {
+                                rememberPages(manifestKey, it)
+                            }
+                    if (reader.value?.id == chapter.id) pageCount.value = pageUrls.size
+                    val url =
+                        pageUrls.getOrNull(page)
+                            ?: throw ContentFailure(
+                                "Page is no longer available. Reopen the chapter."
+                            )
+                    val temporary = storageOperation {
+                        File.createTempFile("page-", ".part", cacheDir)
                     }
-                    coroutineContext.ensureActive()
-                    if (repairMarker(app, chapter.id, page).exists())
-                        ChapterFiles.locked(chapter.id) {
-                            if (
-                                ChapterFiles.version(chapter.id) == repairVersion &&
-                                    dao.download(chapter.id) != null &&
-                                    repairMarker(app, chapter.id, page).exists()
-                            ) {
-                                val repaired =
-                                    File.createTempFile("repair-", ".part", downloaded.parentFile)
-                                try {
-                                    temporary.copyTo(repaired, overwrite = true)
-                                    coroutineContext.ensureActive()
-                                    if (!repaired.renameTo(downloaded))
-                                        throw IOException("Could not repair the downloaded page.")
-                                    repairMarker(app, chapter.id, page).delete()
-                                    reconcileDownload(app, chapter.id)
-                                } finally {
-                                    repaired.delete()
+                    try {
+                        imageConnections.withPermit {
+                            transferImage(
+                                app.source.client,
+                                app.source.imageRequest(url, chapter.id),
+                                temporary,
+                            )
+                        }
+                        coroutineContext.ensureActive()
+                        if (repairMarker(app, chapter.id, page).exists())
+                            ChapterFiles.locked(chapter.id) {
+                                if (
+                                    ChapterFiles.version(chapter.id) == repairVersion &&
+                                        dao.download(chapter.id) != null &&
+                                        repairMarker(app, chapter.id, page).exists()
+                                ) {
+                                    val repaired =
+                                        File.createTempFile(
+                                            "repair-",
+                                            ".part",
+                                            downloaded.parentFile,
+                                        )
+                                    try {
+                                        storageOperation {
+                                            temporary.copyTo(repaired, overwrite = true)
+                                        }
+                                        coroutineContext.ensureActive()
+                                        if (!repaired.renameTo(downloaded))
+                                            throw StorageFailure(
+                                                "Could not repair the downloaded page."
+                                            )
+                                        repairMarker(app, chapter.id, page).delete()
+                                        reconcileDownload(app, chapter.id)
+                                    } finally {
+                                        repaired.delete()
+                                    }
                                 }
                             }
-                        }
-                    if (!temporary.renameTo(target)) throw IOException("Could not cache page")
-                    // Keep the current file; trim oldest pages to a bounded 128 MB cache.
-                    var total = cacheDir.listFiles()?.sumOf { it.length() } ?: 0L
-                    cacheDir
-                        .listFiles()
-                        ?.filter { it != target && it.extension == "img" }
-                        ?.sortedBy { it.lastModified() }
-                        ?.forEach {
-                            if (total > 128L * 1024 * 1024) {
-                                total -= it.length()
-                                it.delete()
+                        if (!temporary.renameTo(target))
+                            throw StorageFailure("Could not cache page")
+                        // Keep the current file; trim oldest pages to a bounded 128 MB cache.
+                        var total = cacheDir.listFiles()?.sumOf { it.length() } ?: 0L
+                        cacheDir
+                            .listFiles()
+                            ?.filter { it != target && it.extension == "img" }
+                            ?.sortedBy { it.lastModified() }
+                            ?.forEach {
+                                if (total > 128L * 1024 * 1024) {
+                                    total -= it.length()
+                                    it.delete()
+                                }
                             }
-                        }
-                    target
-                } finally {
-                    temporary.delete()
+                        target
+                    } finally {
+                        temporary.delete()
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    throw pageRetries.failed(retryKey, e)
                 }
             }
         }
@@ -1040,6 +1091,8 @@ class ReaderViewModel(
         readerFile.value = null
         readerError.value = null
         readerRetryAllowed.value = true
+        readerRetryAt.value = 0L
+        readerSourceAction.value = false
         readerFile.value = pageFileFor(chapter, page)
     }
 
@@ -1066,7 +1119,9 @@ class ReaderViewModel(
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    readerRetryAllowed.value = !requiresSourceAction(e)
+                    readerRetryAllowed.value = automaticRetryAllowed(e)
+                    readerRetryAt.value = retryAtMillis(e)
+                    readerSourceAction.value = requiresSourceAction(e)
                     readerError.value = connectionMessage(e)
                 }
             }

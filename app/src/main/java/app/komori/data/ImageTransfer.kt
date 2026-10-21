@@ -26,8 +26,8 @@ internal fun copyImageBytes(
         val count = input.read(buffer)
         if (count < 0) break
         total += count
-        if (total > limit) throw IOException("This image exceeds the 32 MB page limit.")
-        output.write(buffer, 0, count)
+        if (total > limit) throw ContentFailure("This image exceeds the 32 MB page limit.")
+        storageOperation { output.write(buffer, 0, count) }
         progress(total)
     }
 }
@@ -47,6 +47,12 @@ suspend fun transferImage(
     progress: (Long, Long) -> Unit = { _, _ -> },
 ) =
     suspendCancellableCoroutine<Unit> { continuation ->
+        try {
+            SourceCooldowns.check(request)
+        } catch (e: SourceHttpException) {
+            continuation.resumeWithException(e)
+            return@suspendCancellableCoroutine
+        }
         val call = client.newCall(request)
         continuation.invokeOnCancellation { call.cancel() }
         call.enqueue(
@@ -59,34 +65,32 @@ suspend fun transferImage(
                     try {
                         response.use {
                             if (it.header("cf-mitigated") == "challenge")
-                                throw IOException(
-                                    "This source requires browser verification. Try another source until access is restored."
-                                )
-                            if (!it.isSuccessful)
-                                throw IOException("Image request failed (HTTP ${it.code}).")
+                                throw SourceVerificationRequired("source")
+                            if (!it.isSuccessful) throw httpFailure(it)
                             val body = it.body ?: throw IOException("Empty image response")
                             if (body.contentLength() > MAX_IMAGE_BYTES)
-                                throw IOException("This image exceeds the 32 MB page limit.")
-                            target.outputStream().use { out ->
-                                body.byteStream().use { input ->
-                                    copyImageBytes(
-                                        input,
-                                        out,
-                                        progress = { bytes ->
-                                            progress(bytes, body.contentLength())
-                                        },
-                                    ) {
-                                        if (!continuation.isActive)
-                                            throw IOException("Image request cancelled")
-                                        if (target.parentFile!!.usableSpace < 16L * 1024 * 1024)
-                                            throw IOException(
-                                                "Free storage space to continue loading images."
-                                            )
+                                throw ContentFailure("This image exceeds the 32 MB page limit.")
+                            storageOperation { target.outputStream() }
+                                .use { out ->
+                                    body.byteStream().use { input ->
+                                        copyImageBytes(
+                                            input,
+                                            out,
+                                            progress = { bytes ->
+                                                progress(bytes, body.contentLength())
+                                            },
+                                        ) {
+                                            if (!continuation.isActive)
+                                                throw IOException("Image request cancelled")
+                                            if (target.parentFile!!.usableSpace < 16L * 1024 * 1024)
+                                                throw StorageFailure(
+                                                    "Free storage space to continue loading images."
+                                                )
+                                        }
                                     }
                                 }
-                            }
                             if (!validImage(target))
-                                throw IOException("The source did not return a valid image.")
+                                throw ContentFailure("The source did not return a valid image.")
                         }
                         if (continuation.isActive) continuation.resume(Unit)
                     } catch (e: Exception) {

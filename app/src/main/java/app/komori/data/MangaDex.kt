@@ -58,16 +58,10 @@ class MangaDex(val client: OkHttpClient, private val baseUrl: String = "https://
                             "Komori/${app.komori.BuildConfig.VERSION_NAME} (Android reader)",
                         )
                         .build()
+                SourceCooldowns.check(request, "mangadex")
                 suspend fun fetch(connection: OkHttpClient): JSONObject =
                     connection.newCall(request).readResponse { response ->
-                        if (response.code == 429)
-                            throw IOException(
-                                "MangaDex is rate limiting requests. Please wait before retrying."
-                            )
-                        if (!response.isSuccessful)
-                            throw IOException(
-                                "MangaDex returned ${response.code}. Try again later."
-                            )
+                        if (!response.isSuccessful) throw httpFailure(response, "mangadex")
                         JSONObject(response.body?.string() ?: throw IOException("Empty response"))
                     }
                 val usingCompatibility = System.nanoTime() < compatibilityUntil

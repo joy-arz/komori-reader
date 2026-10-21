@@ -23,8 +23,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.komori.data.ContentFailure
+import app.komori.data.automaticRetryAllowed
 import app.komori.data.connectionMessage
 import app.komori.data.requiresSourceAction
+import app.komori.data.retryAtMillis
 import app.komori.data.sourceKey
 import app.komori.domain.Release
 import java.io.File
@@ -98,8 +101,9 @@ fun WebtoonReader(
     val nextCountdown =
         key(tail.id) {
             imageRetryCountdown(
-                nextError != null && !requiresSourceAction(nextError),
+                nextError != null && automaticRetryAllowed(nextError),
                 settings.retrySeconds,
+                retryAtMillis(nextError),
             ) {
                 nextAttempt++
             }
@@ -201,8 +205,9 @@ fun WebtoonReader(
                             var attempt by remember { mutableIntStateOf(0) }
                             val countdown =
                                 imageRetryCountdown(
-                                    failure != null && !requiresSourceAction(failure),
+                                    failure != null && automaticRetryAllowed(failure),
                                     settings.retrySeconds,
+                                    retryAtMillis(failure),
                                 ) {
                                     attempt++
                                 }
@@ -218,9 +223,10 @@ fun WebtoonReader(
                                                     inJustDecodeBounds = true
                                                 }
                                             BitmapFactory.decodeFile(file.path, bounds)
-                                            check(bounds.outWidth > 0 && bounds.outHeight > 0) {
-                                                "Could not decode page ${page + 1}"
-                                            }
+                                            if (bounds.outWidth <= 0 || bounds.outHeight <= 0)
+                                                throw ContentFailure(
+                                                    "Could not decode page ${page + 1}. Retry manually or use another release."
+                                                )
                                             ScrollImage(file, bounds.outWidth, bounds.outHeight)
                                         }
                                 } catch (e: CancellationException) {
@@ -246,7 +252,14 @@ fun WebtoonReader(
                                             "Retrying this page in ${countdown}s",
                                             color = Color.LightGray,
                                         )
-                                    Button(onClick = { attempt++ }) { Text("Retry page now") }
+                                    Button(
+                                        onClick = {
+                                            vm.resetPageRetries(release, page)
+                                            attempt++
+                                        }
+                                    ) {
+                                        Text("Retry page now")
+                                    }
                                 }
                             }
                         }
@@ -264,8 +277,9 @@ fun WebtoonReader(
                                 var retry by remember { mutableIntStateOf(0) }
                                 val countdown =
                                     imageRetryCountdown(
-                                        decodeError != null && !requiresSourceAction(decodeError),
+                                        decodeError != null && automaticRetryAllowed(decodeError),
                                         settings.retrySeconds,
+                                        retryAtMillis(decodeError),
                                     ) {
                                         retry++
                                     }
@@ -314,7 +328,10 @@ fun WebtoonReader(
                                             } catch (e: CancellationException) {
                                                 throw e
                                             } catch (e: Exception) {
-                                                decodeError = e
+                                                decodeError =
+                                                    ContentFailure(
+                                                        "Could not decode this page. Retry manually or use another release."
+                                                    )
                                             }
                                         }
                                         bitmap?.let {
@@ -343,7 +360,12 @@ fun WebtoonReader(
                                             if (requiresSourceAction(decodeError))
                                                 VerifySourceButton(vm, sourceKey(release.mangaId))
                                             else
-                                                Button(onClick = { retry++ }) {
+                                                Button(
+                                                    onClick = {
+                                                        vm.resetPageRetries(release, page)
+                                                        retry++
+                                                    }
+                                                ) {
                                                     Text(
                                                         if (countdown > 0)
                                                             "Retry image · ${countdown}s"
@@ -372,7 +394,14 @@ fun WebtoonReader(
                         if (nextError != null) {
                             if (nextCountdown > 0)
                                 Text("Retrying in ${nextCountdown}s", color = Color.LightGray)
-                            Button(onClick = { nextAttempt++ }) { Text("Retry next chapter") }
+                            Button(
+                                onClick = {
+                                    vm.resetChapterRetries(next)
+                                    nextAttempt++
+                                }
+                            ) {
+                                Text("Retry next chapter")
+                            }
                         }
                     } else {
                         Text(

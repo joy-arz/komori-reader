@@ -197,7 +197,7 @@ class WebSource(
                     .build()
             connectionRecovery.read(request) {
                 if (!it.isSuccessful)
-                    throw SourceHttpException(it.code, key)
+                    throw httpFailure(it, key)
                 val body = it.body ?: throw IOException("Empty source response")
                 val stream = body.source()
                 if (stream.request(4L * 1024 * 1024 + 1))

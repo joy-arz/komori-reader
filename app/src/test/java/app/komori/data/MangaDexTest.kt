@@ -41,12 +41,19 @@ class MangaDexTest {
     @Test
     fun `rate limits are not immediately retried`() = runBlocking {
         MockWebServer().use { server ->
-            server.enqueue(MockResponse().setResponseCode(429))
+            server.enqueue(MockResponse().setResponseCode(429).setHeader("Retry-After", "120"))
             val source = MangaDex(MangaDex.client(), server.url("/").toString().trimEnd('/'))
             try {
                 source.chapters("test", "en")
                 fail("Expected failure")
             } catch (_: IOException) {}
+            try {
+                source.chapters("another", "en")
+                fail("Expected origin cooldown")
+            } catch (e: SourceHttpException) {
+                assertTrue(e.deferred)
+                assertTrue(e.retryAtMillis!! > System.currentTimeMillis())
+            }
             assertEquals(1, server.requestCount)
         }
     }

@@ -1,6 +1,15 @@
 # Komori development backlog
 
-Updated October 20, 2026. Based on CURRENT_COMPARISON_REVIEW.md; Komikku is the main behavior reference and Mihon the secondary reference. Checkboxes mean delivered and validated, not merely started.
+Updated October 21, 2026. Based on CURRENT_COMPARISON_REVIEW.md; Komikku is the main behavior reference and Mihon the secondary reference. Checkboxes mean delivered and validated, not merely started.
+
+## Delivered in 0.7.0–0.7.2
+- [x] Remove Comix from the enabled sources.
+- [x] Parse source-provided authors/tags and add parody, language and category browsing for supported gallery sources.
+- [x] Keep Authors separate, follow creators, show all works immediately and compact the toolbar without saved-title highlighting.
+- [x] Default Authors to Latest; add Popularity/views, Alphabetical and Author sorting. Latest/popularity blend each source's ranking; alphabetical/author apply to loaded works.
+- [x] Compact Library, Discover and Downloads; remove idle Select bars while retaining long-press selection.
+- [x] Use minimal chapter capsules between chapters in continuous scrolling.
+- [x] Publish signed 0.7.2 and verify the upgrade retains Library state.
 
 ## Current delivery: catalogs and batch actions
 - [x] Load paginated author catalogs, including unsaved works; rotate combined feeds and deduplicate titles.
@@ -42,7 +51,7 @@ Current patch: durable per-page repair markers, Needs repair counts, partial off
 - [x] Persist Needs repair/page indices, reconcile completed download counts and repair failed pages while retaining intact files.
 - [x] Coordinate worker writes, reader repair, pause and deletion per chapter; reject stale reader repair results and test lock/cancellation behavior.
 - [ ] Stress-test repair across process death and real WorkManager pause/delete during slow network transfers.
-- [ ] Add typed offline/rate-limit/missing-page/storage handling, Retry-After support and stable page retry budgets.
+- [x] Add typed offline/rate-limit/missing-page/storage handling, Retry-After support and stable page retry budgets (0.7.3; JVM and API 30 checks).
 - [ ] Add document-picker metadata backup/export, strict validation, restore preview and transactional restore; exclude cookies/images by default.
 - [ ] Add optional scheduled backups with retention and restore round-trip tests.
 - [ ] Add downloaded-file integrity scan, size totals, cache controls and delete-read preview.
@@ -59,7 +68,8 @@ Current patch: durable per-page repair markers, Needs repair counts, partial off
 
 ## Library and updates
 - [ ] Add categories, unread badges and status filters.
-- [ ] Add multi-select, mark read/unread and bulk library actions.
+- [x] Add multi-select and bulk Library actions, including mark read.
+- [ ] Add title-level bulk mark unread.
 - [ ] Add scheduled chapter checks, grouped Updates feed and optional notifications.
 - [ ] Add optional followed-author new-work notifications without default aggressive polling.
 - [ ] Add reviewed source migration with progress transfer, aliases and edition selection; never silently merge by title.
@@ -75,7 +85,8 @@ Current patch: durable per-page repair markers, Needs repair counts, partial off
 - [ ] Consider optional AniList/MAL tracking after core reliability; retain account-free use.
 
 ## Appearance, performance and release quality
-- [ ] Add system theme and compact/comfortable layouts; group Settings by purpose.
+- [x] Group Settings by purpose and compact browsing toolbars.
+- [ ] Add system theme and a compact/comfortable layout preference.
 - [ ] Add cover loading/error placeholders and consistent source/unread badges.
 - [ ] Audit TalkBack, large fonts, landscape, contrast, touch targets and RTL layouts.
 - [ ] Replace repeated library scans with maps and scoped database queries; measure before adding paging.

@@ -21,6 +21,18 @@ class ImageTransferTest {
     }
 
     @Test
+    fun writeFailuresAreStorageFailuresRatherThanNetworkRetries() {
+        val output = object : java.io.OutputStream() {
+            override fun write(value: Int) { throw IOException("No space left on device") }
+        }
+        val failure = assertThrows(StorageFailure::class.java) {
+            copyImageBytes(ByteArrayInputStream(byteArrayOf(1)), output)
+        }
+        assertFalse(automaticRetryAllowed(failure))
+        assertEquals("No space left on device", failure.cause!!.message)
+    }
+
+    @Test
     fun acceptsExactLimit() {
         val output = ByteArrayOutputStream()
         copyImageBytes(ByteArrayInputStream(byteArrayOf(1, 2, 3)), output, 3)
