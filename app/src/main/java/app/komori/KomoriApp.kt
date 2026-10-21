@@ -6,6 +6,7 @@ import app.komori.data.*
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.memory.MemoryCache
+import app.komori.ui.CoverFallbackInterceptor
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 
@@ -36,6 +37,7 @@ class KomoriApp : Application(), ImageLoaderFactory {
         ImageLoader.Builder(this)
             .memoryCache { MemoryCache.Builder(this).maxSizePercent(0.12).build() }
             .okHttpClient(source.client)
+            .components { add(CoverFallbackInterceptor(source.coverRecovery)) }
             .crossfade(false)
             .build()
 }

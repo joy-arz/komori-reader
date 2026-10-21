@@ -21,6 +21,7 @@ All seven releases are published. The latest signed release is 0.8.0 (version co
 - [x] Implement optional daily/weekly metadata backups to a selected document-provider folder, read-back verification, configurable 3/7/14 retention and an immediate backup action.
 - [x] Implement on-demand image/checksum integrity scans, downloaded-file size totals and a reviewed delete-read action that rechecks progress/queue state before deletion. Add temporary reader-cache clearing without deleting downloaded files.
 - [x] Add compact top refresh controls to Discover, Authors, Library, title details and reading; preserve query/filter context and offline files.
+- [x] Add a bounded HentaiZap gallery-cover fallback when a Discover thumbnail fails. Preserve verification/rate-limit failures; no gallery request is made for a successful thumbnail. Device acceptance is included in the release gate below.
 - [ ] Finish new-pass unit, lint, provider, storage and refresh interaction checks; push and inspect the resulting build. These implementation checks do not claim publication.
 
 ## Highest-priority source defect: incomplete author catalogs

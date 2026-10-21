@@ -15,6 +15,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
@@ -241,13 +242,7 @@ fun KomoriScreen(vm: ReaderViewModel) {
 private fun coverRequest(manga: Manga): coil.request.ImageRequest {
     val context = LocalContext.current
     return remember(context, manga.id, manga.cover) {
-        coil.request.ImageRequest.Builder(context)
-            .data(manga.cover.ifBlank { if (sourceKey(manga.id) == "local") {
-                val token = sourcePath(manga.id).trim('/').substringAfterLast('/')
-                android.net.Uri.fromFile(pageFile(context, sourceId("local", "/chapter/$token/"), 0)).toString()
-            } else "" })
-            .apply { sourceOrigins[sourceKey(manga.id)]?.let { addHeader("Referer", "$it/") } }
-            .build()
+        coverImageRequest(context, manga)
     }
 }
 
@@ -2273,9 +2268,13 @@ private fun SourceFilters(
     var category by remember { mutableStateOf(filter.category) }
     var chosen by remember { mutableStateOf(filter.tags) }
     var tagQuery by remember { mutableStateOf("") }
+    val initialFocus = remember { FocusRequester() }
     AlertDialog(
         onDismissRequest = close,
-        title = { Text("Browse filters") },
+        title = {
+            LaunchedEffect(Unit) { initialFocus.requestFocus() }
+            Text("Browse filters", Modifier.focusRequester(initialFocus).focusable())
+        },
         text = {
             Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {

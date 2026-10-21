@@ -108,6 +108,7 @@ data class BrowsePage(val titles: List<Manga>, val hasMore: Boolean, val paginat
 
 /** Existing MangaDex UUIDs stay unchanged; other source IDs encode paths safely for local files. */
 class Sources(val client: OkHttpClient, apiClient: OkHttpClient = client) {
+    val coverRecovery = CoverRecovery(::details)
     private val dex = MangaDex(apiClient)
     private val demonic = WebSource("demonic", "https://demonicscans.org", client)
     private val weeb = WebSource("weeb", "https://weebcentral.com", client)
