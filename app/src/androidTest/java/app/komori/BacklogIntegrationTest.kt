@@ -96,17 +96,20 @@ class BacklogIntegrationTest {
         val red = png(android.graphics.Color.RED)
         try {
             ZipOutputStream(archive.outputStream()).use { zip ->
-                listOf("nested/../10.png" to blue, "nested/../2.png" to red).forEach { (name, bytes) -> zip.putNextEntry(ZipEntry(name)); zip.write(bytes); zip.closeEntry() }
+                listOf("pages/10.png" to blue, "pages/2.png" to red).forEach { (name, bytes) -> zip.putNextEntry(ZipEntry(name)); zip.write(bytes); zip.closeEntry() }
             }
             imported = LocalFiles.importArchive(app, Uri.fromFile(archive)) { }
             val chapter = app.dao.chapters(imported.id).single()
             assertEquals(2, app.dao.download(chapter.id)!!.total)
-            // Entry paths are names for sorting only; all destination paths are generated.
+            // Nested entry names are naturally sorted; destination paths are generated.
             assertArrayEquals(red, pageFile(app, chapter.id, 0).readBytes())
             assertArrayEquals(blue, pageFile(app, chapter.id, 1).readBytes())
             val before = app.dao.allMangaIds().toSet()
             ZipOutputStream(bad.outputStream()).use { zip -> zip.putNextEntry(ZipEntry("page.png")); zip.write("invalid".toByteArray()); zip.closeEntry() }
             try { LocalFiles.importArchive(app, Uri.fromFile(bad)) { }; fail("Invalid image must fail") } catch (_: ContentFailure) { }
+            assertEquals(before, app.dao.allMangaIds().toSet())
+            ZipOutputStream(bad.outputStream()).use { zip -> zip.putNextEntry(ZipEntry("nested/../escape.png")); zip.write(red); zip.closeEntry() }
+            try { LocalFiles.importArchive(app, Uri.fromFile(bad)) { }; fail("Unsafe paths must fail on every Android version") } catch (_: ContentFailure) { }
             assertEquals(before, app.dao.allMangaIds().toSet())
         } finally {
             imported?.let { title ->
@@ -148,12 +151,26 @@ class BacklogIntegrationTest {
             }
             assertTrue(device.wait(Until.hasObject(By.text("Support")), 8000))
             device.findObject(By.text("Support")).click()
+            repeat(4) {
+                if (!device.hasObject(By.text("Support joyarz on Ko-fi"))) {
+                    device.swipe(device.displayWidth / 2, device.displayHeight * 3 / 4,
+                        device.displayWidth / 2, device.displayHeight / 3, 24)
+                    device.waitForIdle()
+                }
+            }
             assertTrue(device.wait(Until.hasObject(By.text("Support joyarz on Ko-fi")), 5000))
             device.executeShellCommand("screencap -p /data/local/tmp/komori-support.png")
             instrumentation.runOnMainSync {
                 activity.setContent { MaterialTheme { CompositionLocalProvider(LocalUriHandler provides object : UriHandler {
                     override fun openUri(uri: String) { opened.set(uri) }
                 }) { SupportPage() } } }
+            }
+            repeat(4) {
+                if (!device.hasObject(By.text("Support joyarz on Ko-fi"))) {
+                    device.swipe(device.displayWidth / 2, device.displayHeight * 3 / 4,
+                        device.displayWidth / 2, device.displayHeight / 3, 24)
+                    device.waitForIdle()
+                }
             }
             assertTrue(device.wait(Until.hasObject(By.text("Support joyarz on Ko-fi")), 5000))
             device.findObject(By.text("Support joyarz on Ko-fi")).click()

@@ -68,6 +68,8 @@ object LocalFiles {
                     entries++
                     if (entries > 20000 || entry.name.length > 512) throw ContentFailure("CBZ contains too many entries or an oversized file name.")
                     val name = entry.name.replace('\\', '/')
+                    if (name.startsWith('/') || name.split('/').any { it == ".." } || Regex("^[A-Za-z]:").containsMatchIn(name))
+                        throw ContentFailure("CBZ contains an unsafe entry path.")
                     if (!names.add(name)) throw ContentFailure("CBZ contains duplicate entry names.")
                     if (entry.isDirectory) { zip.closeEntry(); continue }
                     if (name.substringAfterLast('.').lowercase(Locale.ROOT) !in localExtensions) {
@@ -164,6 +166,8 @@ object LocalFiles {
                 committed = true
             }
             return manga
+        } catch (_: java.util.zip.ZipException) {
+            throw ContentFailure("CBZ contains invalid entries or corrupt ZIP data.")
         } finally {
             stage.deleteRecursively()
             if (!committed) destination.deleteRecursively()

@@ -24,7 +24,7 @@ class ReaderGestureTest {
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             ) as Activity
         instrumentation.runOnMainSync {
-            val image = ReaderImageView(activity)
+            val image = ReaderImageView(activity).apply { setMaxScale(5f) }
             val bitmap = Bitmap.createBitmap(800, 1600, Bitmap.Config.RGB_565)
             val output = Bitmap.createBitmap(1080, 1800, Bitmap.Config.RGB_565)
             val canvas = Canvas(output)
