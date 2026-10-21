@@ -4,6 +4,7 @@ on:
     tags: ['v*']
 permissions:
   contents: write
+  actions: read
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
@@ -55,6 +56,10 @@ jobs:
           python3 scripts/update_manifest.py
           cd dist
           sha256sum *.apk > SHA256SUMS.txt
+      - name: Require build and device acceptance for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/wait_release_checks.py --commit "$GITHUB_SHA" --repo "$GITHUB_REPOSITORY"
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
