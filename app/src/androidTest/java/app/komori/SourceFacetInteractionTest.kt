@@ -4,6 +4,7 @@ import android.content.Intent
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
+import androidx.test.uiautomator.BySelector
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.Until
 import app.komori.data.*
@@ -50,6 +51,11 @@ class SourceFacetInteractionTest {
         val activity = instrumentation.startActivitySync(
             Intent(instrumentation.targetContext, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
         ) as MainActivity
+        fun tap(selector: BySelector) {
+            val control = device.wait(Until.findObject(selector), 8000)
+            assertNotNull("Missing control: $selector", control)
+            control.click()
+        }
         lateinit var vm: ReaderViewModel
         instrumentation.runOnMainSync {
             vm = ViewModelProvider(activity)[ReaderViewModel::class.java]
@@ -67,11 +73,11 @@ class SourceFacetInteractionTest {
             assertEquals("nhentai", vm.activeSource.value)
             device.waitForIdle()
             assertTrue(device.wait(Until.hasObject(By.desc("Filters and sorting")), 8000))
-            device.findObject(By.desc("Filters and sorting")).click()
+            tap(By.desc("Filters and sorting"))
             assertTrue(device.wait(Until.hasObject(By.text("All languages")), 5000))
-            device.findObject(By.text("English")).click()
-            device.findObject(By.text("Manga")).click()
-            device.findObject(By.text("Apply")).click()
+            tap(By.text("English"))
+            tap(By.text("Manga"))
+            tap(By.text("Apply"))
             assertTrue(device.wait(Until.gone(By.text("Browse filters")), 5000))
             device.waitForIdle()
             instrumentation.waitForIdleSync()
@@ -84,9 +90,9 @@ class SourceFacetInteractionTest {
             }
             assertFalse("Source request did not settle", vm.loading.value)
             device.waitForIdle()
-            device.findObject(By.pkg(instrumentation.targetContext.packageName).desc("Filters and sorting")).click()
+            tap(By.pkg(instrumentation.targetContext.packageName).desc("Filters and sorting"))
             assertTrue(device.wait(Until.hasObject(By.text("Reset")), 5000))
-            device.findObject(By.text("Reset")).click()
+            tap(By.text("Reset"))
             assertTrue(device.wait(Until.gone(By.text("Browse filters")), 5000))
             device.waitForIdle()
             instrumentation.waitForIdleSync()
@@ -100,6 +106,11 @@ class SourceFacetInteractionTest {
                 assertEquals("english", vm.browseFilter.value.language)
                 assertEquals("manga", vm.browseFilter.value.category)
             }
+        } catch (error: Throwable) {
+            val folder = java.io.File(instrumentation.targetContext.getExternalFilesDir(null), "device-diagnostics").apply { mkdirs() }
+            device.takeScreenshot(java.io.File(folder, "facet-failure.png"))
+            device.dumpWindowHierarchy(java.io.File(folder, "facet-failure.xml"))
+            throw error
         } finally {
             instrumentation.runOnMainSync { activity.finish() }
         }
