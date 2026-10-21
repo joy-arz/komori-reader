@@ -9,7 +9,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 
 <br>
 
-[![Release](https://img.shields.io/badge/release-0.7.0-A3E635?style=for-the-badge&labelColor=0A0A0A)](https://github.com/joy-arz/komori-reader/releases/latest)
+[![Release](https://img.shields.io/badge/release-0.7.1-A3E635?style=for-the-badge&labelColor=0A0A0A)](https://github.com/joy-arz/komori-reader/releases/latest)
 [![Android](https://img.shields.io/badge/Android-8.0%2B-A3E635?style=for-the-badge&logo=android&logoColor=A3E635&labelColor=0A0A0A)](#install)
 [![Kotlin](https://img.shields.io/badge/Kotlin-Compose-A3E635?style=for-the-badge&logo=kotlin&logoColor=A3E635&labelColor=0A0A0A)](#build)
 [![No ads](https://img.shields.io/badge/no%20ads-no%20analytics-A3E635?style=for-the-badge&labelColor=0A0A0A)](#features)
@@ -28,7 +28,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 
 <br>
 
-> **Current release: 0.7.0.** Signed APK for Android 8.0 and newer. This is a full GitHub release. Source-specific limitations and planned features are listed below.
+> **Current release: 0.7.1.** Signed APK for Android 8.0 and newer. This is a full GitHub release. Source-specific limitations and planned features are listed below.
 
 ---
 
@@ -53,7 +53,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 - Dark appearance is the default. An explicitly saved light preference is retained.
 - Settings are grouped into **Reading**, **Sources** and **App**.
 - Background update checks and downloads use a nonblocking banner. Installation dialogs open from **Review/Install**.
-- Compact Discover and Library search that opens from an icon.
+- Compact Library and Discover toolbars with icon-triggered search. Library collection tabs keep counts in a shorter row, leaving more room for covers.
 - Swipe left or right across the catalog to change sources in your Settings order.
 - Discover filters live in the toolbar. **Verify source** and **Reset search** sit under Source options.
 
@@ -71,7 +71,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 
 - Personal library, likes, reading statuses and history stored locally with Room.
 - The **Downloaded** collection includes titles with saved pages and opens their offline chapter list.
-- Multi-select across title grids, chapters, downloads and followed creators.
+- Long-press a title, chapter, download or followed creator to select it. Batch controls appear only during selection; browsing has no idle Select bar.
 - Bulk actions: save, like, download, read-state changes, pause, resume, and confirmed deletion or unfollow. Select all applies to loaded or filtered items.
 - Possible-duplicate warnings for normalized matching titles already saved from another source. Titles are never merged automatically.
 - Dedicated **Authors** tab with compact creator chips, searchable follow management and complete paginated source catalogs.
@@ -90,7 +90,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 
 - Persistent chapter downloads with Wi-Fi constraint, retries, pause and resume, original or data-saving images, and offline access.
 - Bulk options: all readable, all unread and next 1, 5, 10 or 25 unread. Active and completed downloads are skipped.
-- Per-chapter progress with pause and retry actions, plus queue-wide pause and resume.
+- A compact Downloads header shows queued and offline counts. Queue options contain pause and resume/retry commands when available. Completed chapters omit redundant progress bars; active transfers retain detailed progress.
 - Configurable visible-image retries (off, 3, 5, 10 or 30 seconds, up to three attempts, 3 seconds by default).
 - Integrity checks when opening saved chapters, a persistent **Needs repair** status and targeted repair. Intact pages stay accessible with **Read saved pages**.
 
@@ -148,7 +148,7 @@ MangaDex and scanlation groups are credited in the application. This is an indep
 
 <div align="center">
 
-### [Download komori-0.7.0.apk](https://github.com/joy-arz/komori-reader/releases/download/v0.7.0/komori-0.7.0.apk)
+### [Download komori-0.7.1.apk](https://github.com/joy-arz/komori-reader/releases/download/v0.7.1/komori-0.7.1.apk)
 
 </div>
 
@@ -182,14 +182,14 @@ Local signing is automated through JVM `keytool` validation and Gradle. See [rel
 
 Every push to `main` and every pull request runs unit tests, lint and a debug APK build.
 
-A version tag such as `v0.7.0` automatically tests, builds, signs and publishes a release APK plus a SHA-256 checksum and updater metadata (`update.json`).
+A version tag such as `v0.7.1` automatically tests, builds, signs and publishes a release APK plus a SHA-256 checksum and updater metadata (`update.json`).
 
 - Plain version tags publish full releases and mark them as **Latest**.
 - Tags containing a suffix remain prereleases.
 
 ```sh
-git tag v0.7.0
-git push origin v0.7.0
+git tag v0.7.1
+git push origin v0.7.1
 ```
 
 Signing secrets are already configured in repository Actions secrets. No signing material is committed. See [RELEASING.md](docs/RELEASING.md) for key backup and release details.

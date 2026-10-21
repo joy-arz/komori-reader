@@ -16,9 +16,11 @@ import app.komori.ui.UpdateViewModel
 import java.io.File
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -114,10 +116,11 @@ class AuthorsInteractionTest {
             assertTrue(device.wait(Until.hasObject(By.text("Unfollow")), 5000))
             device.findObjects(By.text("Unfollow")).first().click()
             device.waitForIdle()
-            assertEquals(
-                1,
-                app.dao.observeCreators().first().count { it.id.contains("authors-test-") },
-            )
+            withTimeout(5000) {
+                while (
+                    app.dao.observeCreators().first().count { it.id.contains("authors-test-") } != 1
+                ) delay(30)
+            }
         } finally {
             instrumentation.runOnMainSync { activity.finish() }
             creators.forEach { app.dao.removeCreator(it.id) }

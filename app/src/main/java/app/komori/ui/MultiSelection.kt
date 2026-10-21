@@ -56,56 +56,49 @@ internal fun SelectionBar(
     available: List<String>,
     actions: List<BatchAction>,
 ) {
+    if (!selection.active) return
     var menu by remember { mutableStateOf(false) }
     var pending by remember { mutableStateOf<Pair<BatchAction, List<String>>?>(null) }
     Row(
         Modifier.fillMaxWidth()
-            .background(MaterialTheme.colorScheme.background)
+            .background(MaterialTheme.colorScheme.surfaceContainer)
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (!selection.active) {
-            Spacer(Modifier.weight(1f))
-            TextButton(onClick = { selection.active = true }, enabled = available.isNotEmpty()) {
-                Text("Select")
+        Text(
+            "${selection.ids.size} selected",
+            Modifier.weight(1f),
+            style = MaterialTheme.typography.labelLarge,
+        )
+        TextButton(
+            onClick = {
+                selection.ids = if (selection.ids.size == available.size) emptyList() else available
             }
-        } else {
-            Text(
-                "${selection.ids.size} selected",
-                Modifier.weight(1f),
-                style = MaterialTheme.typography.labelLarge,
-            )
-            TextButton(
-                onClick = {
-                    selection.ids =
-                        if (selection.ids.size == available.size) emptyList() else available
-                }
-            ) {
-                Text(if (selection.ids.size == available.size) "Deselect all" else "Select all")
-            }
-            Box {
-                TextButton(enabled = selection.ids.isNotEmpty(), onClick = { menu = true }) {
-                    Text("Actions")
-                }
-                DropdownMenu(menu, { menu = false }) {
-                    actions.forEach { action ->
-                        DropdownMenuItem(
-                            text = { Text(action.label) },
-                            onClick = {
-                                menu = false
-                                val ids = selection.ids.toList()
-                                if (action.destructive) pending = action to ids
-                                else {
-                                    action.run(ids)
-                                    selection.clear()
-                                }
-                            },
-                        )
-                    }
-                }
-            }
-            TextButton(onClick = { selection.clear() }) { Text("Done") }
+        ) {
+            Text(if (selection.ids.size == available.size) "Deselect all" else "Select all")
         }
+        Box {
+            TextButton(enabled = selection.ids.isNotEmpty(), onClick = { menu = true }) {
+                Text("Actions")
+            }
+            DropdownMenu(menu, { menu = false }) {
+                actions.forEach { action ->
+                    DropdownMenuItem(
+                        text = { Text(action.label) },
+                        onClick = {
+                            menu = false
+                            val ids = selection.ids.toList()
+                            if (action.destructive) pending = action to ids
+                            else {
+                                action.run(ids)
+                                selection.clear()
+                            }
+                        },
+                    )
+                }
+            }
+        }
+        TextButton(onClick = { selection.clear() }) { Text("Done") }
     }
     pending?.let { (action, ids) ->
         AlertDialog(

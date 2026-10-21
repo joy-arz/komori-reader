@@ -82,6 +82,13 @@ class BatchSelectionTest {
             device.findObject(By.text(text)).click()
             device.waitForIdle()
         }
+        fun tapDescription(description: String) {
+            assertTrue(
+                "Missing $description",
+                device.wait(Until.hasObject(By.desc(description)), 8000),
+            )
+            device.findObject(By.desc(description)).click()
+        }
         try {
             tapText("Downloaded")
             assertTrue(device.wait(Until.hasObject(By.desc("Batch book 1")), 5000))
@@ -89,7 +96,8 @@ class BatchSelectionTest {
             device.takeScreenshot(
                 java.io.File(app.getExternalFilesDir(null), "downloaded-library.png")
             )
-            tapText("Select")
+            assertFalse(device.hasObject(By.text("Select")))
+            device.findObject(By.desc("Batch book 1")).longClick()
             tapText("Select all")
             tapText("Actions")
             tapText("Like")
@@ -99,11 +107,12 @@ class BatchSelectionTest {
             assertTrue(titles.all { app.dao.shelf(it.id)?.saved == false })
             device.findObject(By.desc("Batch book 1")).click()
             assertTrue(device.wait(Until.hasObject(By.text("Saved chapter list · Offline")), 5000))
-            device.findObject(By.desc("Back")).click()
-            device.findObject(By.desc("Authors")).click()
+            tapDescription("Back")
+            tapDescription("Authors")
             tapText("Manage")
-            tapText("Select")
-            for (creator in followed) {
+            assertFalse(device.hasObject(By.text("Select")))
+            device.findObject(By.text(followed.first().name)).longClick()
+            for (creator in followed.drop(1)) {
                 assertTrue(device.wait(Until.hasObject(By.desc("Select ${creator.name}")), 5000))
                 device.findObject(By.desc("Select ${creator.name}")).click()
             }
@@ -115,9 +124,12 @@ class BatchSelectionTest {
                     app.dao.observeCreators().first().any { it.id in followed.map { c -> c.id } }
                 ) delay(30)
             }
-            device.findObject(By.desc("Downloads")).click()
-            tapText("Select")
-            tapText("Batch book 1")
+            tapDescription("Downloads")
+            assertFalse(device.hasObject(By.text("Select")))
+            device.takeScreenshot(
+                java.io.File(app.getExternalFilesDir(null), "downloads-compact.png")
+            )
+            device.findObject(By.text("Batch book 1")).longClick()
             tapText("Batch book 2")
             tapText("Actions")
             tapText("Delete downloads")

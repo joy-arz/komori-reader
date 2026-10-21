@@ -239,3 +239,14 @@ Installed the published APK over production `v0.7.0-alpha.1` without clearing da
 - Local `lintDebug assembleDebug` passed. Signed-release CI performs unit tests, release lint, assembly and signature verification.
 
 - API 30 launcher inspection caught an inset seam and then clipping of the illustration. Replaced the inset with a nine-patch and reduced its fixed artwork size; final resources pass lint/build. A subsequent emulator renderer failure prevented final on-device visual confirmation before publication.
+
+## Compact browsing and long-press selection (October 21, 2026)
+
+- Started from the full `v0.7.0` release, then incorporated GitHub's README and screenshot updates through `127646a`. Preserved the cropped bat launcher icon and the revised README presentation.
+- Removed the idle Select control from the shared selection bar. Title grids, chapters, downloads and creator management enter selection through long press. Select all, bulk actions, Back/Done exit and destructive-action confirmations remain available during selection.
+- Library now uses a single compact title/search toolbar and shorter collection tabs with counts. Removed its separate Collections label row and the tall global heading/subtitle.
+- Discover uses a shorter toolbar and less source-strip padding. Search, sorting/filter controls, source options and swipe switching remain available.
+- Downloads now has a compact title/queue-count header. Queue-wide commands move to Queue options and appear only when actionable. Completed chapters omit redundant progress bars; active downloads retain byte/page progress and per-item actions.
+- Removing the idle sticky-header content exposed a Compose LazyList crash when that header contained no placeables. Chapter and download sticky headers are now emitted only during selection. Also fixed pre-existing test timing assumptions: Authors waits for the database update after unfollow, and batch navigation waits for controls after Back.
+- JVM checks: **97 passed, four optional live-source tests skipped**. Debug/release lint passed with **zero errors and 24 advisory warnings**, and the debug APK assembled. The corrected full API 30 suite passed 19 of 20 cases; the remaining failure was the batch test querying Authors before Back navigation completed. After adding the control wait, BatchSelectionTest and BrowseInteractionTest both passed on a cold boot. A further focused BatchSelectionTest passed after the final full-width download-card adjustment. All 20 instrumentation cases therefore have passing results across the suite and focused reruns, rather than a claimed clean final 20-case run.
+- Visually reviewed native framebuffer captures of populated Library, Discover, download cards, batch selection and delete confirmation using synthetic fixtures. Download cards now fill the available width. The emulator's UiAutomation screenshot helper did not produce images, so review used `adb exec-out screencap -p` instead.

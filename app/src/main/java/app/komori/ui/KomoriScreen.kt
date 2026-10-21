@@ -133,7 +133,7 @@ fun KomoriScreen(vm: ReaderViewModel) {
                         ),
                     containerColor = Color.Transparent,
                     topBar = {
-                        if (selected != null || (tab != 1 && tab != 2))
+                        if (selected != null || tab == 4)
                             AppHeading(
                                 if (selected != null) "Title details"
                                 else
@@ -283,7 +283,15 @@ private fun Library(vm: ReaderViewModel, discover: () -> Unit) {
     }
     BackHandler(searchExpanded) { closeSearch() }
     LaunchedEffect(searchExpanded) { if (searchExpanded) focus.requestFocus() }
-    Column {
+    Column(Modifier.fillMaxSize()) {
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Your library", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+            if (!searchExpanded)
+                RoundControl(KomoriIcons.Search, "Search library", { searchExpanded = true })
+        }
         val recent = shelf.firstOrNull { it.lastRelease != null }
         val book = manga.find { it.id == recent?.mangaId }
         if (book != null && settings.showContinue && query.isEmpty() && filter == "Saved") {
@@ -335,14 +343,6 @@ private fun Library(vm: ReaderViewModel, discover: () -> Unit) {
                 shape = RoundedCornerShape(18.dp),
             )
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 18.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text("Collections", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-            if (!searchExpanded)
-                RoundControl(KomoriIcons.Search, "Search library", { searchExpanded = true })
-        }
-        Row(
             Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -368,11 +368,12 @@ private fun Library(vm: ReaderViewModel, discover: () -> Unit) {
                             RoundedCornerShape(14.dp),
                         )
                         .selectable(filter == label, role = Role.Tab, onClick = { filter = label })
-                        .padding(horizontal = 8.dp, vertical = 12.dp)
+                        .heightIn(min = 48.dp)
+                        .padding(horizontal = 6.dp, vertical = 6.dp)
                 ) {
                     Text(
                         count.toString(),
-                        style = MaterialTheme.typography.titleLarge,
+                        style = MaterialTheme.typography.labelLarge,
                         color =
                             if (filter == label) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.onSurface,
@@ -556,7 +557,6 @@ private fun Authors(vm: ReaderViewModel) {
                     { vm.open(it) },
                     { vm.open(it, true) },
                     gridState = grid,
-                    showSelectionShortcut = false,
                     footer = {
                         Column(
                             Modifier.fillMaxWidth(),
@@ -670,7 +670,7 @@ private fun Discover(vm: ReaderViewModel) {
     LaunchedEffect(Unit) { if (activeSource.isEmpty() && !loading) vm.search("", null) }
     Column(Modifier.fillMaxSize()) {
         Row(
-            Modifier.fillMaxWidth().heightIn(min = 76.dp).padding(horizontal = 18.dp),
+            Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 18.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (searchExpanded) {
@@ -698,10 +698,10 @@ private fun Discover(vm: ReaderViewModel) {
                     Icon(KomoriIcons.Search, "Search source")
                 }
             } else {
-                Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
+                Column(Modifier.weight(1f).padding(vertical = 4.dp)) {
                     Text(
                         "Discover",
-                        style = MaterialTheme.typography.headlineSmall,
+                        style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.SemiBold,
                     )
                     Text(
@@ -709,13 +709,21 @@ private fun Discover(vm: ReaderViewModel) {
                             filter.sort.ifEmpty {
                                 vm.app.source.sorts(activeSource).firstOrNull().orEmpty()
                             }
-                        } + (if (filter.tags.isNotEmpty()) " · ${filter.tags.size} tags" else "") +
+                        } +
+                            (if (filter.tags.isNotEmpty()) " · ${filter.tags.size} tags" else "") +
                             listOfNotNull(
-                                sourceBrowseLanguages(activeSource).firstOrNull { it.id == filter.language }?.name,
-                                sourceBrowseCategories(activeSource).firstOrNull { it.id == filter.category }?.name,
-                            ).joinToString(separator = " · ", prefix = " · ").takeIf {
-                                filter.language.isNotEmpty() || filter.category.isNotEmpty()
-                            }.orEmpty(),
+                                    sourceBrowseLanguages(activeSource)
+                                        .firstOrNull { it.id == filter.language }
+                                        ?.name,
+                                    sourceBrowseCategories(activeSource)
+                                        .firstOrNull { it.id == filter.category }
+                                        ?.name,
+                                )
+                                .joinToString(separator = " · ", prefix = " · ")
+                                .takeIf {
+                                    filter.language.isNotEmpty() || filter.category.isNotEmpty()
+                                }
+                                .orEmpty(),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
@@ -751,7 +759,7 @@ private fun Discover(vm: ReaderViewModel) {
         LazyRow(
             state = sourceTabs,
             modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 4.dp),
+            contentPadding = PaddingValues(horizontal = 18.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(sources, key = { it }) { key ->
@@ -877,7 +885,6 @@ private fun MangaGrid(
     subtitle: (Manga) -> String = { "" },
     footer: @Composable () -> Unit = {},
     gridState: LazyGridState = rememberLazyGridState(),
-    showSelectionShortcut: Boolean = true,
 ) {
     val available = manga.map { it.id }
     val selection = rememberMultiSelection(available)
@@ -902,7 +909,7 @@ private fun MangaGrid(
                 },
             )
     Column(Modifier.fillMaxSize()) {
-        if (showSelectionShortcut || selection.active) SelectionBar(selection, available, actions)
+        SelectionBar(selection, available, actions)
         LazyVerticalGrid(
             GridCells.Adaptive(140.dp),
             state = gridState,
@@ -1237,7 +1244,7 @@ private fun Details(
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
-        stickyHeader {
+        if (chapterSelection.active) stickyHeader {
             SelectionBar(
                 chapterSelection,
                 chapterIds,
@@ -1437,170 +1444,196 @@ private fun Downloads(vm: ReaderViewModel) {
     val downloadIds = downloads.map { it.releaseId }
     val selection = rememberMultiSelection(downloadIds)
     var deleting by remember { mutableStateOf<Download?>(null) }
-    if (downloads.isEmpty())
-        EmptyState(
-            KomoriIcons.Download,
-            "Take a few chapters with you",
-            "Download from a title's chapter list. Finished downloads remain available offline.",
-        )
-    else
-        LazyColumn(
-            contentPadding = PaddingValues(18.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            stickyHeader {
-                SelectionBar(
-                    selection,
-                    downloadIds,
-                    listOf(
-                        BatchAction("Pause selected") { vm.batchDownloads(it, "Pause") },
-                        BatchAction("Resume selected") { vm.batchDownloads(it, "Resume") },
-                        BatchAction("Delete downloads", true) {
-                            vm.batchDownloads(it, "Delete downloads")
-                        },
-                    ),
-                )
-            }
-            item {
-                val active = downloads.count { it.state in DownloadPolicy.activeStates }
-                val complete = downloads.count { it.state == "Complete" }
-                Text(
-                    "$active in queue · $complete ready offline",
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                Row {
-                    TextButton(enabled = active > 0, onClick = { vm.pauseAll() }) {
-                        Text("Pause queue")
-                    }
-                    TextButton(
-                        enabled =
-                            downloads.any {
-                                it.state in
-                                    listOf(
-                                        "Paused",
-                                        "Failed",
-                                        "Verification required",
-                                        "Needs repair",
-                                    )
-                            },
-                        onClick = { vm.resumeAll() },
-                    ) {
-                        Text("Resume / retry all")
-                    }
-                }
-            }
-            items(
-                downloads.sortedBy { if (it.state == "Complete") 1 else 0 },
-                key = { it.releaseId },
-            ) { download ->
-                OutlinedCard(
-                    modifier =
-                        Modifier.combinedClickable(
-                            onLongClick = { selection.toggle(download.releaseId) },
-                            onClick = { if (selection.active) selection.toggle(download.releaseId) },
-                        ),
-                    colors =
-                        CardDefaults.outlinedCardColors(
-                            containerColor = MaterialTheme.colorScheme.surface
-                        ),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                ) {
-                    Column(Modifier.padding(16.dp)) {
-                        if (selection.active)
-                            Checkbox(
-                                download.releaseId in selection.ids,
-                                { selection.toggle(download.releaseId) },
-                                Modifier.semantics {
-                                    contentDescription = "Select download ${download.label}"
-                                },
-                            )
-                        Text(
-                            manga.find { it.id == download.mangaId }?.title ?: download.label,
-                            style = MaterialTheme.typography.titleMedium,
-                        )
-                        Text(
-                            "${download.label} · ${download.state}",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                        val transfer = transfers[download.releaseId]
-                        val receiving = download.state == "Downloading" && transfer != null
-                        if (receiving && (transfer!!.resolving || transfer.totalBytes <= 0)) {
-                            LinearProgressIndicator(
-                                Modifier.fillMaxWidth().padding(vertical = 12.dp)
-                            )
-                        } else {
-                            LinearProgressIndicator(
-                                progress = {
-                                    val fraction =
-                                        if (receiving && transfer!!.totalBytes > 0)
-                                            (transfer.bytes.toFloat() / transfer.totalBytes)
-                                                .coerceIn(0f, 1f)
-                                        else 0f
-                                    if (download.total == 0) 0f
-                                    else
-                                        (((if (receiving) transfer!!.completedPages
-                                            else download.done) + fraction) / download.total)
-                                            .coerceIn(0f, 1f)
-                                },
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
-                            )
-                        }
-                        Text(
-                            when {
-                                receiving && transfer!!.resolving -> "Finding chapter images…"
-                                receiving ->
-                                    "Page ${transfer!!.page} · ${transfer.bytes / 1024} KB" +
-                                        if (transfer.totalBytes > 0)
-                                            " / ${transfer.totalBytes / 1024} KB"
-                                        else " received"
-                                download.state == "Queued" ->
-                                    if (settings.wifi)
-                                        "Waiting for queue, unmetered Wi-Fi and available storage"
-                                    else "Waiting for queue, connection and available storage"
-                                download.state == "Retrying" ->
-                                    "Retry scheduled · ${download.done} pages saved"
-                                else -> "${download.done} / ${download.total} pages"
-                            },
-                            style = MaterialTheme.typography.labelMedium,
-                        )
-                        if (download.error.isNotEmpty())
-                            Text(
-                                download.error,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error,
-                            )
-                        if (download.state == "Verification required")
-                            VerifySourceButton(vm, sourceKey(download.mangaId))
-                        Row {
-                            if (
-                                download.state in
-                                    listOf(
-                                        "Paused",
-                                        "Failed",
-                                        "Verification required",
-                                        "Needs repair",
-                                    )
-                            )
-                                TextButton(onClick = { vm.resume(download) }) {
-                                    Text(
-                                        if (download.state == "Needs repair") "Repair" else "Resume"
-                                    )
-                                }
-                            else if (download.state != "Complete")
-                                TextButton(onClick = { vm.pause(download) }) { Text("Pause") }
-                            if (download.done > 0)
-                                TextButton(onClick = { vm.readOffline(download) }) {
-                                    Text(
-                                        if (download.state == "Complete") "Read offline"
-                                        else "Read saved pages"
-                                    )
-                                }
-                            TextButton(onClick = { deleting = download }) { Text("Delete") }
-                        }
-                    }
-                }
-            }
+    val active = downloads.count { it.state in DownloadPolicy.activeStates }
+    val complete = downloads.count { it.state == "Complete" }
+    val canResume =
+        downloads.any {
+            it.state in listOf("Paused", "Failed", "Verification required", "Needs repair")
         }
+    var queueMenu by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxSize()) {
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("Downloads", style = MaterialTheme.typography.titleLarge)
+                if (downloads.isNotEmpty())
+                    Text(
+                        "$active in queue · $complete ready offline",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+            }
+            if (active > 0 || canResume)
+                Box {
+                    RoundControl(KomoriIcons.More, "Queue options", { queueMenu = true })
+                    DropdownMenu(queueMenu, { queueMenu = false }) {
+                        if (active > 0)
+                            DropdownMenuItem(
+                                text = { Text("Pause queue") },
+                                onClick = {
+                                    vm.pauseAll()
+                                    queueMenu = false
+                                },
+                            )
+                        if (canResume)
+                            DropdownMenuItem(
+                                text = { Text("Resume / retry all") },
+                                onClick = {
+                                    vm.resumeAll()
+                                    queueMenu = false
+                                },
+                            )
+                    }
+                }
+        }
+        if (downloads.isEmpty())
+            EmptyState(
+                KomoriIcons.Download,
+                "Take a few chapters with you",
+                "Download from a title's chapter list. Finished downloads remain available offline.",
+            )
+        else
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                if (selection.active) stickyHeader {
+                    SelectionBar(
+                        selection,
+                        downloadIds,
+                        listOf(
+                            BatchAction("Pause selected") { vm.batchDownloads(it, "Pause") },
+                            BatchAction("Resume selected") { vm.batchDownloads(it, "Resume") },
+                            BatchAction("Delete downloads", true) {
+                                vm.batchDownloads(it, "Delete downloads")
+                            },
+                        ),
+                    )
+                }
+                items(
+                    downloads.sortedBy { if (it.state == "Complete") 1 else 0 },
+                    key = { it.releaseId },
+                ) { download ->
+                    OutlinedCard(
+                        modifier =
+                            Modifier.fillMaxWidth().combinedClickable(
+                                onLongClick = { selection.toggle(download.releaseId) },
+                                onClick = {
+                                    if (selection.active) selection.toggle(download.releaseId)
+                                },
+                            ),
+                        colors =
+                            CardDefaults.outlinedCardColors(
+                                containerColor = MaterialTheme.colorScheme.surface
+                            ),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    ) {
+                        Column(Modifier.padding(16.dp)) {
+                            if (selection.active)
+                                Checkbox(
+                                    download.releaseId in selection.ids,
+                                    { selection.toggle(download.releaseId) },
+                                    Modifier.semantics {
+                                        contentDescription = "Select download ${download.label}"
+                                    },
+                                )
+                            Text(
+                                manga.find { it.id == download.mangaId }?.title ?: download.label,
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                            Text(
+                                "${download.label} · ${download.state}",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            val transfer = transfers[download.releaseId]
+                            val receiving = download.state == "Downloading" && transfer != null
+                            if (download.state != "Complete") {
+                                if (
+                                    receiving && (transfer!!.resolving || transfer.totalBytes <= 0)
+                                ) {
+                                    LinearProgressIndicator(
+                                        Modifier.fillMaxWidth().padding(vertical = 12.dp)
+                                    )
+                                } else {
+                                    LinearProgressIndicator(
+                                        progress = {
+                                            val fraction =
+                                                if (receiving && transfer!!.totalBytes > 0)
+                                                    (transfer.bytes.toFloat() / transfer.totalBytes)
+                                                        .coerceIn(0f, 1f)
+                                                else 0f
+                                            if (download.total == 0) 0f
+                                            else
+                                                (((if (receiving) transfer!!.completedPages
+                                                    else download.done) + fraction) /
+                                                        download.total)
+                                                    .coerceIn(0f, 1f)
+                                        },
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                                    )
+                                }
+                            }
+                            Text(
+                                when {
+                                    receiving && transfer!!.resolving -> "Finding chapter images…"
+                                    receiving ->
+                                        "Page ${transfer!!.page} · ${transfer.bytes / 1024} KB" +
+                                            if (transfer.totalBytes > 0)
+                                                " / ${transfer.totalBytes / 1024} KB"
+                                            else " received"
+                                    download.state == "Queued" ->
+                                        if (settings.wifi)
+                                            "Waiting for queue, unmetered Wi-Fi and available storage"
+                                        else "Waiting for queue, connection and available storage"
+                                    download.state == "Retrying" ->
+                                        "Retry scheduled · ${download.done} pages saved"
+                                    else -> "${download.done} / ${download.total} pages"
+                                },
+                                style = MaterialTheme.typography.labelMedium,
+                            )
+                            if (download.error.isNotEmpty())
+                                Text(
+                                    download.error,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                            if (download.state == "Verification required")
+                                VerifySourceButton(vm, sourceKey(download.mangaId))
+                            Row {
+                                if (
+                                    download.state in
+                                        listOf(
+                                            "Paused",
+                                            "Failed",
+                                            "Verification required",
+                                            "Needs repair",
+                                        )
+                                )
+                                    TextButton(onClick = { vm.resume(download) }) {
+                                        Text(
+                                            if (download.state == "Needs repair") "Repair"
+                                            else "Resume"
+                                        )
+                                    }
+                                else if (download.state != "Complete")
+                                    TextButton(onClick = { vm.pause(download) }) { Text("Pause") }
+                                if (download.done > 0)
+                                    TextButton(onClick = { vm.readOffline(download) }) {
+                                        Text(
+                                            if (download.state == "Complete") "Read offline"
+                                            else "Read saved pages"
+                                        )
+                                    }
+                                TextButton(onClick = { deleting = download }) { Text("Delete") }
+                            }
+                        }
+                    }
+                }
+            }
+    }
     deleting?.let { item ->
         AlertDialog(
             onDismissRequest = { deleting = null },
