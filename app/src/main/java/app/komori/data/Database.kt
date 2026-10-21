@@ -73,8 +73,43 @@ data class TitlePreferences(
     @ColumnInfo(defaultValue = "''") val readerMode: String = "",
 )
 
+data class BackupChapterOwner(val id: String, val mangaId: String)
+
 @Dao
 interface LibraryDao {
+    @Query("""SELECT
+        (SELECT COUNT(*) FROM manga WHERE id IN (SELECT mangaId FROM shelf UNION SELECT mangaId FROM progress UNION SELECT mangaId FROM chapter_preferences)) <= 10000 AND
+        (SELECT COUNT(*) FROM shelf) <= 10000 AND
+        (SELECT COUNT(*) FROM chapters WHERE id IN (SELECT releaseId FROM progress UNION SELECT lastRelease FROM shelf)) <= 50000 AND
+        (SELECT COUNT(*) FROM progress) <= 50000 AND
+        (SELECT COUNT(*) FROM creators) <= 10000 AND
+        (SELECT COUNT(*) FROM chapter_preferences) <= 10000
+    """)
+    suspend fun backupCountsWithinLimits(): Boolean
+
+    @Query("""SELECT
+        COALESCE((SELECT SUM(length(CAST(id || title || description || cover || creatorsJson || status || tagsJson AS BLOB))) FROM manga WHERE id IN (SELECT mangaId FROM shelf UNION SELECT mangaId FROM progress UNION SELECT mangaId FROM chapter_preferences)), 0) +
+        COALESCE((SELECT SUM(length(CAST(id || mangaId || json AS BLOB))) FROM chapters WHERE id IN (SELECT releaseId FROM progress UNION SELECT lastRelease FROM shelf)), 0) +
+        COALESCE((SELECT SUM(length(CAST(releaseId || mangaId || chapterKey AS BLOB))) FROM progress), 0) +
+        COALESCE((SELECT SUM(length(CAST(mangaId || status || COALESCE(lastRelease, '') AS BLOB))) FROM shelf), 0) +
+        COALESCE((SELECT SUM(length(CAST(id || name || role AS BLOB))) FROM creators), 0) +
+        COALESCE((SELECT SUM(length(CAST(mangaId || groupId || readerMode AS BLOB))) FROM chapter_preferences), 0)
+    """)
+    suspend fun backupSizeEstimate(): Long
+
+    @Query("SELECT * FROM manga WHERE id IN (SELECT mangaId FROM shelf UNION SELECT mangaId FROM progress UNION SELECT mangaId FROM chapter_preferences) ORDER BY id")
+    suspend fun backupManga(): List<Manga>
+
+    @Query("SELECT id FROM manga") suspend fun allMangaIds(): List<String>
+    @Query("SELECT * FROM shelf ORDER BY mangaId") suspend fun backupShelf(): List<Shelf>
+    @Query("SELECT * FROM creators ORDER BY id") suspend fun backupCreators(): List<Creator>
+    @Query("SELECT * FROM progress ORDER BY releaseId") suspend fun backupProgress(): List<Progress>
+    @Query("SELECT * FROM chapter_preferences ORDER BY mangaId") suspend fun backupPreferences(): List<TitlePreferences>
+    @Query("SELECT * FROM chapters WHERE id IN (SELECT releaseId FROM progress UNION SELECT lastRelease FROM shelf) ORDER BY id")
+    suspend fun backupChapters(): List<Chapter>
+    @Query("SELECT id, mangaId FROM chapters") suspend fun chapterOwners(): List<BackupChapterOwner>
+    @Query("SELECT releaseId AS id, mangaId FROM downloads") suspend fun downloadOwners(): List<BackupChapterOwner>
+
     @Query("SELECT * FROM manga ORDER BY title") fun observeManga(): Flow<List<Manga>>
 
     @Query("SELECT * FROM shelf ORDER BY touched DESC") fun observeShelf(): Flow<List<Shelf>>

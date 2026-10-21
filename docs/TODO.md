@@ -52,7 +52,7 @@ Current patch: durable per-page repair markers, Needs repair counts, partial off
 - [x] Coordinate worker writes, reader repair, pause and deletion per chapter; reject stale reader repair results and test lock/cancellation behavior.
 - [ ] Stress-test repair across process death and real WorkManager pause/delete during slow network transfers.
 - [x] Add typed offline/rate-limit/missing-page/storage handling, Retry-After support and stable page retry budgets (0.7.3; JVM and API 30 checks).
-- [ ] Add document-picker metadata backup/export, strict validation, restore preview and transactional restore; exclude cookies/images by default.
+- [x] Add document-picker metadata backup/export, strict validation, restore preview and transactional restore; exclude cookies/images by default (0.7.4). Device-wide settings remain excluded.
 - [ ] Add optional scheduled backups with retention and restore round-trip tests.
 - [ ] Add downloaded-file integrity scan, size totals, cache controls and delete-read preview.
 

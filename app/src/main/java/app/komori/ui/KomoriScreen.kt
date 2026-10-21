@@ -1911,6 +1911,7 @@ private fun SettingsScreen(vm: ReaderViewModel, settings: Settings) {
                     }
                 }
                 if (section == "App") {
+                    item { BackupSettings() }
                     item {
                         HorizontalDivider()
                         Text(

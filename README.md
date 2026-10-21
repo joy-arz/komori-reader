@@ -9,7 +9,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 
 <br>
 
-[![Release](https://img.shields.io/badge/release-0.7.3-A3E635?style=for-the-badge&labelColor=0A0A0A)](https://github.com/joy-arz/komori-reader/releases/latest)
+[![Release](https://img.shields.io/badge/release-0.7.4-A3E635?style=for-the-badge&labelColor=0A0A0A)](https://github.com/joy-arz/komori-reader/releases/latest)
 [![Android](https://img.shields.io/badge/Android-8.0%2B-A3E635?style=for-the-badge&logo=android&logoColor=A3E635&labelColor=0A0A0A)](#install)
 [![Kotlin](https://img.shields.io/badge/Kotlin-Compose-A3E635?style=for-the-badge&logo=kotlin&logoColor=A3E635&labelColor=0A0A0A)](#build)
 [![No ads](https://img.shields.io/badge/no%20ads-no%20analytics-A3E635?style=for-the-badge&labelColor=0A0A0A)](#features)
@@ -28,7 +28,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 
 <br>
 
-> **Current release: 0.7.3.** Signed APK for Android 8.0 and newer. This is a full GitHub release. Source-specific limitations and planned features are listed below.
+> **Current release: 0.7.4.** Signed APK for Android 8.0 and newer. This is a full GitHub release. Source-specific limitations and planned features are listed below.
 
 ---
 
@@ -56,6 +56,13 @@ Built with Kotlin and Compose. Native online and offline reading.
 - Compact Library and Discover toolbars with icon-triggered search. Library collection tabs keep counts in a shorter row, leaving more room for covers.
 - Swipe left or right across the catalog to change sources in your Settings order.
 - Discover filters live in the toolbar. **Verify source** and **Reset search** sit under Source options.
+
+### Library backup and restore
+
+- **Settings → App → Library backup** exports a versioned JSON file through Android's document picker.
+- Backups contain saved/liked titles, history and reading positions, followed authors, chapter metadata and per-title reader/group preferences. Device settings, source sessions, download queues and image files are excluded.
+- Restore validates the complete file before showing a preview. New entries merge into the Library; existing values are kept by default. Select **Use backup values for matching entries** to replace them. Unrelated entries remain available.
+- [Backup format and merge details](docs/BACKUP.md). Metadata writes commit in one database transaction. Invalid files and conflicting chapter ownership are rejected. The format supports files up to 16 MiB; scheduled backups and image/archive export remain planned.
 
 ### <img src="https://api.iconify.design/lucide/book-open.svg?color=%23A3E635" width="22" height="22" align="absmiddle"> Reading
 
@@ -151,7 +158,7 @@ MangaDex and scanlation groups are credited in the application. This is an indep
 
 <div align="center">
 
-### [Download komori-0.7.3.apk](https://github.com/joy-arz/komori-reader/releases/download/v0.7.3/komori-0.7.3.apk)
+### [Download komori-0.7.4.apk](https://github.com/joy-arz/komori-reader/releases/download/v0.7.4/komori-0.7.4.apk)
 
 </div>
 
@@ -185,14 +192,14 @@ Local signing is automated through JVM `keytool` validation and Gradle. See [rel
 
 Every push to `main` and every pull request runs unit tests, lint and a debug APK build.
 
-A version tag such as `v0.7.3` automatically tests, builds, signs and publishes a release APK plus a SHA-256 checksum and updater metadata (`update.json`).
+A version tag such as `v0.7.4` automatically tests, builds, signs and publishes a release APK plus a SHA-256 checksum and updater metadata (`update.json`).
 
 - Plain version tags publish full releases and mark them as **Latest**.
 - Tags containing a suffix remain prereleases.
 
 ```sh
-git tag v0.7.3
-git push origin v0.7.3
+git tag v0.7.4
+git push origin v0.7.4
 ```
 
 Signing secrets are already configured in repository Actions secrets. No signing material is committed. See [RELEASING.md](docs/RELEASING.md) for key backup and release details.

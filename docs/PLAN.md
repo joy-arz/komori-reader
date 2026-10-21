@@ -34,7 +34,7 @@ Current delivery and remaining work are tracked in [TODO.md](TODO.md). Published
 
 ## Milestone 3: library durability and updates
 
-- Versioned metadata backup/restore and Room migration tests before schema changes ship.
+- [x] Versioned metadata backup/restore through the Android document picker, strict previewed merges, transactional writes and Room migration checks. Scheduled backups and device-wide settings export remain planned.
 - Collections, sorting, bulk operations and undo for removal.
 - Batched, battery-aware updates for saved titles and followed creators.
 - Separate caught-up, source publication status and user-completed status.
