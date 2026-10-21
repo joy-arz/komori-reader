@@ -70,7 +70,14 @@ class SourceFacetInteractionTest {
             instrumentation.waitForIdleSync()
             assertEquals("english", vm.browseFilter.value.language)
             assertEquals("manga", vm.browseFilter.value.category)
-            device.findObject(By.desc("Filters and sorting")).click()
+            // A completed source request can insert an error banner and move the toolbar.
+            val deadline = android.os.SystemClock.uptimeMillis() + 35_000
+            while (vm.loading.value && android.os.SystemClock.uptimeMillis() < deadline) {
+                android.os.SystemClock.sleep(50)
+            }
+            assertFalse("Source request did not settle", vm.loading.value)
+            device.waitForIdle()
+            device.findObject(By.pkg(instrumentation.targetContext.packageName).desc("Filters and sorting")).click()
             assertTrue(device.wait(Until.hasObject(By.text("Reset")), 5000))
             device.findObject(By.text("Reset")).click()
             assertTrue(device.wait(Until.gone(By.text("Browse filters")), 5000))

@@ -47,17 +47,26 @@ class BackupInteractionTest {
             while (vm.busy.value && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(50)
             assertFalse("Backup operation did not finish", vm.busy.value)
         }
+        fun cancelPicker() {
+            device.waitForIdle()
+            device.pressBack()
+            device.waitForIdle()
+            // Create-document can focus its filename editor and consume Back in the IME.
+            if (!device.wait(Until.hasObject(By.pkg(app.packageName).text("Restore backup")), 1500)) {
+                device.pressBack()
+            }
+            assertTrue(device.wait(Until.hasObject(By.pkg(app.packageName).text("Restore backup")), 8000))
+        }
         try {
             assertTrue(device.wait(Until.hasObject(By.text("App")), 8000))
             device.findObject(By.text("App")).click()
             assertTrue(device.wait(Until.hasObject(By.text("Export backup")), 5000))
             device.findObject(By.text("Export backup")).click()
             assertTrue(device.wait(Until.hasObject(By.pkg(java.util.regex.Pattern.compile("com\\.(google\\.android|android)\\.documentsui"))), 5000))
-            device.pressBack()
-            assertTrue(device.wait(Until.hasObject(By.text("Restore backup")), 5000))
+            cancelPicker()
             device.findObject(By.text("Restore backup")).click()
             assertTrue(device.wait(Until.hasObject(By.pkg(java.util.regex.Pattern.compile("com\\.(google\\.android|android)\\.documentsui"))), 5000))
-            device.pressBack()
+            cancelPicker()
             assertTrue(device.wait(Until.hasObject(By.text("Export backup")), 5000))
             assertNull(vm.preview.value)
             assertEquals("Reading", app.dao.shelf(id)!!.status)
