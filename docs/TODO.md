@@ -1,6 +1,6 @@
 # Komori development backlog
 
-Updated October 21, 2026 after fetching GitHub main at `b577b5b` and checking the published releases through `v0.7.5`. Reconciled against source code and [release validation](VALIDATION.md), rather than treating the October 15 comparison as current status. Komikku remains the main behavior reference and Mihon the secondary reference. Checkboxes mean delivered and validated, not merely started. Open items below are remaining work, not release promises. The reconciled checklist contains **38 completed groups and 34 open groups**; groups can contain several related tasks.
+Updated October 21, 2026 for the 0.8.0 implementation pass. Published delivery is listed separately below. Checkboxes record implemented features with local checks; device/network acceptance that remains unverified stays open. See [the pass log](BACKLOG_PASS.md) for exact results and release gates. Tracking is deferred by the user until core acceptance.
 
 ## Published delivery ledger
 
@@ -17,7 +17,7 @@ All six releases are published. The latest signed release is 0.7.5; its CI, sign
 
 ## Highest-priority source defect: incomplete author catalogs
 
-- [ ] Fix HentaiZap author catalog completeness in both Author search and the Authors tab. On October 21 the native `/artist/kanamirubon/` listing returned only gallery `1580076`, while name search returned 12 works including user-reported `1665352`; that gallery explicitly links to the same artist. The app currently follows the incomplete native artist listing. This remains unfixed in 0.7.4. See [the reproduction and acceptance criteria](AUTHOR_CATALOG_AUDIT_2026-10-21.md). Do not treat unverified title/name matches as confirmed creator works.
+- [x] Supplement HentaiZap author catalogs in Author search and Authors with exact-creator-verified search results. The live check returned 19 Kanamirubon works including reported gallery `1665352`; fixtures reject name-only matches and preserve pagination through filtered pages and missing native index pages. HTTP 403 still requires source action. See [the source audit](AUTHOR_CATALOG_AUDIT_2026-10-21.md). Source indexes/searches can still omit works; this is not a universal completeness guarantee.
 
 Pagination support alone does not prove that a source's artist index contains every work. Keep the delivered pagination item checked while tracking this separate completeness defect. Latest/popularity follow native source rank; alphabetical/author sort loaded works, not an unseen complete catalog.
 
@@ -77,40 +77,49 @@ Released repair work: durable per-page repair markers, Needs repair counts, part
 - [ ] Add downloaded-file integrity scan, size totals, cache controls and delete-read preview.
 
 ## Reader
-- [ ] Load previous chapters on backward scrolling with stable anchors and bounded memory.
-- [ ] Warn about missing chapter-number gaps before transitions.
-- [ ] Add chapter/page jump and seek controls; previous chapter from first paged page.
-- [ ] Restore selected title/source/filter/reader after process death using saved identifiers and Room.
-- [ ] Add brightness/dimming, orientation lock and optional volume-key navigation.
-- [ ] Add webtoon zoom and optional automatic webtoon detection.
-- [ ] Expose conservative preload/cache choices; preserve per-title settings.
-- [ ] Explain why Smart Chapters selected a particular release, add a dedicated alternate-release picker and per-title language overrides. Existing All releases and scanlation preferences remain available.
+- [x] Load previous chapters on backward scrolling with stable anchors and bounded memory.
+- [x] Warn about missing chapter-number gaps before transitions.
+- [x] Add chapter/page jump and seek controls; previous chapter from first paged page.
+- [x] Restore selected title/source/filter/reader after process death using saved identifiers and Room.
+- [x] Add brightness/dimming, orientation lock and optional volume-key navigation.
+- [x] Add webtoon zoom and optional automatic webtoon detection.
+- [x] Expose conservative preload/cache choices; preserve per-title settings.
+- [x] Explain why Smart Chapters selected a particular release, add a dedicated alternate-release picker and per-title language overrides. Existing All releases and scanlation preferences remain available.
 
 ## Library and updates
-- [ ] Add categories, unread badges and status filters.
+- [x] Add categories, unread badges and status filters.
 - [x] Add multi-select and bulk Library actions, including mark read.
-- [ ] Add title-level bulk mark unread.
-- [ ] Add scheduled chapter checks, grouped Updates feed and optional notifications.
-- [ ] Add optional followed-author new-work notifications without default aggressive polling.
-- [ ] Add reviewed source migration with progress transfer, aliases and edition selection; never silently merge by title.
+- [x] Add title-level bulk mark unread.
+- [x] Add scheduled chapter checks, grouped Updates feed and optional notifications.
+- [x] Add optional followed-author new-work notifications without default aggressive polling.
+- [x] Add reviewed source migration with progress transfer, aliases and edition selection; never silently merge by title.
 
 ## Downloads and sources
-- [ ] Persist explicit queue order; add Download now, reorder and cancel-selected without deleting files. Batch pause/resume and confirmed Delete downloads already exist.
-- [ ] Show Waiting for Wi-Fi/storage separately from queued/downloading.
+- [x] Persist explicit queue order; add Download now, reorder and cancel-selected without deleting files. Batch pause/resume and confirmed Delete downloads already exist.
+- [x] Show Waiting for Wi-Fi/storage separately from queued/downloading.
 - [x] Download selected chapters or next 1/5/10/25 unread, all unread and all readable; skip active/completed entries.
-- [ ] Group downloads by title; add arbitrary chapter-range selection and optional export/folder selection.
-- [ ] Add source enable/disable, capability/status labels and saved searches.
-- [ ] Test legitimate verification redirects per source; add honest native-access results and full-browser fallback.
-- [ ] Add targeted session reset and real-device challenge tests; preserve TLS checks and user-operated verification.
-- [ ] Add optional local CBZ/folder import.
+- [x] Group downloads by title; add arbitrary chapter-range selection and optional export/folder selection.
+- [x] Add source enable/disable, capability/status labels and saved searches.
+- [ ] Finish live verification-redirect acceptance per protected source. Native access testing, HTTPS/frame/host allowlists and full-browser fallback are implemented; fixture allowlist checks pass. Real challenges remain network/device acceptance.
+- [ ] Finish real-device challenge acceptance. Targeted reset is implemented and API 30-tested for root/path cookies and other-source isolation. WebView cannot enumerate every unknown cookie path; all-session reset remains an explicit fallback. TLS checks and user-operated verification stay enabled.
+- [x] Add optional local CBZ/folder import.
 - [ ] Consider optional AniList/MAL tracking after core reliability; retain account-free use.
 
 ## Appearance, performance and release quality
 - [x] Group Settings by purpose and compact browsing toolbars.
-- [ ] Add system theme and a compact/comfortable layout preference.
-- [ ] Add cover loading/error placeholders and consistent source/unread badges.
+- [x] Add system theme and a compact/comfortable layout preference.
+- [x] Add cover loading/error placeholders and consistent source/unread badges.
 - [ ] Audit TalkBack, large fonts, landscape, contrast, touch targets and RTL layouts.
-- [ ] Replace repeated library scans with maps and scoped database queries; measure before adding paging.
+- [x] Replace repeated library scans with maps and scoped database queries; measure before adding paging.
 - [ ] Benchmark cold start (including source sessions), 1,000-title libraries/50,000 progress rows and long reads on a physical 2 GB phone.
-- [ ] Add API 26/API 36 instrumentation and signed upgrade/process-death/interrupted-network tests to CI.
-- [ ] Add Stable/Preview updater channels, release notes, snooze and conditional requests with longer cooldown.
+- [ ] Complete the first API 26/API 36 CI and signed-upgrade runs. Workflows and a disposable-emulator script are implemented; API 30 schema 5→6, process-death restoration and offline navigation passed locally. CI results remain a release gate.
+- [x] Add Stable/Preview updater channels, release notes, snooze and conditional requests with longer cooldown.
+
+## Support
+- [x] Add a full-page Settings → Support tab inspired by the requested coffee component, correctly labelled Ko-fi and linked to `https://ko-fi.com/joyarz`. Device navigation and exact URI checks passed; revised initial viewport reviewed.
+- [x] Add a README Support section with a Ko-fi icon and voluntary open-source support copy.
+
+## Acceptance boundaries
+- Webtoon forward/backward continuity and reader controls have API 30 checks; sustained zoom/detection, notifications, document-provider variations and source migration still need broader hands-on acceptance.
+- A 1,000-title / 50,000-progress synthetic emulator query measurement is recorded in BACKLOG_PASS.md. It does not close the physical 2 GB cold-start/long-read benchmark.
+- Core implementation does not imply the reported Nhentai restriction is resolved on the affected phone/network.

@@ -34,6 +34,7 @@ class AuthorCatalog(
         var done: Boolean = false,
         val seen: MutableSet<String> = mutableSetOf(),
         var rank: Int = 0,
+        val paginationIds: MutableSet<String> = mutableSetOf(),
     )
 
     var sort: AuthorSort = sort
@@ -85,7 +86,8 @@ class AuthorCatalog(
             attempted++
             try {
                 val result = fetch(cursor.creator, cursor.page)
-                val fresh = result.titles.any { it.id !in cursor.seen }
+                val fresh = result.paginationIds.any { it !in cursor.paginationIds }
+                cursor.paginationIds.addAll(result.paginationIds)
                 result.titles.forEach {
                     if (cursor.seen.add(it.id)) {
                         ranks[it.id] = minOf(ranks[it.id] ?: Int.MAX_VALUE, cursor.rank++)

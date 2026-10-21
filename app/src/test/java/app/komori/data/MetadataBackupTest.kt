@@ -86,7 +86,7 @@ class MetadataBackupTest {
                 "chapters",
                 "progress",
                 "creators",
-                "preferences",
+                "preferences", "categories", "memberships", "links",
             ),
             keys,
         )
@@ -94,7 +94,7 @@ class MetadataBackupTest {
 
     @Test
     fun unsafeFilesTypesAndVersionsAreRejected() {
-        rejected { it.put("version", 2) }
+        rejected { it.put("version", 3) }
         rejected { it.put("cookies", JSONObject()) }
         rejected { it.put("downloads", JSONArray()) }
         rejected { it.remove("shelf") }
@@ -221,4 +221,29 @@ class MetadataBackupTest {
         val error = assertThrows(InvalidBackup::class.java) { BackupCodec.encode(backup) }
         assertTrue(error.message.orEmpty().contains("16 MiB"))
     }
+    @Test fun earlierVersionOneBackupsStillRestoreWithDefaultOrganizationAndLanguage() {
+        val old = json().put("version", 1)
+        old.remove("categories"); old.remove("memberships"); old.remove("links")
+        old.getJSONArray("preferences").objects().forEach { it.remove("language") }
+        val decoded = BackupCodec.decode(old.toString().toByteArray())
+        assertEquals(fixture().preferences, decoded.preferences)
+        assertTrue(decoded.categories.isEmpty())
+        assertTrue(decoded.memberships.isEmpty())
+    }
+
+    @Test fun organizationAndPerTitleLanguageRoundTripWithOwnershipValidation() {
+        val initial = fixture().copy(
+            categories = listOf(LibraryCategory("cat-1", "Favorites")),
+            memberships = listOf(CategoryMembership("title-1", "cat-1")),
+            preferences = listOf(TitlePreferences("title-1", language = "ja")),
+        )
+        val restored = BackupCodec.decode(BackupCodec.encode(initial))
+        assertEquals(initial.categories, restored.categories)
+        assertEquals(initial.memberships, restored.memberships)
+        assertEquals(initial.preferences, restored.preferences)
+        assertThrows(InvalidBackup::class.java) {
+            BackupCodec.encode(initial.copy(memberships = listOf(CategoryMembership("missing-title", "cat-1"))))
+        }
+    }
+
 }

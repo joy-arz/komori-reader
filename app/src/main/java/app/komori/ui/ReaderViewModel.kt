@@ -2,8 +2,10 @@ package app.komori.ui
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkManager
+import androidx.room.withTransaction
 import app.komori.KomoriApp
 import app.komori.data.*
 import app.komori.domain.*
@@ -19,8 +21,11 @@ import kotlinx.coroutines.sync.withPermit
 class ReaderViewModel(
     application: Application,
     private val authorPage: (suspend (Creator, Int, BrowseFilter) -> BrowsePage)?,
+    private val savedState: SavedStateHandle,
 ) : AndroidViewModel(application) {
-    constructor(application: Application) : this(application, null)
+    constructor(application: Application) : this(application, null, SavedStateHandle())
+    constructor(application: Application, savedState: SavedStateHandle) : this(application, null, savedState)
+    constructor(application: Application, authorPage: (suspend (Creator, Int, BrowseFilter) -> BrowsePage)?) : this(application, authorPage, SavedStateHandle())
 
     val app = application as KomoriApp
     private val dao = app.dao
@@ -30,17 +35,25 @@ class ReaderViewModel(
         dao.observeCreators().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val downloads =
         dao.observeDownloads().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-    val progress =
-        dao.observeProgress().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val selected = MutableStateFlow<Manga?>(null)
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val progress = selected.map { it?.id.orEmpty() }.distinctUntilChanged()
+        .flatMapLatest { dao.observeProgressForManga(it) }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val preferences =
         dao.observeTitlePreferences().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val settings = app.settings.flow.stateIn(viewModelScope, SharingStarted.Eagerly, Settings())
+    val migrationLinks = dao.observeMigrationLinks().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val categories = dao.observeCategories().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val memberships = dao.observeMemberships().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val libraryCounts = settings.map { it.language }.distinctUntilChanged()
+        .flatMapLatest { dao.observeLibraryCounts(it) }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val libraryUpdates = dao.observeLibraryUpdates().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val results = MutableStateFlow<List<Manga>>(emptyList())
     val activeSource = MutableStateFlow("")
     val browseFilter = MutableStateFlow(BrowseFilter())
     val tags = MutableStateFlow<List<SourceTag>>(emptyList())
     private var tagsJob: Job? = null
-    val selected = MutableStateFlow<Manga?>(null)
     val chapters = MutableStateFlow<List<Release>>(emptyList())
     val chapterStatus = MutableStateFlow("")
     val sourceLanguages = MutableStateFlow<List<String>>(emptyList())
@@ -50,6 +63,10 @@ class ReaderViewModel(
     val reader = MutableStateFlow<Release?>(null)
     val readerSession = MutableStateFlow(0)
     val bulkStatus = MutableStateFlow<String?>(null)
+    val updatesVisible = MutableStateFlow(false)
+    val sourceStatus = MutableStateFlow<Map<String, String>>(emptyMap())
+    val localFileStatus = MutableStateFlow<String?>(null)
+    private var localFileJob: Job? = null
     private var bulkJob: Job? = null
 
     fun stopAddingDownloads() {
@@ -75,6 +92,7 @@ class ReaderViewModel(
     private var query = ""
     private var offlineLanguage: String? = null
     private var nextOffset = 1
+    private val paginationIds = mutableSetOf<String>()
     private var creatorFilter: Creator? = null
     val activeCreator = MutableStateFlow<Creator?>(null)
     private var searchJob: Job? = null
@@ -106,6 +124,7 @@ class ReaderViewModel(
         val status: String,
         val offlineLanguage: String?,
         val error: String?,
+        val paginationIds: Set<String>,
     )
 
     private val history = ArrayDeque<NavigationSnapshot>()
@@ -129,6 +148,7 @@ class ReaderViewModel(
                 chapterStatus.value,
                 offlineLanguage,
                 error.value,
+                paginationIds.toSet(),
             )
         )
         if (history.size > 30) history.removeFirst()
@@ -220,7 +240,7 @@ class ReaderViewModel(
         }
 
     fun search(text: String = query, creator: Creator? = creatorFilter, more: Boolean = false) {
-        if (more && (searchJob?.isActive == true || !canLoadMore || results.value.isEmpty())) return
+        if (more && (searchJob?.isActive == true || !canLoadMore)) return
         searchJob?.cancel()
         if (!more) searchQuery.value = text
         searchJob = task {
@@ -230,6 +250,7 @@ class ReaderViewModel(
                 if (!more) {
                     results.value = emptyList()
                     nextOffset = 1
+                    paginationIds.clear()
                     canLoadMore = true
                     query = text
                     if (creator != null && creator.id != creatorFilter?.id)
@@ -248,7 +269,8 @@ class ReaderViewModel(
                     activeSource.value = creatorSource
                 }
                 if (activeSource.value.isEmpty())
-                    activeSource.value = sourceOrder(app.settings.flow.first().sources).first()
+                    activeSource.value = enabledSourceOrder(app.settings.flow.first()).firstOrNull()
+                        ?: throw IOException("Enable a source in Settings to browse titles.")
                 val foundPage =
                     app.source.browse(
                         activeSource.value,
@@ -261,8 +283,9 @@ class ReaderViewModel(
                 nextOffset += 1
                 val previous = if (more) results.value else emptyList()
                 val merged = (previous + found).distinctBy { it.id }
-                canLoadMore =
-                    PaginationPolicy.hasNext(foundPage.hasMore, previous.size, merged.size)
+                val beforePagination = paginationIds.size
+                paginationIds.addAll(foundPage.paginationIds)
+                canLoadMore = PaginationPolicy.hasNext(foundPage.hasMore, beforePagination, paginationIds.size)
                 results.value = merged
             } finally {
                 loading.value = false
@@ -401,7 +424,7 @@ class ReaderViewModel(
                     ChapterPolicy.start(
                         ordered,
                         dao.shelf(book.id)?.lastRelease,
-                        dao.observeProgress()
+                        dao.observeProgressForManga(book.id)
                             .first()
                             .filter { it.completed }
                             .map { it.chapterKey }
@@ -430,8 +453,9 @@ class ReaderViewModel(
             loading.value = true
             try {
                 val language =
-                    if (sourceKey(manga.id) == "mangadex") app.settings.flow.first().language
+                    if (sourceKey(manga.id) == "mangadex") dao.titlePreferences(manga.id)?.language?.takeIf { it.isNotEmpty() } ?: app.settings.flow.first().language
                     else "en"
+                dao.markUpdatesSeen(manga.id)
                 val stored = dao.manga(manga.id)
                 val baseManga = stored ?: manga
                 selected.value = baseManga
@@ -462,6 +486,12 @@ class ReaderViewModel(
                         completedDownloads,
                     )
                 chapters.value = cached
+                if (sourceKey(manga.id) == "local") {
+                    chapterStatus.value = "Imported comic · Stored on this device"
+                    sourceLanguages.value = listOf("en")
+                    if (immediately) startReading()
+                    return@task
+                }
                 // Only resume a known complete snapshot early; a new start waits for
                 // the full feed so a partial legacy cache cannot choose a late chapter.
                 val resumed =
@@ -525,6 +555,8 @@ class ReaderViewModel(
             activeCreator.value = previous.creator
             results.value = previous.results
             nextOffset = previous.nextOffset
+            paginationIds.clear()
+            paginationIds.addAll(previous.paginationIds)
             canLoadMore = previous.more
             tags.value = previous.tags
             selected.value = previous.title
@@ -540,7 +572,8 @@ class ReaderViewModel(
 
     fun chapterLanguage(): String =
         offlineLanguage
-            ?: if (sourceKey(selected.value?.id.orEmpty()) == "mangadex") settings.value.language
+            ?: if (sourceKey(selected.value?.id.orEmpty()) == "mangadex")
+                preferences.value.find { it.mangaId == selected.value?.id }?.language?.takeIf { it.isNotEmpty() } ?: settings.value.language
             else "en"
 
     fun selectedChapters(): List<Release> {
@@ -564,6 +597,19 @@ class ReaderViewModel(
             for (title in titles.distinctBy { it.id }) {
                 dao.putManga(title)
                 val old = dao.shelf(title.id) ?: Shelf(title.id)
+                if (action == "Mark unread") dao.resetProgress(title.id)
+                if (action == "Mark all read") {
+                    val cached = dao.chapters(title.id).ifEmpty {
+                        val language = dao.titlePreferences(title.id)?.language?.takeIf { it.isNotEmpty() } ?: settings.value.language
+                        app.source.chapters(title.id, if (sourceKey(title.id) == "mangadex") language else "en").also {
+                            dao.saveFeed(title.id, language, it)
+                        }
+                    }
+                    cached.map { it.release() }.filter { it.readable }.forEach {
+                        val position = dao.progress(it.id)
+                        dao.putProgress(Progress(it.id, it.mangaId, it.key, position?.page ?: 0, true, position?.scroll ?: 0f))
+                    }
+                }
                 dao.putShelf(
                     when (action) {
                         "Save" -> old.copy(saved = true)
@@ -571,6 +617,8 @@ class ReaderViewModel(
                         "Like" -> old.copy(liked = true)
                         "Unlike" -> old.copy(liked = false)
                         "Mark completed" -> old.copy(saved = true, status = "Completed")
+                        "Mark all read" -> old
+                        "Mark unread" -> old.copy(lastRelease = null, status = if (old.status == "Completed") "Reading" else old.status)
                         else -> throw IllegalArgumentException("Unknown title action")
                     }
                 )
@@ -588,7 +636,7 @@ class ReaderViewModel(
         mutation.withLock {
             if (!completed) {
                 val keys = releases.map { it.key }.toSet()
-                for (old in dao.observeProgress().first().filter { it.chapterKey in keys }) dao
+                for (old in keys.toList().chunked(400).flatMap { dao.progressForKeys(it) }) dao
                     .putProgress(old.copy(completed = false, page = 0, scroll = 0f))
             }
             for (release in releases.distinctBy { it.id }) {
@@ -612,6 +660,7 @@ class ReaderViewModel(
             when (action) {
                 "Pause" -> pause(it).join()
                 "Resume" -> resume(it).join()
+                "Cancel" -> cancelDownload(it).join()
                 "Delete downloads" -> deleteDownload(it).join()
             }
         }
@@ -645,7 +694,7 @@ class ReaderViewModel(
                                 ),
                             )
                         val read =
-                            progress.value.filter { it.completed }.map { it.chapterKey }.toSet()
+                            dao.observeProgressForManga(title.id).first().filter { it.completed }.map { it.chapterKey }.toSet()
                         for (release in
                             releases.filter {
                                 it.readable && (!unread || it.key !in read)
@@ -686,6 +735,38 @@ class ReaderViewModel(
         else dao.putCreator(creator)
     }
 
+    fun saveCategory(name: String, id: String? = null) = task {
+        val clean = name.trim()
+        require(clean.isNotEmpty() && clean.length <= 100) { "Category names must contain 1–100 characters." }
+        mutation.withLock {
+            val existing = dao.backupCategories()
+            require(existing.none { it.id != id && it.name.equals(clean, true) }) { "A category with this name already exists." }
+            require(id != null || existing.size < 1000) { "The category limit is 1,000." }
+            dao.putCategory(LibraryCategory(id ?: java.util.UUID.randomUUID().toString(), clean))
+        }
+    }
+
+    fun deleteCategory(id: String) = task { dao.deleteCategory(id) }
+
+    fun changeCategories(ids: List<String>, changes: Map<String, Boolean>) = task {
+        mutation.withLock {
+            val known = dao.backupCategories().map { it.id }.toSet()
+            for (id in ids.distinct()) for ((category, add) in changes) {
+                require(category in known) { "This category no longer exists." }
+                if (add) dao.putMembership(CategoryMembership(id, category)) else dao.removeMembership(id, category)
+            }
+        }
+    }
+
+    fun titleLanguage(value: String) = task {
+        val id = selected.value?.id ?: return@task
+        require(value.isEmpty() || value == "*" || value.matches(Regex("[a-z]{2,3}(?:-[A-Za-z]{2,8})*"))) { "Invalid language." }
+        mutation.withLock {
+            dao.putTitlePreferences((dao.titlePreferences(id) ?: TitlePreferences(id)).copy(language = value))
+        }
+        selected.value?.let { open(it) }
+    }
+
     fun group(id: String, strict: Boolean = false) {
         val mangaId = selected.value?.id ?: return
         task {
@@ -708,6 +789,7 @@ class ReaderViewModel(
 
     fun setting(key: String, value: Boolean) = task {
         app.settings.set(key, value)
+        if (key == "checkWifi") LibraryCheckScheduler.schedule(app, app.settings.flow.first())
         if (key == "wifi") {
             // WorkManager constraints are immutable; apply the new choice to the existing queue.
             val queued = downloads.value.filter { it.state in DownloadPolicy.activeStates }
@@ -726,10 +808,11 @@ class ReaderViewModel(
         selected.value?.let { open(it) }
     }
 
-    fun startReading(fromBeginning: Boolean = false) {
+    fun startReading(fromBeginning: Boolean = false) = task {
         val available = selectedChapters()
         val last = shelf.value.find { it.mangaId == selected.value?.id }?.lastRelease
-        val completed = progress.value.filter { it.completed }.map { it.chapterKey }.toSet()
+        val completed = dao.observeProgressForManga(selected.value?.id.orEmpty()).first()
+            .filter { it.completed }.map { it.chapterKey }.toSet()
         val next =
             if (fromBeginning) available.firstOrNull { it.readable }
             else ChapterPolicy.start(available, last, completed, settings.value.reread)
@@ -737,12 +820,12 @@ class ReaderViewModel(
             notice.value =
                 if (available.isEmpty()) "No chapters match your language and group preferences."
                 else "You're caught up. Use Read again to start at the beginning."
-            return
+            return@task
         }
         read(next, restart = fromBeginning || next.key in completed)
     }
 
-    fun read(chapter: Release, restart: Boolean = false, preserveRetries: Boolean = false) {
+    fun read(chapter: Release, restart: Boolean = false, preserveRetries: Boolean = false, requestedPage: Int? = null) {
         if (!chapter.readable) {
             notice.value =
                 if (chapter.unavailable)
@@ -771,7 +854,7 @@ class ReaderViewModel(
                     pageCount.value = resolved.pages
                     val previous = dao.progress(chapter.id)
                     val page =
-                        if (restart || !settings.value.resume || previous?.completed == true) 0
+                        requestedPage ?: if (restart || !settings.value.resume || previous?.completed == true) 0
                         else previous?.page ?: 0
                     readerPage.value = page.coerceIn(0, (resolved.pages - 1).coerceAtLeast(0))
                     readerScroll.value =
@@ -836,6 +919,31 @@ class ReaderViewModel(
         pageRetries.reset("manifest-${chapter.id}-${settings.value.saver}")
     }
 
+    fun previousChapter(chapter: Release): Release? = ReaderContinuity.previous(selectedChapters(), chapter)
+
+    fun jumpTo(chapter: Release, page: Int = 0) = read(chapter, requestedPage = page.coerceAtLeast(0))
+
+    fun previousChapter() {
+        val current = reader.value ?: return
+        previousChapter(current)?.let { jumpTo(it, if (it.pages < 0) Int.MAX_VALUE else (it.pages - 1).coerceAtLeast(0)) }
+    }
+
+    fun numberSetting(key: String, value: Int) = task {
+        app.settings.number(key, value)
+        if (key == "libraryCheckHours") LibraryCheckScheduler.schedule(app, app.settings.flow.first())
+    }
+    fun checkLibraryNow() = task { LibraryCheckScheduler.now(app, app.settings.flow.first()); notice.value = "Chapter check queued. It runs when network and battery constraints allow." }
+    fun markUpdatesSeen(id: String) = task { dao.markUpdatesSeen(id) }
+    fun markAllUpdatesSeen() = task { dao.markAllUpdatesSeen() }
+    fun openLibraryUpdate(update: LibraryUpdate) = task {
+        val title = dao.manga(update.mangaId) ?: return@task
+        updatesVisible.value = false
+        open(title)
+        if (update.kind == "chapter") dao.chapter(update.releaseId)?.release()?.let { read(it) }
+    }
+    fun enableSource(key: String, enabled: Boolean) = task { app.settings.enableSource(key, enabled) }
+    fun choiceSetting(key: String, value: String) = task { app.settings.choice(key, value) }
+
     fun nextChapter(chapter: Release): Release? =
         selectedChapters()
             .dropWhile { it.id != chapter.id }
@@ -893,17 +1001,63 @@ class ReaderViewModel(
         }
     }
 
+    private fun fileTask(block: suspend () -> Unit) {
+        if (localFileJob?.isActive == true) { notice.value = "A file operation is already running."; return }
+        localFileJob = viewModelScope.launch {
+            localFileStatus.value = "Preparing files…"
+            try { block(); notice.value = "File operation completed" }
+            catch (e: CancellationException) { notice.value = "File operation stopped. An export destination may be incomplete."; throw e }
+            catch (e: Exception) { error.value = connectionMessage(e) + " An export destination may be incomplete." }
+            finally { localFileStatus.value = null }
+        }
+    }
+    fun importComic(uri: android.net.Uri, folder: Boolean) = fileTask {
+        if (folder) LocalFiles.importFolder(app, uri) { localFileStatus.value = it }
+        else LocalFiles.importArchive(app, uri) { localFileStatus.value = it }
+        currentTab.value = 0
+    }
+    fun exportComic(download: Download, uri: android.net.Uri? = null) = fileTask {
+        val tree = app.settings.flow.first().exportFolder.takeIf { it.isNotEmpty() }?.let(android.net.Uri::parse)
+        LocalFiles.export(app, download, uri, tree) { localFileStatus.value = it }
+    }
+    fun exportFolder(uri: android.net.Uri?) = task { app.settings.exportFolder(uri?.toString().orEmpty()) }
+    fun cancelFileOperation() { localFileJob?.cancel() }
+
+    fun saveCurrentSearch(name: String) = task {
+        require(activeSource.value in sourceNames) { "Choose a source first." }
+        app.settings.saveSearch(SavedSearch(java.util.UUID.randomUUID().toString(), name.trim(),
+            NavigationState(tab = 1, source = activeSource.value, query = query, filter = browseFilter.value, creator = creatorFilter)))
+        notice.value = "Search saved"
+    }
+    fun removeSavedSearch(id: String) = task { app.settings.removeSearch(id) }
+    fun restoreSearch(saved: SavedSearch) = task {
+        require(saved.navigation.source in enabledSourceOrder(app.settings.flow.first())) { "Enable this source in Settings before opening its saved search." }
+        pushScreen()
+        selected.value = null
+        activeSource.value = saved.navigation.source
+        browseFilter.value = saved.navigation.filter
+        creatorFilter = saved.navigation.creator
+        search(saved.navigation.query, saved.navigation.creator)
+        currentTab.value = 1
+    }
+    fun testSource(key: String) = task {
+        sourceStatus.value = sourceStatus.value + (key to "Checking native access…")
+        try {
+            val page = app.source.browse(key, "", 1, BrowseFilter(), null)
+            sourceStatus.value = sourceStatus.value + (key to if (page.titles.isEmpty()) "Responded, but no titles were parsed. Access is not confirmed." else "Native catalog available · ${page.titles.size} titles returned")
+        } catch (e: CancellationException) { throw e }
+        catch (e: Exception) { sourceStatus.value = sourceStatus.value + (key to connectionMessage(e)) }
+    }
+
     fun resetSourceOrder() = task { app.settings.sources(sourceNames.keys.joinToString(",")) }
 
     fun retryInterval(seconds: Int) = task { app.settings.retrySeconds(seconds) }
 
-    fun downloadCandidates(choice: DownloadChoice) =
-        DownloadPolicy.select(
-            selectedChapters(),
-            progress.value.filter { it.completed }.map { it.chapterKey }.toSet(),
-            downloads.value.associate { it.releaseId to it.state },
-            choice,
-        )
+    fun downloadCandidates(choice: DownloadChoice, first: Int = 1, last: Int = Int.MAX_VALUE): List<Release> {
+        val existing = downloads.value.associate { it.releaseId to it.state }
+        return if (choice == DownloadChoice.RANGE) DownloadPolicy.range(selectedChapters(), existing, first, last)
+        else DownloadPolicy.select(selectedChapters(), progress.value.filter { it.completed }.map { it.chapterKey }.toSet(), existing, choice)
+    }
 
     fun downloadBatch(releases: List<Release>) {
         if (bulkStatus.value != null) return
@@ -998,6 +1152,7 @@ class ReaderViewModel(
                             markPageForRepair(app, chapter.id, page)
                     }
                 val repairVersion = ChapterFiles.version(chapter.id)
+                if (sourceKey(chapter.mangaId) == "local") throw ContentFailure("This local page is unavailable. Import the comic again to restore its files.")
                 val cacheDir = File(app.cacheDir, "reader").apply { mkdirs() }
                 val target = File(cacheDir, "${chapter.id}-$page-${settings.value.saver}.img")
                 if (validImage(target) && !repairMarker(app, chapter.id, page).exists()) {
@@ -1069,7 +1224,7 @@ class ReaderViewModel(
                             ?.filter { it != target && it.extension == "img" }
                             ?.sortedBy { it.lastModified() }
                             ?.forEach {
-                                if (total > 128L * 1024 * 1024) {
+                                if (total > settings.value.readerCacheMb.toLong() * 1024 * 1024) {
                                     total -= it.length()
                                     it.delete()
                                 }
@@ -1094,6 +1249,26 @@ class ReaderViewModel(
         readerRetryAt.value = 0L
         readerSourceAction.value = false
         readerFile.value = pageFileFor(chapter, page)
+        if (settings.value.detectWebtoon && preferences.value.none { it.mangaId == chapter.mangaId && it.readerMode.isNotEmpty() }) {
+            val dimensions = withContext(Dispatchers.IO) {
+                android.graphics.BitmapFactory.Options().apply {
+                    inJustDecodeBounds = true
+                    android.graphics.BitmapFactory.decodeFile(readerFile.value?.path, this)
+                }
+            }
+            if (dimensions.outWidth > 0 && dimensions.outHeight.toLong() > dimensions.outWidth * 3L)
+                titleReaderMode("webtoon")
+        }
+        coroutineScope {
+            launch {
+                for (next in (page + 1)..minOf(page + settings.value.preloadPages, chapter.pages - 1)) {
+                    if (reader.value?.id != chapter.id) break
+                    try { pageFileFor(chapter, next) }
+                    catch (e: CancellationException) { throw e }
+                    catch (_: IOException) { break }
+                }
+            }
+        }
     }
 
     fun scrollPosition(chapter: Release, page: Int, fraction: Float) {
@@ -1160,7 +1335,9 @@ class ReaderViewModel(
             else "Chapter queued for download."
     }
 
-    fun pause(download: Download) = task {
+    fun pause(download: Download) = task { stopDownload(download, "Paused") }
+
+    private suspend fun stopDownload(download: Download, state: String) {
         withContext(Dispatchers.IO) {
             WorkManager.getInstance(app)
                 .cancelUniqueWork("download-${download.releaseId}")
@@ -1170,9 +1347,29 @@ class ReaderViewModel(
         ChapterFiles.locked(download.releaseId) {
             ChapterFiles.invalidate(download.releaseId)
             dao.download(download.releaseId)?.let { latest ->
-                if (latest.state != "Complete") dao.putDownload(latest.copy(state = "Paused"))
+                if (latest.state != "Complete") dao.putDownload(latest.copy(state = state))
             }
         }
+        kickDownloadQueue(app)
+    }
+
+    fun cancelDownload(download: Download) = task {
+        if (download.state == "Complete") return@task
+        stopDownload(download, "Cancelled")
+    }
+
+    fun moveDownload(download: Download, step: Int? = null) = task {
+        app.database.withTransaction {
+            val rows = dao.orderedQueue().toMutableList()
+            val index = rows.indexOfFirst { it.releaseId == download.releaseId }
+            if (index >= 0) {
+                val target = if (step == null) 0 else (index + step).coerceIn(0, rows.lastIndex)
+                rows.add(target, rows.removeAt(index))
+                rows.forEachIndexed { rank, row -> dao.queuePosition(row.releaseId, rank.toLong()) }
+            }
+        }
+        kickDownloadQueue(app)
+        notice.value = "Queue order updated. The current chapter finishes first."
     }
 
     fun resume(download: Download) = task {
@@ -1196,5 +1393,45 @@ class ReaderViewModel(
                 dao.removeDownload(download.releaseId)
             }
         }
+        kickDownloadQueue(app)
     }
+    @OptIn(kotlinx.coroutines.FlowPreview::class)
+    private fun observeNavigation() {
+        viewModelScope.launch {
+            combine(currentTab, activeSource, searchQuery, browseFilter, selected) { tab, source, query, filter, title ->
+                NavigationState(tab, source, query, filter, title?.id.orEmpty())
+            }.combine(reader) { state, release -> state.copy(reader = release?.id.orEmpty()) }
+                .combine(readerPage) { state, page -> state.copy(page = page) }
+                .combine(activeCreator) { state, creator -> state.copy(creator = creator) }
+                .debounce(150).collect { savedState["navigation"] = it.encode() }
+        }
+    }
+
+    init {
+        viewModelScope.launch {
+            val restored = NavigationState.decode(savedState["navigation"])
+            if (restored != null) {
+                app.settings.flow.first()
+                currentTab.value = restored.tab
+                activeSource.value = restored.source.takeIf { it in sourceNames }.orEmpty()
+                browseFilter.value = restored.filter
+                searchQuery.value = restored.query
+                query = restored.query
+                creatorFilter = restored.creator
+                activeCreator.value = restored.creator
+                val title = restored.title.takeIf { it.isNotEmpty() }?.let { dao.manga(it) }
+                if (title != null) {
+                    selected.value = title
+                    chapters.value = dao.chapters(title.id).map { it.release() }
+                    val release = restored.reader.takeIf { it.isNotEmpty() }?.let { dao.chapter(it)?.release() }
+                    if (release != null && release.mangaId == title.id) read(release, requestedPage = restored.page)
+                    else open(title)
+                } else if (restored.tab == 1 && activeSource.value.isNotEmpty()) {
+                    search(restored.query, restored.creator)
+                }
+            }
+            observeNavigation()
+        }
+    }
+
 }

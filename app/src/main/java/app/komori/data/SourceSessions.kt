@@ -1,5 +1,7 @@
 package app.komori.data
 
+import kotlin.coroutines.resume
+
 import android.content.Context
 import android.webkit.CookieManager
 import android.webkit.WebSettings
@@ -31,7 +33,7 @@ interface SourceCookieStore {
 /** CookieManager applies expiry, domain, path and Secure rules before returning cookies. */
 class SourceCookieJar(private val store: SourceCookieStore) : CookieJar {
     private fun allowed(url: HttpUrl) =
-        url.isHttps && sourceOrigins.values.any { it.toHttpUrl().host == url.host }
+        url.isHttps && sourceOrigins.keys.any { url.host in sourceSessionHosts(it) }
 
     override fun loadForRequest(url: HttpUrl): List<Cookie> {
         if (!allowed(url)) return emptyList()
@@ -97,12 +99,53 @@ fun requiresSourceAction(error: Exception?): Boolean =
 class SourceSessions(context: Context) {
     val userAgent: String = WebSettings.getDefaultUserAgent(context)
     private val manager = CookieManager.getInstance().apply { setAcceptCookie(true) }
+    private val paths = context.getSharedPreferences("source-session-paths", Context.MODE_PRIVATE)
+    private val pathLock = Any()
+
+    private fun rememberPath(url: String) {
+        val parsed = url.toHttpUrlOrNull() ?: return
+        if (parsed.encodedPath.length > 512 || ';' in parsed.encodedPath) return
+        synchronized(pathLock) {
+            val known = paths.getStringSet(parsed.host, emptySet()).orEmpty().toMutableSet()
+            if (parsed.encodedPath !in known) {
+                if (known.size >= 64) known.remove(known.first())
+                known.add(parsed.encodedPath)
+                paths.edit().putStringSet(parsed.host, known).apply()
+            }
+        }
+    }
+
+    /** Expires source cookies on root, supported routes and paths used by native requests. */
+    suspend fun resetSource(key: String) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main.immediate) {
+        val hosts = sourceSessionHosts(key)
+        require(hosts.isNotEmpty())
+        val deletes = linkedSetOf<Pair<String, String>>()
+        for (host in hosts) {
+            val candidates = linkedSetOf("/", "/g/", "/gallery/", "/artist/", "/author/", "/search/", "/login/", "/reader/")
+            paths.getStringSet(host, emptySet()).orEmpty().forEach { path ->
+                candidates.add(path)
+                path.indices.filter { path[it] == '/' }.forEach { candidates.add(path.take(it + 1)) }
+            }
+            val names = candidates.take(256).flatMap { path ->
+                manager.getCookie("https://$host$path").orEmpty().split(';').map { it.substringBefore('=').trim() }
+            }.filter { it.matches(Regex("[!#$%&'*+.^_`|~0-9A-Za-z-]{1,256}")) }.distinct().take(64)
+            for (path in candidates.take(256)) for (name in names) for (domain in listOf("", "; Domain=$host", "; Domain=${host.removePrefix("www.")}")) {
+                deletes.add("https://$host$path" to "$name=; Max-Age=0; Path=$path; Secure; HttpOnly$domain")
+            }
+            android.webkit.WebStorage.getInstance().deleteOrigin("https://$host")
+        }
+        for ((url, cookie) in deletes) kotlinx.coroutines.suspendCancellableCoroutine<Unit> { continuation ->
+            manager.setCookie(url, cookie) { if (continuation.isActive) continuation.resume(Unit) }
+        }
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { manager.flush() }
+        synchronized(pathLock) { val edit = paths.edit(); hosts.forEach { edit.remove(it) }; edit.apply() }
+    }
     private val jar =
         SourceCookieJar(
             object : SourceCookieStore {
-                override fun read(url: String) = manager.getCookie(url)
+                override fun read(url: String): String? { rememberPath(url); return manager.getCookie(url) }
 
-                override fun write(url: String, cookie: String) = manager.setCookie(url, cookie)
+                override fun write(url: String, cookie: String) { rememberPath(url); manager.setCookie(url, cookie) }
 
                 override fun flush() = manager.flush()
             }

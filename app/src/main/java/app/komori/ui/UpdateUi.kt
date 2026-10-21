@@ -3,6 +3,9 @@ package app.komori.ui
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -33,11 +36,15 @@ fun UpdateDialog(vm: UpdateViewModel = viewModel()) {
         }
     if (state.show && state.update != null)
         AlertDialog(
-            onDismissRequest = vm::dismiss,
+            onDismissRequest = vm::snooze,
             title = { Text("Komori ${state.update!!.version}") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(state.message)
+                    if (state.update!!.releaseNotes.isNotBlank()) {
+                        Text("Release notes", style = MaterialTheme.typography.titleSmall)
+                        Text(state.update!!.releaseNotes, Modifier.heightIn(max = 280.dp).verticalScroll(rememberScrollState()), style = MaterialTheme.typography.bodySmall)
+                    }
                     if (state.downloading) {
                         LinearProgressIndicator(
                             progress = { state.percent / 100f },
@@ -72,7 +79,7 @@ fun UpdateDialog(vm: UpdateViewModel = viewModel()) {
                         Text(if (state.file == null) "Download update" else "Install update")
                     }
             },
-            dismissButton = { TextButton(onClick = vm::dismiss) { Text("Later") } },
+            dismissButton = { TextButton(onClick = vm::snooze) { Text("Snooze 24h") } },
         )
 }
 
@@ -80,6 +87,12 @@ fun UpdateDialog(vm: UpdateViewModel = viewModel()) {
 fun UpdateSettings(vm: UpdateViewModel = viewModel()) {
     val state by vm.state.collectAsStateWithLifecycle()
     Text("App updates", style = MaterialTheme.typography.titleLarge)
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        listOf("stable" to "Stable", "preview" to "Preview").forEach { (key, label) ->
+            FilterChip(state.channel == key, { vm.channel(key) }, { Text(label) }, enabled = !state.checking && !state.downloading)
+        }
+    }
+    Text("Preview includes prereleases. Automatic checks use HTTP cache validators and a six-hour cooldown.", style = MaterialTheme.typography.bodySmall)
     Text(state.message, style = MaterialTheme.typography.bodyMedium)
     Row {
         TextButton(onClick = { vm.check(true) }, enabled = !state.checking && !state.downloading) {
@@ -95,7 +108,7 @@ fun UpdateSettings(vm: UpdateViewModel = viewModel()) {
 @Composable
 fun UpdateBanner(vm: UpdateViewModel = viewModel()) {
     val state by vm.state.collectAsStateWithLifecycle()
-    if (state.update != null && !state.show) {
+    if (state.update != null && !state.show && state.snoozedUntil <= System.currentTimeMillis()) {
         Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
             Row(
                 Modifier.fillMaxWidth().padding(start = 18.dp, end = 8.dp),

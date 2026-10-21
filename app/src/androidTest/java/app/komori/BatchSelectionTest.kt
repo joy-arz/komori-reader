@@ -70,7 +70,7 @@ class BatchSelectionTest {
         }
         val activity =
             instrumentation.startActivitySync(
-                Intent(app, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                Intent(app, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
             ) as MainActivity
         lateinit var vm: ReaderViewModel
         instrumentation.runOnMainSync {
@@ -140,6 +140,9 @@ class BatchSelectionTest {
             tapText("Confirm")
             withTimeout(5000) { while (chapters.any { app.dao.download(it.id) != null }) delay(30) }
             assertTrue(chapters.none { chapterDirectory(app, it.id).exists() })
+        } catch (error: Throwable) {
+            device.executeShellCommand("screencap -p /data/local/tmp/komori-batch-failure.png")
+            throw error
         } finally {
             instrumentation.runOnMainSync { activity.finish() }
             app.settings.set("showContinue", oldSettings.showContinue)

@@ -96,7 +96,7 @@ internal fun BackupSettings(vm: BackupViewModel = viewModel()) {
                         "${pending.backup.manga.size} titles · ${pending.saved} saved · ${pending.liked} liked"
                     )
                     Text(
-                        "${pending.backup.progress.size} reading positions · ${pending.backup.creators.size} followed authors · ${pending.backup.preferences.size} title preferences"
+                        "${pending.backup.progress.size} reading positions · ${pending.backup.creators.size} followed authors · ${pending.backup.preferences.size} title preferences · ${pending.backup.categories.size} categories · ${pending.backup.links.size} migration links"
                     )
                     Text(
                         "Matches on this device: ${pending.matchingTitles} titles, ${pending.matchingShelf} shelf entries, ${pending.matchingProgress} reading positions, ${pending.matchingCreators} authors, ${pending.matchingPreferences} preferences."

@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -25,6 +26,8 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.komori.domain.ReaderContinuity
+import app.komori.MainActivity
 import app.komori.domain.ReadingMode
 import app.komori.domain.Release
 import com.davemorrissey.labs.subscaleview.ImageSource
@@ -52,6 +55,8 @@ fun ReaderScreen(vm: ReaderViewModel, chapter: Release) {
     val mode = ReadingMode.resolve(override, settings.webtoon, settings.rtl)
     var controls by rememberSaveable { mutableStateOf(true) }
     var options by rememberSaveable { mutableStateOf(false) }
+    var jump by rememberSaveable { mutableStateOf(false) }
+    var gapTarget by remember { mutableStateOf<Release?>(null) }
     val view = LocalView.current
     val window = (view.context as? Activity)?.window
     LaunchedEffect(mode, ready) {
@@ -72,7 +77,22 @@ fun ReaderScreen(vm: ReaderViewModel, chapter: Release) {
     }
     BackHandler { if (!controls) controls = true else vm.closeReader() }
     fun navigate(delta: Int) {
-        if (delta > 0 && page + 1 >= count) vm.finishChapter() else vm.page(page + delta)
+        if (!ready || count <= 0) return
+        if (delta < 0 && page == 0) vm.previousChapter()
+        else if (delta > 0 && page + 1 >= count) {
+            val next = vm.nextChapter(chapter)
+            if (settings.gapWarnings && next != null && ReaderContinuity.gap(chapter, next) != null)
+                gapTarget = next
+            else vm.finishChapter()
+        } else if (mode == ReadingMode.WEBTOON) vm.jumpTo(chapter, page + delta)
+        else vm.page(page + delta)
+    }
+    val latestNavigate by rememberUpdatedState<(Int) -> Unit>({ navigate(it) })
+    DisposableEffect(view, settings.volumeKeys) {
+        val activity = view.context as? MainActivity
+        val handler: (Int) -> Unit = { latestNavigate(it) }
+        if (settings.volumeKeys) activity?.volumeNavigation = handler
+        onDispose { if (activity?.volumeNavigation === handler) activity?.volumeNavigation = null }
     }
     Box(Modifier.fillMaxSize().background(Color.Black).safeDrawingPadding()) {
         Column(Modifier.fillMaxSize()) {
@@ -95,13 +115,13 @@ fun ReaderScreen(vm: ReaderViewModel, chapter: Release) {
                     }
                     Text(
                         "${page + 1} / $count",
-                        Modifier.padding(8.dp),
+                        Modifier.clickable { jump = true }.heightIn(min = 48.dp).wrapContentHeight().padding(8.dp),
                         style = MaterialTheme.typography.labelLarge,
                     )
                     RoundControl(KomoriIcons.Tune, "Reader settings", { options = true })
                 }
             if (mode == ReadingMode.WEBTOON && ready) {
-                WebtoonReader(vm, chapter, Modifier.weight(1f), onTap = { controls = !controls })
+                WebtoonReader(vm, chapter, Modifier.weight(1f).graphicsLayer(alpha = 1f - settings.dim / 100f), onTap = { controls = !controls })
             } else
                 Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                     if (error != null)
@@ -147,7 +167,7 @@ fun ReaderScreen(vm: ReaderViewModel, chapter: Release) {
                                     }
                                     image.onReaderSwipe = { navigate(mode.swipeDelta(it)) }
                                 },
-                                modifier = Modifier.fillMaxSize().clipToBounds(),
+                                modifier = Modifier.fillMaxSize().clipToBounds().graphicsLayer(alpha = 1f - settings.dim / 100f),
                                 onReset = null,
                                 onRelease = { it.recycle() },
                             )
@@ -169,6 +189,7 @@ fun ReaderScreen(vm: ReaderViewModel, chapter: Release) {
                         style = MaterialTheme.typography.labelSmall,
                         color = Color.LightGray,
                     )
+                    TextButton(onClick = { jump = true }, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Go to chapter / page") }
                     Row(
                         Modifier.fillMaxWidth().padding(12.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -176,7 +197,7 @@ fun ReaderScreen(vm: ReaderViewModel, chapter: Release) {
                         val previous: @Composable () -> Unit = {
                             OutlinedButton(
                                 onClick = { navigate(-1) },
-                                enabled = page > 0 && file != null,
+                                enabled = (page > 0 || vm.previousChapter(chapter) != null) && file != null,
                             ) {
                                 Text("Previous")
                             }
@@ -223,6 +244,13 @@ fun ReaderScreen(vm: ReaderViewModel, chapter: Release) {
                 }
             }
     }
+    gapTarget?.let { next ->
+        AlertDialog(onDismissRequest = { gapTarget = null }, title = { Text("Chapter gap") },
+            text = { Text(ReaderContinuity.gap(chapter, next).orEmpty()) },
+            confirmButton = { TextButton(onClick = { gapTarget = null; vm.finishChapter() }) { Text("Continue") } },
+            dismissButton = { TextButton(onClick = { gapTarget = null }) { Text("Stay here") } })
+    }
+    if (jump) ReaderJumpDialog(vm, chapter, page, count) { jump = false }
     if (options)
         ModalBottomSheet(
             onDismissRequest = { options = false },
@@ -254,6 +282,8 @@ fun ReaderScreen(vm: ReaderViewModel, chapter: Release) {
                         Text(label, Modifier.padding(start = 8.dp))
                     }
                 }
+                HorizontalDivider(Modifier.padding(vertical = 12.dp))
+                ReaderTools(vm, settings)
                 HorizontalDivider(Modifier.padding(vertical = 12.dp))
                 Text(
                     "Paged mode: tap the center to hide controls; use edges or swipes to turn pages. When zoomed in, drag to pan. Webtoon: tap any image to hide controls.",

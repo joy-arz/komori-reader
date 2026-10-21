@@ -40,13 +40,21 @@ class SourceMetadataTest {
     @Test fun followBrowsePreservesSourceSortAndPagination() = runBlocking {
         for (key in listOf("zap", "nhentai")) MockWebServer().use { server ->
             server.enqueue(MockResponse().setBody("<div></div>"))
+            if (key == "zap") server.enqueue(MockResponse().setBody("<div></div>"))
             val source = WebSource(key, server.url("/").toString().trimEnd('/'), MangaDex.client())
             source.browse("", 3, BrowseFilter(if (key == "zap") "Popular" else "Popular all time"),
                 Creator(sourceId(key, "/artist/sample-artist/"), "Sample Artist", "artist"))
             val request = server.takeRequest().requestUrl!!
             assertEquals(if (key == "zap") "/artist/sample-artist/popular/" else "/artist/sample-artist/", request.encodedPath)
             assertEquals("3", request.queryParameter("page"))
-            if (key == "zap") assertNull(request.queryParameter("pp"))
+            if (key == "zap") {
+                assertNull(request.queryParameter("pp"))
+                val supplementary = server.takeRequest().requestUrl!!
+                assertEquals("/search/", supplementary.encodedPath)
+                assertEquals("Sample Artist", supplementary.queryParameter("key"))
+                assertEquals("1", supplementary.queryParameter("pp"))
+                assertEquals("3", supplementary.queryParameter("page"))
+            }
             else assertEquals("popular", request.queryParameter("sort"))
         }
     }
@@ -55,8 +63,10 @@ class SourceMetadataTest {
         MockWebServer().use { server ->
             val source = WebSource("zap", server.url("/").toString().trimEnd('/'), MangaDex.client())
             server.enqueue(MockResponse().setBody(""))
+            server.enqueue(MockResponse().setBody(""))
             source.browse("Sample Artist", 1, BrowseFilter(searchType = "Author"))
             assertEquals("/artist/sample-artist/", server.takeRequest().requestUrl!!.encodedPath)
+            assertEquals("/search/", server.takeRequest().requestUrl!!.encodedPath)
             server.enqueue(MockResponse().setBody(""))
             source.browse("colour", 2, BrowseFilter(searchType = "Tag"))
             assertEquals("/tag/colour/", server.takeRequest().requestUrl!!.encodedPath)

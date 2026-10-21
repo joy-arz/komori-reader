@@ -82,15 +82,21 @@ fun KomoriScreen(vm: ReaderViewModel) {
     val tab by vm.currentTab.collectAsStateWithLifecycle()
     val navigationEntry by vm.navigationEntry.collectAsStateWithLifecycle()
     val canNavigateBack by vm.canNavigateBack.collectAsStateWithLifecycle()
+    val dark = when (settings.theme) {
+        "system" -> androidx.compose.foundation.isSystemInDarkTheme()
+        "light" -> false
+        "dark" -> true
+        else -> settings.dark
+    }
     val screenState = rememberSaveableStateHolder()
     val snackbar = remember { SnackbarHostState() }
     val view = LocalView.current
-    LaunchedEffect(reader, settings.dark) {
+    LaunchedEffect(reader, dark) {
         (view.context as? Activity)?.window?.let { window ->
             view.post {
                 WindowCompat.getInsetsController(window, view).apply {
-                    isAppearanceLightStatusBars = reader == null && !settings.dark
-                    isAppearanceLightNavigationBars = reader == null && !settings.dark
+                    isAppearanceLightStatusBars = reader == null && !dark
+                    isAppearanceLightNavigationBars = reader == null && !dark
                 }
             }
         }
@@ -102,12 +108,13 @@ fun KomoriScreen(vm: ReaderViewModel) {
         }
     }
     MaterialTheme(
-        colorScheme = if (settings.dark) Night else Day,
+        colorScheme = if (dark) Night else Day,
         typography = ReaderTypography,
         shapes = ReaderShapes,
     ) {
         UpdateDialog()
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            ReaderWindowEffects(reader != null, settings)
             if (reader != null)
                 key(readerSession) {
                     MaterialTheme(colorScheme = Night) {
@@ -125,7 +132,7 @@ fun KomoriScreen(vm: ReaderViewModel) {
                     modifier =
                         Modifier.background(
                             Brush.radialGradient(
-                                if (settings.dark) listOf(Color(0xFF073017), Color.Black)
+                                if (dark) listOf(Color(0xFF073017), Color.Black)
                                 else listOf(Color(0xFFE1F2DB), Day.background),
                                 center = Offset.Zero,
                                 radius = 1000f,
@@ -233,7 +240,10 @@ private fun coverRequest(manga: Manga): coil.request.ImageRequest {
     val context = LocalContext.current
     return remember(context, manga.id, manga.cover) {
         coil.request.ImageRequest.Builder(context)
-            .data(manga.cover)
+            .data(manga.cover.ifBlank { if (sourceKey(manga.id) == "local") {
+                val token = sourcePath(manga.id).trim('/').substringAfterLast('/')
+                android.net.Uri.fromFile(pageFile(context, sourceId("local", "/chapter/$token/"), 0)).toString()
+            } else "" })
             .apply { sourceOrigins[sourceKey(manga.id)]?.let { addHeader("Referer", "$it/") } }
             .build()
     }
@@ -265,15 +275,29 @@ private fun EmptyState(
 }
 
 @Composable
-private fun MangaCover(
+internal fun MangaCover(
     manga: Manga,
     description: String?,
     modifier: Modifier,
     contentScale: ContentScale = ContentScale.Crop,
+    showSource: Boolean = false,
 ) {
+    var coverState by remember(manga.cover) { mutableIntStateOf(if (manga.cover.isEmpty()) 2 else 0) }
     val languages = remember(manga.tagsJson) { manga.coverLanguages() }
     Box(modifier) {
-        AsyncImage(coverRequest(manga), description, Modifier.matchParentSize(), contentScale = contentScale)
+        AsyncImage(coverRequest(manga), description, Modifier.matchParentSize(), contentScale = contentScale,
+            onLoading = { coverState = 0 }, onSuccess = { coverState = 1 }, onError = { coverState = 2 })
+        if (coverState != 1) Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+            if (coverState == 0) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+            else { Icon(KomoriIcons.MenuBook, "No cover available", Modifier.size(26.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
+        if (showSource) Text(
+            when (sourceKey(manga.id)) { "mangadex" -> "MD"; "demonic" -> "DS"; "weeb" -> "WC"; "zap" -> "HZ"; "imhentai" -> "IM"; "nhentai" -> "NH"; "local" -> "Local"; else -> "?" },
+            Modifier.align(Alignment.TopEnd).padding(6.dp).clip(RoundedCornerShape(5.dp))
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)).padding(horizontal = 6.dp, vertical = 3.dp)
+                .semantics { contentDescription = "Source: ${sourceName(manga.id)}" },
+            color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall,
+        )
         if (languages.isNotEmpty()) {
             Text(
                 languages.joinToString(" / ") { it.code },
@@ -294,9 +318,23 @@ private fun MangaCover(
 
 @Composable
 private fun Library(vm: ReaderViewModel, discover: () -> Unit) {
+    val updatesVisible by vm.updatesVisible.collectAsStateWithLifecycle()
     val manga by vm.library.collectAsStateWithLifecycle()
     val shelf by vm.shelf.collectAsStateWithLifecycle()
     val downloads by vm.downloads.collectAsStateWithLifecycle()
+    val counts by vm.libraryCounts.collectAsStateWithLifecycle()
+    val memberships by vm.memberships.collectAsStateWithLifecycle()
+    val categoryNames by vm.categories.collectAsStateWithLifecycle()
+    val countById = remember(counts) { counts.associateBy { it.mangaId } }
+    val mangaById = remember(manga) { manga.associateBy { it.id } }
+    val shelfById = remember(shelf) { shelf.associateBy { it.mangaId } }
+    var category by rememberSaveable { mutableStateOf("") }
+    var status by rememberSaveable { mutableStateOf("") }
+    var unreadOnly by rememberSaveable { mutableStateOf(false) }
+    var showLibraryFilters by remember { mutableStateOf(false) }
+    if (showLibraryFilters) LibraryFilterDialog(vm, category, status, unreadOnly,
+        { selectedCategory, selectedStatus, unread -> category = selectedCategory; status = selectedStatus; unreadOnly = unread },
+        { showLibraryFilters = false })
     val downloadedIds = downloads.filter { it.done > 0 }.map { it.mangaId }.toSet()
     val settings by vm.settings.collectAsStateWithLifecycle()
     var filter by rememberSaveable { mutableStateOf("Saved") }
@@ -311,14 +349,25 @@ private fun Library(vm: ReaderViewModel, discover: () -> Unit) {
     }
     BackHandler(searchExpanded) { closeSearch() }
     LaunchedEffect(searchExpanded) { if (searchExpanded) focus.requestFocus() }
+    if (updatesVisible) {
+        LibraryUpdatesScreen(vm) { vm.updatesVisible.value = false }
+        return
+    }
     Column(Modifier.fillMaxSize()) {
         Row(
             Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 18.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("Your library", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+            RoundControl(KomoriIcons.CheckCircle, "Library updates", { vm.updatesVisible.value = true })
+            RoundControl(KomoriIcons.Tune, "Filter library", { showLibraryFilters = true })
             if (!searchExpanded)
                 RoundControl(KomoriIcons.Search, "Search library", { searchExpanded = true })
+        }
+        if (category.isNotEmpty() || status.isNotEmpty() || unreadOnly) {
+            Text(listOfNotNull(category.takeIf { it.isNotEmpty() }?.let { id -> categoryNames.find { it.id == id }?.name ?: "Uncategorized" },
+                status.takeIf { it.isNotEmpty() }, "Unread chapters".takeIf { unreadOnly }).joinToString(" · "),
+                Modifier.padding(horizontal = 18.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall)
         }
         val recent = shelf.firstOrNull { it.lastRelease != null }
         val book = manga.find { it.id == recent?.mangaId }
@@ -423,10 +472,15 @@ private fun Library(vm: ReaderViewModel, discover: () -> Unit) {
                         else -> it.saved
                     }
                 }
+            val categoriesByTitle = remember(memberships) { memberships.groupBy { it.mangaId }.mapValues { (_, rows) -> rows.map { it.categoryId }.toSet() } }
             val titles =
                 (if (filter == "Downloaded") manga.filter { it.id in downloadedIds }
-                    else entries.mapNotNull { entry -> manga.find { it.id == entry.mangaId } })
+                    else entries.mapNotNull { entry -> mangaById[entry.mangaId] })
                     .filter { it.title.contains(query, true) }
+                    .filter { status.isEmpty() || shelfById[it.id]?.status == status }
+                    .filter { !unreadOnly || (countById[it.id]?.unread ?: 0) > 0 }
+                    .filter { title -> category.isEmpty() || if (category == "uncategorized") categoriesByTitle[title.id].isNullOrEmpty()
+                        else category in categoriesByTitle[title.id].orEmpty() }
                     .let {
                         if (settings.libraryAlphabetical)
                             it.sortedBy { book -> book.title.lowercase() }
@@ -461,6 +515,7 @@ private fun Library(vm: ReaderViewModel, discover: () -> Unit) {
                                 ?.let { vm.readOffline(it, chooseStart = true) }
                         else vm.open(title, true)
                     },
+                    unreadCounts = countById.mapValues { it.value.unread },
                     subtitle = { title -> shelf.find { it.mangaId == title.id }?.status ?: "" },
                 )
         }
@@ -708,9 +763,21 @@ private fun Discover(vm: ReaderViewModel) {
     }
     var searchExpanded by rememberSaveable { mutableStateOf(false) }
     var sourceMenu by remember { mutableStateOf(false) }
+    var saveSearch by remember { mutableStateOf(false) }
+    var showSavedSearches by remember { mutableStateOf(false) }
+    if (saveSearch) SaveSearchDialog(vm) { saveSearch = false }
+    if (showSavedSearches) SavedSearchDialog(vm) { showSavedSearches = false }
     val focusRequester = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
-    val sources = sourceOrder(settings.sources)
+    val sources = enabledSourceOrder(settings)
+    LaunchedEffect(sources, activeSource, activeCreator) {
+        if (activeSource.isNotEmpty() && activeSource !in sources && activeCreator == null) {
+            sources.firstOrNull()?.let(vm::chooseSource) ?: run {
+                vm.results.value = emptyList(); vm.activeSource.value = ""
+                vm.error.value = "Enable a source in Settings to browse titles."
+            }
+        }
+    }
     val sourceTabs = rememberLazyListState()
     LaunchedEffect(activeSource, sources) {
         val index = sources.indexOf(activeSource)
@@ -806,6 +873,8 @@ private fun Discover(vm: ReaderViewModel) {
                     RoundControl(KomoriIcons.More, "Source options", { sourceMenu = true })
                     DropdownMenu(sourceMenu, { sourceMenu = false }) {
                         VerifySourceButton(vm, activeSource)
+                        DropdownMenuItem(text = { Text("Save this search") }, onClick = { sourceMenu = false; saveSearch = true })
+                        DropdownMenuItem(text = { Text("Saved searches") }, onClick = { sourceMenu = false; showSavedSearches = true })
                         DropdownMenuItem(
                             text = { Text("Reset search") },
                             onClick = {
@@ -903,9 +972,10 @@ private fun Discover(vm: ReaderViewModel) {
                 EmptyState(
                     KomoriIcons.Search,
                     "No titles to show",
-                    "Try a different search, or check your connection.",
-                    "Retry",
-                    { vm.search() },
+                    if (vm.canLoadMore && browseError == null) "No matching works on this page. More source results are available."
+                    else "Try a different search, or check your connection.",
+                    if (vm.canLoadMore && browseError == null) "Continue searching" else "Retry",
+                    { vm.search(more = vm.canLoadMore && browseError == null) },
                 )
             else
                 MangaGrid(
@@ -947,17 +1017,21 @@ private fun MangaGrid(
     onRead: (Manga) -> Unit,
     subtitle: (Manga) -> String = { "" },
     footer: @Composable () -> Unit = {},
+    unreadCounts: Map<String, Int> = emptyMap(),
     gridState: LazyGridState = rememberLazyGridState(),
 ) {
+    val settings by vm.settings.collectAsStateWithLifecycle()
+    var categorySelection by remember { mutableStateOf<List<String>?>(null) }
     val available = manga.map { it.id }
     val selection = rememberMultiSelection(available)
     val actions =
-        listOf("Save", "Like", "Unlike", "Remove from Library", "Mark completed").map { label ->
+        listOf("Save", "Like", "Unlike", "Remove from Library", "Mark completed", "Mark all read", "Mark unread").map { label ->
             BatchAction(label, label == "Remove from Library") { ids ->
                 vm.batchTitles(manga.filter { it.id in ids }, label)
             }
         } +
             listOf(
+                BatchAction("Set categories") { categorySelection = it },
                 BatchAction("Download all chapters") { ids ->
                     vm.downloadTitles(manga.filter { it.id in ids }, false)
                 },
@@ -971,10 +1045,11 @@ private fun MangaGrid(
                     )
                 },
             )
+    categorySelection?.let { ids -> CategoryAssignmentDialog(vm, ids) { categorySelection = null } }
     Column(Modifier.fillMaxSize()) {
         SelectionBar(selection, available, actions)
         LazyVerticalGrid(
-            GridCells.Adaptive(140.dp),
+            GridCells.Adaptive(if (settings.compact) 140.dp else 170.dp),
             state = gridState,
             modifier = Modifier.weight(1f),
             contentPadding = PaddingValues(16.dp, 12.dp, 16.dp, 24.dp),
@@ -1004,6 +1079,14 @@ private fun MangaGrid(
                                     },
                                 ),
                             contentScale = ContentScale.Crop,
+                            showSource = !selection.active,
+                        )
+                        if ((unreadCounts[title.id] ?: 0) > 0) Text(
+                            "${unreadCounts[title.id]} unread",
+                            Modifier.align(Alignment.BottomStart).padding(8.dp)
+                                .clip(RoundedCornerShape(6.dp)).background(MaterialTheme.colorScheme.surface.copy(alpha = 0.95f))
+                                .padding(horizontal = 6.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary,
                         )
                         if (selection.active)
                             Checkbox(
@@ -1126,6 +1209,9 @@ private fun Details(
     val chapterIds = visibleChapters.map { it.id }
     val chapterSelection = rememberMultiSelection(chapterIds)
     var showGroups by remember { mutableStateOf(false) }
+    var alternateFor by remember { mutableStateOf<app.komori.domain.Release?>(null) }
+    var showMigration by remember { mutableStateOf(false) }
+    val migrationLinks by vm.migrationLinks.collectAsStateWithLifecycle()
     var showStatus by remember { mutableStateOf(false) }
     val uri = LocalUriHandler.current
     val creators =
@@ -1394,11 +1480,22 @@ private fun Details(
                         { chapterSelection.toggle(chapter.id) },
                         Modifier.semantics { contentDescription = "Select ${chapter.label}" },
                     )
-                else ChapterDownloadControl(vm, chapter, downloaded)
+                else {
+                    if (raw.count { it.key == chapter.key } > 1)
+                        TextButton(onClick = { alternateFor = chapter }) { Text("Releases") }
+                    ChapterDownloadControl(vm, chapter, downloaded)
+                }
             }
         }
         item {
-            TextButton(onClick = { uri.openUri(sourcePageUrl(manga.id)) }) {
+            TextButton(onClick = { showMigration = true }) { Text("Find another edition / source") }
+            migrationLinks.filter { it.fromId == manga.id || it.toId == manga.id }.forEach { link ->
+                val other = if (link.fromId == manga.id) link.toId else link.fromId
+                library.find { it.id == other }?.let { linked ->
+                    TextButton(onClick = { vm.open(linked) }) { Text("Linked: ${sourceName(other)} · ${linked.title}") }
+                }
+            }
+            if (sourceKey(manga.id) != "local") TextButton(onClick = { uri.openUri(sourcePageUrl(manga.id)) }) {
                 Text("View on ${sourceName(manga.id)}")
             }
             Text(
@@ -1428,9 +1525,28 @@ private fun Details(
             },
             confirmButton = {},
         )
+    if (showMigration) MigrationDialog(vm, manga, dismiss = { showMigration = false })
+    alternateFor?.let { chosen ->
+        val alternatives = raw.filter { it.key == chosen.key }
+        AlertDialog(onDismissRequest = { alternateFor = null }, title = { Text("${chosen.label} releases") },
+            text = { Column {
+                Text(if (!settings.smart) "All releases are shown."
+                    else if (shelf.any { it.mangaId == manga.id && it.lastRelease == chosen.id }) "The current release stays selected."
+                    else if (preferences.find { it.mangaId == manga.id }?.groupId in chosen.groups) "Your preferred scanlation group is available."
+                    else "Smart Chapters picks a readable release, then scanlation continuity and a stable fallback.", style = MaterialTheme.typography.bodySmall)
+                LazyColumn(Modifier.heightIn(max = 340.dp)) {
+                    items(alternatives, key = { it.id }) { release ->
+                        ListItem(headlineContent = { Text(release.groupNames) },
+                            supportingContent = { Text("${release.language.uppercase()} · ${if (release.readable) if (release.local) "Downloaded" else "Readable" else "Unavailable"}") },
+                            leadingContent = { RadioButton(release.id == chosen.id, null) },
+                            modifier = Modifier.clickable(enabled = release.readable) { alternateFor = null; vm.read(release) })
+                    }
+                }
+            } }, confirmButton = { TextButton(onClick = { alternateFor = null }) { Text("Close") } })
+    }
     if (showLanguages)
-        LanguagePicker(settings.language, sourceLanguages, { showLanguages = false }) {
-            vm.language(it)
+        LanguagePicker(vm.chapterLanguage(), sourceLanguages, { showLanguages = false }, titleOnly = true) {
+            vm.titleLanguage(it)
             showLanguages = false
         }
     if (showGroups)
@@ -1513,7 +1629,13 @@ private fun Downloads(vm: ReaderViewModel) {
         downloads.any {
             it.state in listOf("Paused", "Failed", "Verification required", "Needs repair")
         }
+    val exportComic = rememberComicExporter(vm)
     var queueMenu by remember { mutableStateOf(false) }
+    var groupByTitle by rememberSaveable { mutableStateOf(true) }
+    val environment by remember(vm.app) { downloadEnvironment(vm.app) }.collectAsStateWithLifecycle(DownloadEnvironment())
+    val mangaById = remember(manga) { manga.associateBy { it.id } }
+    val ordered = downloads.sortedWith(compareBy<Download> { it.state == "Complete" }.thenBy { it.queuePosition }.thenBy { it.releaseId })
+    val groups = if (groupByTitle) ordered.groupBy { it.mangaId } else linkedMapOf("" to ordered)
     Column(Modifier.fillMaxSize()) {
         Row(
             Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 18.dp),
@@ -1528,10 +1650,12 @@ private fun Downloads(vm: ReaderViewModel) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
             }
-            if (active > 0 || canResume)
+            if (downloads.isNotEmpty())
                 Box {
                     RoundControl(KomoriIcons.More, "Queue options", { queueMenu = true })
                     DropdownMenu(queueMenu, { queueMenu = false }) {
+                        DropdownMenuItem(text = { Text(if (groupByTitle) "Show queue order" else "Group by title") },
+                            onClick = { groupByTitle = !groupByTitle; queueMenu = false })
                         if (active > 0)
                             DropdownMenuItem(
                                 text = { Text("Pause queue") },
@@ -1570,16 +1694,35 @@ private fun Downloads(vm: ReaderViewModel) {
                         listOf(
                             BatchAction("Pause selected") { vm.batchDownloads(it, "Pause") },
                             BatchAction("Resume selected") { vm.batchDownloads(it, "Resume") },
+                            BatchAction("Cancel selected") { vm.batchDownloads(it, "Cancel") },
                             BatchAction("Delete downloads", true) {
                                 vm.batchDownloads(it, "Delete downloads")
                             },
                         ),
                     )
                 }
+                groups.forEach { (mangaId, chapters) ->
+                if (groupByTitle) item(key = "title-$mangaId") {
+                    Text(mangaById[mangaId]?.title ?: "Downloaded title", style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).combinedClickable(
+                            onLongClick = {
+                                selection.active = true
+                                selection.ids = (selection.ids + chapters.map { it.releaseId }).distinct()
+                            },
+                            onClick = {
+                                if (selection.active) {
+                                    val groupIds = chapters.map { it.releaseId }
+                                    selection.ids = if (groupIds.all { it in selection.ids }) selection.ids - groupIds.toSet()
+                                        else (selection.ids + groupIds).distinct()
+                                }
+                            }).padding(top = 8.dp))
+                }
                 items(
-                    downloads.sortedBy { if (it.state == "Complete") 1 else 0 },
+                    chapters,
                     key = { it.releaseId },
                 ) { download ->
+                    val displayState = downloadDisplayState(download, environment, settings.wifi)
+                    var itemMenu by remember { mutableStateOf(false) }
                     OutlinedCard(
                         modifier =
                             Modifier.fillMaxWidth().combinedClickable(
@@ -1608,7 +1751,7 @@ private fun Downloads(vm: ReaderViewModel) {
                                 style = MaterialTheme.typography.titleMedium,
                             )
                             Text(
-                                "${download.label} · ${download.state}",
+                                "${download.label} · $displayState",
                                 style = MaterialTheme.typography.bodySmall,
                             )
                             val transfer = transfers[download.releaseId]
@@ -1647,10 +1790,8 @@ private fun Downloads(vm: ReaderViewModel) {
                                             if (transfer.totalBytes > 0)
                                                 " / ${transfer.totalBytes / 1024} KB"
                                             else " received"
-                                    download.state == "Queued" ->
-                                        if (settings.wifi)
-                                            "Waiting for queue, unmetered Wi-Fi and available storage"
-                                        else "Waiting for queue, connection and available storage"
+                                    displayState.startsWith("Waiting") -> displayState
+                                    download.state == "Queued" -> "Queued · position ${ordered.indexOfFirst { it.releaseId == download.releaseId } + 1}"
                                     download.state == "Retrying" ->
                                         "Retry scheduled · ${download.done} pages saved"
                                     else -> "${download.done} / ${download.total} pages"
@@ -1673,6 +1814,7 @@ private fun Downloads(vm: ReaderViewModel) {
                                             "Failed",
                                             "Verification required",
                                             "Needs repair",
+                                            "Cancelled",
                                         )
                                 )
                                     TextButton(onClick = { vm.resume(download) }) {
@@ -1690,10 +1832,23 @@ private fun Downloads(vm: ReaderViewModel) {
                                             else "Read saved pages"
                                         )
                                     }
-                                TextButton(onClick = { deleting = download }) { Text("Delete") }
+                                Box {
+                                    TextButton(onClick = { itemMenu = true }) { Text("More") }
+                                    DropdownMenu(itemMenu, { itemMenu = false }) {
+                                        if (download.state in DownloadPolicy.activeStates) {
+                                            DropdownMenuItem(text = { Text("Download now") }, onClick = { vm.moveDownload(download); itemMenu = false })
+                                            DropdownMenuItem(text = { Text("Move up") }, onClick = { vm.moveDownload(download, -1); itemMenu = false })
+                                            DropdownMenuItem(text = { Text("Move down") }, onClick = { vm.moveDownload(download, 1); itemMenu = false })
+                                            DropdownMenuItem(text = { Text("Cancel, keep pages") }, onClick = { vm.cancelDownload(download); itemMenu = false })
+                                        }
+                                        if (download.state == "Complete") DropdownMenuItem(text = { Text("Export CBZ") }, onClick = { exportComic(download); itemMenu = false })
+                                        DropdownMenuItem(text = { Text("Delete downloads") }, onClick = { deleting = download; itemMenu = false })
+                                    }
+                                }
                             }
                         }
                     }
+                }
                 }
             }
     }
@@ -1750,7 +1905,7 @@ private fun SettingsScreen(vm: ReaderViewModel, settings: Settings) {
                 .padding(horizontal = 18.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            listOf("Reading", "Sources", "App").forEach { label ->
+            listOf("Reading", "Sources", "App", "Support").forEach { label ->
                 FilterChip(
                     section == label,
                     { section = label },
@@ -1760,7 +1915,8 @@ private fun SettingsScreen(vm: ReaderViewModel, settings: Settings) {
             }
         }
         key(section) {
-            LazyColumn(
+            if (section == "Support") SupportPage()
+            else LazyColumn(
                 contentPadding = PaddingValues(18.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
@@ -1786,9 +1942,11 @@ private fun SettingsScreen(vm: ReaderViewModel, settings: Settings) {
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Text(
-                                    "${index + 1}. ${sourceNames.getValue(key)}${if(index == 0) " · Default" else ""}",
+                                    "${index + 1}. ${sourceNames.getValue(key)}${if(key == enabledSourceOrder(settings).firstOrNull()) " · Default" else ""}",
                                     Modifier.weight(1f),
                                 )
+                                Switch(key in settings.enabledSources.split(','), { vm.enableSource(key, it) },
+                                    Modifier.semantics { contentDescription = "Enable ${sourceNames[key]}" })
                                 TextButton(
                                     enabled = index > 0,
                                     onClick = { vm.moveSource(key, -1) },
@@ -1813,6 +1971,7 @@ private fun SettingsScreen(vm: ReaderViewModel, settings: Settings) {
                             vm.setting("showContinue", it)
                         }
                     }
+                    item { SourceDiagnostics(vm) }
                     item {
                         TextButton(onClick = { vm.resetSourceOrder() }) {
                             Text("Reset source order")
@@ -1968,15 +2127,24 @@ private fun SettingsScreen(vm: ReaderViewModel, settings: Settings) {
                     }
                     item {
                         Toggle(
-                            "Dark appearance",
-                            "A softer shelf for late-night reading",
-                            settings.dark,
-                        ) {
-                            vm.setting("dark", it)
+                            "Compact layout",
+                            "Smaller covers fit more titles on screen",
+                            settings.compact,
+                        ) { vm.setting("compact", it) }
+                        Text("Appearance", style = MaterialTheme.typography.titleSmall)
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            listOf("system", "dark", "light").forEach { choice ->
+                                FilterChip((if (settings.theme == "legacy") if (settings.dark) "dark" else "light" else settings.theme) == choice,
+                                    { vm.choiceSetting("theme", choice) }, { Text(choice.replaceFirstChar { it.uppercase() }) })
+                            }
                         }
                     }
                     item {
                         HorizontalDivider()
+                        LocalFilesSettings(vm, settings)
+                        HorizontalDivider(Modifier.padding(vertical = 12.dp))
+                        LibraryCheckSettings(vm, settings)
+                        HorizontalDivider(Modifier.padding(vertical = 12.dp))
                         UpdateSettings()
                         Toggle(
                             "Download updates on Wi-Fi",
@@ -2016,6 +2184,7 @@ private fun LanguagePicker(
     current: String,
     sourceLanguages: List<String>,
     dismiss: () -> Unit,
+    titleOnly: Boolean = false,
     choose: (String) -> Unit,
 ) {
     AlertDialog(
@@ -2025,7 +2194,7 @@ private fun LanguagePicker(
             LazyColumn(Modifier.heightIn(max = 400.dp)) {
                 item {
                     Text(
-                        "Applies across the app. MangaDex language metadata can include translations that are no longer available.",
+                        if (titleOnly) "Applies to this title. Source language hints can include removed translations." else "Applies across the app. MangaDex language metadata can include translations that are no longer available.",
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
@@ -2157,6 +2326,8 @@ private fun SourceFilters(
 @Composable
 private fun BulkDownloadDialog(vm: ReaderViewModel, close: () -> Unit) {
     var choice by remember { mutableStateOf(DownloadChoice.NEXT_5) }
+    var first by rememberSaveable { mutableStateOf("1") }
+    var last by rememberSaveable { mutableStateOf("10") }
     val downloads by vm.downloads.collectAsStateWithLifecycle()
     val progress by vm.progress.collectAsStateWithLifecycle()
     val chapters by vm.chapters.collectAsStateWithLifecycle()
@@ -2164,8 +2335,8 @@ private fun BulkDownloadDialog(vm: ReaderViewModel, close: () -> Unit) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val shelf by vm.shelf.collectAsStateWithLifecycle()
     val candidates =
-        remember(choice, downloads, progress, chapters, preferences, settings, shelf) {
-            vm.downloadCandidates(choice)
+        remember(choice, first, last, downloads, progress, chapters, preferences, settings, shelf) {
+            vm.downloadCandidates(choice, first.toIntOrNull() ?: 0, last.toIntOrNull() ?: 0)
         }
     AlertDialog(
         onDismissRequest = close,
@@ -2191,6 +2362,19 @@ private fun BulkDownloadDialog(vm: ReaderViewModel, close: () -> Unit) {
                         Text(value.label)
                     }
                 }
+                if (choice == DownloadChoice.RANGE) {
+                    val readable = vm.selectedChapters().filter { it.readable }
+                    Text("Choose list positions in reading order, including extras (1–${readable.size}).", style = MaterialTheme.typography.bodySmall)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(first, { first = it.filter(Char::isDigit).take(5) }, Modifier.weight(1f), label = { Text("From position") },
+                            keyboardOptions = KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number), singleLine = true)
+                        OutlinedTextField(last, { last = it.filter(Char::isDigit).take(5) }, Modifier.weight(1f), label = { Text("To position") },
+                            keyboardOptions = KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number), singleLine = true)
+                    }
+                    val from = first.toIntOrNull()?.let { readable.getOrNull(it - 1) }
+                    val to = last.toIntOrNull()?.let { readable.getOrNull(it - 1) }
+                    if (from != null && to != null) Text("${from.label} → ${to.label}", style = MaterialTheme.typography.bodySmall)
+                }
                 Text(
                     "${candidates.size} chapters to queue",
                     style = MaterialTheme.typography.titleSmall,
@@ -2201,7 +2385,7 @@ private fun BulkDownloadDialog(vm: ReaderViewModel, close: () -> Unit) {
             TextButton(
                 enabled = candidates.isNotEmpty(),
                 onClick = {
-                    vm.downloadBatch(vm.downloadCandidates(choice))
+                    vm.downloadBatch(vm.downloadCandidates(choice, first.toIntOrNull() ?: 0, last.toIntOrNull() ?: 0))
                     close()
                 },
             ) {

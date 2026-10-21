@@ -11,10 +11,17 @@ enum class DownloadChoice(
     NEXT_25("Next 25 unread", 25),
     UNREAD("All unread chapters"),
     ALL("All readable chapters", unreadOnly = false),
+    RANGE("Chapter range", unreadOnly = false),
 }
 
 object DownloadPolicy {
-    val activeStates = setOf("Queued", "Downloading", "Retrying")
+    val activeStates = setOf("Queued", "Downloading", "Retrying", "Waiting for storage")
+
+    fun range(releases: List<Release>, existing: Map<String, String>, first: Int, last: Int): List<Release> {
+        val ordered = ChapterPolicy.readingOrder(releases).filter { it.readable }.distinctBy { it.id }
+        if (first < 1 || last < first || last > ordered.size) return emptyList()
+        return ordered.subList(first - 1, last).filter { existing[it.id] !in activeStates + "Complete" }
+    }
 
     fun select(
         releases: List<Release>,

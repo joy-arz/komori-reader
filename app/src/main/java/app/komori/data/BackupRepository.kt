@@ -22,7 +22,7 @@ data class BackupPreview(
     val unavailableSources
         get() =
             (backup.manga.map { sourceKey(it.id) } + backup.creators.map { sourceKey(it.id) })
-                .filter { it !in sourceNames }
+                .filter { it !in sourceNames && it != "local" }
                 .distinct()
                 .size
 }
@@ -37,7 +37,7 @@ class BackupRepository(private val database: LibraryDatabase) {
         withContext(Dispatchers.IO) {
             val snapshot =
                 database.withTransaction {
-                    if (!dao.backupCountsWithinLimits())
+                    if (!dao.backupCountsWithinLimits() || !dao.backupOrganizationWithinLimits())
                         throw InvalidBackup(
                             "Library metadata exceeds the supported backup entry limits."
                         )
@@ -46,12 +46,13 @@ class BackupRepository(private val database: LibraryDatabase) {
                     MetadataBackup(
                         System.currentTimeMillis(),
                         appVersion,
-                        dao.backupManga(),
+                        dao.backupManga().map { if (sourceKey(it.id) == "local") it.copy(cover = "") else it },
                         dao.backupShelf(),
                         dao.backupChapters(),
                         dao.backupProgress(),
                         dao.backupCreators(),
                         dao.backupPreferences(),
+                        dao.backupCategories(), dao.backupMemberships(), dao.backupLinks(),
                     )
                 }
             BackupCodec.encode(snapshot)
@@ -100,6 +101,11 @@ class BackupRepository(private val database: LibraryDatabase) {
                 checked.creators
                     .filter { useBackupValues || it.id !in creators }
                     .forEach { dao.putCreator(it) }
+                val categoryIds = dao.backupCategories().map { it.id }.toSet()
+                checked.categories.filter { useBackupValues || it.id !in categoryIds }.forEach { dao.putCategory(it) }
+                checked.memberships.forEach { dao.putMembership(it) }
+                val links = dao.backupLinks().map { it.fromId to it.toId }.toSet()
+                checked.links.filter { useBackupValues || (it.fromId to it.toId) !in links }.forEach { dao.putLink(it) }
                 checked.preferences
                     .filter { useBackupValues || it.mangaId !in preferences }
                     .forEach { dao.putTitlePreferences(it) }

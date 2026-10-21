@@ -143,4 +143,19 @@ class AuthorCatalogTest {
             fail("A different source ranking needs new pages")
         } catch (_: IllegalArgumentException) {}
     }
+    @Test fun emptyVerifiedPageDoesNotEndAuthorPagination() = runBlocking {
+        val calls = mutableListOf<Int>()
+        val catalog = AuthorCatalog(creators.take(1)) { _, page ->
+            calls += page
+            if (page == 1) BrowsePage(emptyList(), true, listOf("raw-rejected"))
+            else BrowsePage(listOf(title("verified")), false, listOf("raw-verified"))
+        }
+        catalog.loadNext()
+        assertTrue(catalog.hasMore)
+        catalog.loadNext()
+        assertEquals(listOf(1, 2), calls)
+        assertEquals(listOf("verified"), catalog.items.map { it.id })
+        assertFalse(catalog.hasMore)
+    }
+
 }

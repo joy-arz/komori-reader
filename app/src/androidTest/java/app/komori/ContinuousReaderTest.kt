@@ -125,6 +125,20 @@ class ContinuousReaderTest {
             )
             waitUntil { runBlocking { app.dao.shelf(id)?.lastRelease == "$id-4" } }
             assertEquals("$id-4", app.dao.shelf(id)?.lastRelease)
+            repeat(30) {
+                if (vm.reader.value?.id != "$id-1") {
+                    val start = SystemClock.uptimeMillis()
+                    for (step in 0..12) {
+                        val event = MotionEvent.obtain(start, start + step * 20L,
+                            when (step) { 0 -> MotionEvent.ACTION_DOWN; 12 -> MotionEvent.ACTION_UP; else -> MotionEvent.ACTION_MOVE },
+                            metrics.widthPixels * .5f, metrics.heightPixels * (.25f + .5f * step / 12f), 0)
+                        instrumentation.sendPointerSync(event); event.recycle(); SystemClock.sleep(20)
+                    }
+                    SystemClock.sleep(450)
+                }
+            }
+            waitUntil { vm.reader.value?.id == "$id-1" }
+            assertEquals("Backward loading retains the reader session", session, vm.readerSession.value)
             instrumentation.runOnMainSync {
                 vm.read(chapters.first().release().copy(local = true))
                 vm.scrollChapterPosition(chapters.last().release(), 0, 0f, session)
@@ -149,6 +163,7 @@ class ContinuousReaderTest {
                     "shelf",
                     "chapter_preferences",
                     "chapter_feeds",
+                    "chapter_index",
                 )) app.database.openHelper.writableDatabase.execSQL(
                 "DELETE FROM $table WHERE mangaId = ?",
                 arrayOf(id),

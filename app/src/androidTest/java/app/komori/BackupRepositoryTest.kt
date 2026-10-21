@@ -149,7 +149,7 @@ class BackupRepositoryTest {
         val target = database()
         try {
             seed(source)
-            target.dao().putChapters(listOf(Chapter("backup-chapter", "another-title", "{}")))
+            target.dao().putChapterRows(listOf(Chapter("backup-chapter", "another-title", "{}")))
             val snapshot = BackupCodec.decode(BackupRepository(source).export("0.7.4"))
             var failed = false
             try {

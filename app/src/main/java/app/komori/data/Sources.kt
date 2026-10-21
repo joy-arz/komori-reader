@@ -5,6 +5,9 @@ import java.text.Normalizer
 import java.util.Base64
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import okhttp3.*
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -36,7 +39,7 @@ fun sourcePageUrl(id: String): String =
         else -> "https://mangadex.org/title/$id"
     }
 
-fun sourceName(id: String) = sourceNames[sourceKey(id)] ?: "Unknown source"
+fun sourceName(id: String) = if (sourceKey(id) == "local") "Local" else sourceNames[sourceKey(id)] ?: "Unknown source"
 
 fun sourceOrder(value: String) =
     (value.split(',').filter { it in sourceNames } + sourceNames.keys).distinct()
@@ -101,7 +104,7 @@ fun Manga.metadata(): List<SourceTag> = JSONArray(tagsJson).objects().map {
     SourceTag(it.getString("id"), it.getString("name"), it.optString("type", "tag"))
 }
 
-data class BrowsePage(val titles: List<Manga>, val hasMore: Boolean)
+data class BrowsePage(val titles: List<Manga>, val hasMore: Boolean, val paginationIds: List<String> = titles.map { it.id })
 
 /** Existing MangaDex UUIDs stay unchanged; other source IDs encode paths safely for local files. */
 class Sources(val client: OkHttpClient, apiClient: OkHttpClient = client) {
@@ -153,7 +156,7 @@ class Sources(val client: OkHttpClient, apiClient: OkHttpClient = client) {
         if (key == "mangadex") dex.tags() else web(key).tags()
 
     suspend fun details(manga: Manga): Manga =
-        if (sourceKey(manga.id) == "mangadex") manga else web(sourceKey(manga.id)).details(manga)
+        if (sourceKey(manga.id) in setOf("mangadex", "local")) manga else web(sourceKey(manga.id)).details(manga)
 
     suspend fun chapters(id: String, language: String) =
         if (sourceKey(id) == "mangadex") dex.chapters(id, language)
@@ -186,6 +189,21 @@ class WebSource(
     private val client: OkHttpClient,
 ) {
     private val connectionRecovery = SourceConnectionRecovery(client, key)
+    private data class CreatorMetadata(val manga: Manga, val checkedAt: Long)
+    private val creatorMetadata = object : LinkedHashMap<String, CreatorMetadata>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CreatorMetadata>?) = size > 256
+    }
+
+    private fun rememberCreatorMetadata(manga: Manga): Manga {
+        synchronized(creatorMetadata) { creatorMetadata[manga.id] = CreatorMetadata(manga, System.nanoTime()) }
+        return manga
+    }
+
+    private suspend fun creatorDetails(manga: Manga): Manga {
+        val cached = synchronized(creatorMetadata) { creatorMetadata[manga.id] }
+        if (cached != null && System.nanoTime() - cached.checkedAt in 0 until 600_000_000_000L) return cached.manga
+        return rememberCreatorMetadata(details(manga))
+    }
 
     private suspend fun document(path: String, form: FormBody? = null): Document =
         withContext(Dispatchers.IO) {
@@ -291,8 +309,19 @@ class WebSource(
                 } else facet
                 val url = "$base$path".toHttpUrl().newBuilder().addQueryParameter("page", page.toString())
                 if (key != "zap") addGallerySort(url, filter.sort)
-                val d = document(url.build().toString().removePrefix(base))
-                return BrowsePage(parseBrowse(d), hasNext(d, page))
+                val zapCreator = key == "zap" && (facet.startsWith("/artist/") || facet.startsWith("/author/"))
+                val native = try {
+                    val d = document(url.build().toString().removePrefix(base))
+                    BrowsePage(parseBrowse(d), hasNext(d, page))
+                } catch (failure: SourceHttpException) {
+                    if (zapCreator && failure.status == 404) BrowsePage(emptyList(), false) else throw failure
+                }
+                if (zapCreator) {
+                    val name = creator?.name ?: query.takeIf { filter.searchType == "Author" && it.isNotBlank() }
+                        ?: "$base$facet".toHttpUrl().pathSegments[1].replace('-', ' ')
+                    return supplementZapCreator(native, name, facet, page, filter)
+                }
+                return native
             }
         }
         if (key == "nhentai") return browseNhentai(query, page, filter)
@@ -417,8 +446,28 @@ class WebSource(
             .distinctBy { it.id }
     }
 
+    private suspend fun supplementZapCreator(native: BrowsePage, name: String, facet: String, page: Int, filter: BrowseFilter): BrowsePage {
+        val search = browseGallery(name, page, filter.copy(searchType = "Title", tags = emptySet(), facetPath = ""))
+        val nativeIds = native.titles.map { it.id }.toSet()
+        val expected = sourceId(key, facet)
+        val verified = mutableMapOf<String, Manga>()
+        for (chunk in search.titles.filter { it.id !in nativeIds }.chunked(2)) {
+            val checked = coroutineScope { chunk.map { candidate -> async {
+                val detail = creatorDetails(candidate)
+                detail.takeIf { JSONArray(it.creatorsJson).objects().any { creator -> creator.optString("id") == expected } }
+            } }.awaitAll() }
+            checked.filterNotNull().forEach { verified[it.id] = it }
+        }
+        val results = (search.titles.mapNotNull { if (it.id in nativeIds) it else verified[it.id] } + native.titles).distinctBy { it.id }
+        val ordered = if (filter.sort == "Popular") results else results.sortedByDescending {
+            sourcePath(it.id).trim('/').substringAfterLast('/').toLongOrNull() ?: 0
+        }
+        return BrowsePage(ordered, native.hasMore || search.hasMore, (native.paginationIds + search.paginationIds).distinct())
+    }
+
     suspend fun details(manga: Manga): Manga {
-        return parseDetails(manga, document(sourcePath(manga.id)))
+        val result = parseDetails(manga, document(sourcePath(manga.id)))
+        return if (key == "zap") rememberCreatorMetadata(result) else result
     }
 
     fun parseDetails(manga: Manga, d: Document): Manga {

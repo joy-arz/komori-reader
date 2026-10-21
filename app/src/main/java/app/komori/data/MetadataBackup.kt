@@ -24,11 +24,14 @@ data class MetadataBackup(
     val progress: List<Progress>,
     val creators: List<Creator>,
     val preferences: List<TitlePreferences>,
+    val categories: List<LibraryCategory> = emptyList(),
+    val memberships: List<CategoryMembership> = emptyList(),
+    val links: List<MigrationLink> = emptyList(),
 )
 
 object BackupCodec {
     private const val FORMAT = "komori.metadata.backup"
-    private const val VERSION = 1
+    private const val VERSION = 2
     private val idPattern = Regex("[A-Za-z0-9_-]+(?::[A-Za-z0-9_-]+)?")
 
     fun read(input: InputStream): MetadataBackup {
@@ -49,20 +52,11 @@ object BackupCodec {
         try {
             val root = StrictJson(utf8(bytes)).document()
             if (root.text("format", 64) != FORMAT) invalid("This is not a Komori metadata backup.")
-            if (root.integer("version", 1, Long.MAX_VALUE) != VERSION.toLong())
+            val version = root.integer("version", 1, Long.MAX_VALUE)
+            if (version > VERSION)
                 invalid("This backup version is not supported. Update Komori before restoring it.")
-            root.fields(
-                "format",
-                "version",
-                "createdAt",
-                "appVersion",
-                "manga",
-                "shelf",
-                "chapters",
-                "progress",
-                "creators",
-                "preferences",
-            )
+            root.fields(*(listOf("format", "version", "createdAt", "appVersion", "manga", "shelf", "chapters", "progress", "creators", "preferences") +
+                if (version >= 2) listOf("categories", "memberships", "links") else emptyList()).toTypedArray())
             val manga =
                 root.rows("manga", 10_000).map { o ->
                     o.fields("id", "title", "description", "cover", "creators", "status", "tags")
@@ -133,13 +127,16 @@ object BackupCodec {
             val creators = root.rows("creators", 10_000).map(::creator)
             val preferences =
                 root.rows("preferences", 10_000).map { o ->
-                    o.fields("mangaId", "groupId", "strict", "readerMode")
+                    o.fields(*(listOf("mangaId", "groupId", "strict", "readerMode") + if (version >= 2) listOf("language") else emptyList()).toTypedArray())
                     val group = o.text("groupId", 4096).also { if (it.isNotEmpty()) safeId(it) }
                     TitlePreferences(
                         o.id("mangaId"),
                         group,
                         o.boolean("strict"),
                         o.choice("readerMode", setOf("", "ltr", "rtl", "webtoon")),
+                        if (version >= 2) o.text("language", 64).also {
+                            if (!it.matches(Regex("(?:[a-z]{2,3}(?:-[A-Za-z]{2,8})*|\\*|)"))) invalid("Invalid per-title language.")
+                        } else "",
                     )
                 }
             val result =
@@ -152,6 +149,15 @@ object BackupCodec {
                     progress,
                     creators,
                     preferences,
+                    if (version >= 2) root.rows("categories", 1000).map { o ->
+                        o.fields("id", "name"); LibraryCategory(o.id("id"), o.text("name", 100, false))
+                    } else emptyList(),
+                    if (version >= 2) root.rows("memberships", 50000).map { o ->
+                        o.fields("mangaId", "categoryId"); CategoryMembership(o.id("mangaId"), o.id("categoryId"))
+                    } else emptyList(),
+                    if (version >= 2) root.rows("links", 10000).map { o ->
+                        o.fields("fromId", "toId", "createdAt"); MigrationLink(o.id("fromId"), o.id("toId"), o.integer("createdAt", 0, Long.MAX_VALUE))
+                    } else emptyList(),
                 )
             relationships(result)
             return result
@@ -172,7 +178,7 @@ object BackupCodec {
                 backup.chapters.size > 50_000 ||
                 backup.progress.size > 50_000 ||
                 backup.creators.size > 10_000 ||
-                backup.preferences.size > 10_000
+                backup.preferences.size > 10_000 || backup.categories.size > 1000 || backup.memberships.size > 50000 || backup.links.size > 10000
         )
             invalid("Backup exceeds the supported entry limits.")
         val root =
@@ -244,10 +250,13 @@ object BackupCodec {
                                 .put("mangaId", row.mangaId)
                                 .put("groupId", row.groupId)
                                 .put("strict", row.strict)
-                                .put("readerMode", row.readerMode)
+                                .put("readerMode", row.readerMode).put("language", row.language)
                         }
                     ),
                 )
+        root.put("categories", JSONArray(backup.categories.map { JSONObject().put("id", it.id).put("name", it.name) }))
+        root.put("memberships", JSONArray(backup.memberships.map { JSONObject().put("mangaId", it.mangaId).put("categoryId", it.categoryId) }))
+        root.put("links", JSONArray(backup.links.map { JSONObject().put("fromId", it.fromId).put("toId", it.toId).put("createdAt", it.createdAt) }))
         val bytes = boundedJson(root)
         decode(bytes)
         return bytes
@@ -356,7 +365,14 @@ object BackupCodec {
         unique(backup.progress.map { it.releaseId }, "reading position")
         unique(backup.creators.map { it.id }, "followed creator")
         unique(backup.preferences.map { it.mangaId }, "title preference")
+        unique(backup.categories.map { it.id }, "category")
+        unique(backup.memberships.map { "${it.mangaId}|${it.categoryId}" }, "category membership")
+        unique(backup.links.map { "${it.fromId}|${it.toId}" }, "migration link")
+        val categoryIds = backup.categories.map { it.id }.toSet()
         val titles = backup.manga.map { it.id }.toSet()
+        if (backup.memberships.any { it.mangaId !in titles || it.categoryId !in categoryIds } ||
+            backup.links.any { it.fromId !in titles || it.toId !in titles || it.fromId == it.toId })
+            invalid("Category or migration link refers to missing metadata.")
         val chapters = backup.chapters.associateBy { it.id }
         val positions = backup.progress.associateBy { it.releaseId }
         for (id in

@@ -34,3 +34,9 @@ The app needs a completeness fallback. The site's artist index and keyword searc
 - Live regression: gallery `1665352` appears under Kanamirubon in typed Author search and in the followed-author feed; compare against current site results without claiming permanent exhaustive coverage.
 
 Until that fix ships, ordinary Title/name search for `kanamirubon` exposes additional source search results. Those are keyword results, not an automatically verified complete author catalog. Following again or resetting the source session does not change the incomplete artist listing observed here.
+
+## Local fix validation, October 21
+
+The pending backlog implementation supplements HentaiZap's native artist listing with name-search candidates, then checks each candidate's detail metadata for the exact artist path before accepting it. Raw candidate IDs drive pagination even when a page has no verified matches. Metadata verification uses bounded concurrency and a short-lived in-memory cache.
+
+`KOMORI_LIVE_SOURCE_AUDIT=1 ./gradlew testDebugUnitTest` passed the reported case: 19 verified Kanamirubon works on the current live response, including gallery 1665352. Fixture checks also reject unrelated name matches and retain continuation through filtered-empty pages. The observed count differs from the earlier reproduction; the result is a point-in-time verification, not proof that the site's catalog is universally complete. Release/device integration is still pending in this checkpoint.

@@ -2,7 +2,7 @@
 
 Open **Settings → App → Library backup**. **Export backup** creates a JSON file in a location chosen through Android's document picker. **Restore backup** opens a file and validates it before displaying a review dialog. Cancelling either picker or the review leaves the Library unchanged.
 
-The file contains Library titles and their metadata, saved/liked/status flags, reading history and page/scroll positions, followed authors/artists, referenced chapter metadata, and per-title reader/scanlation preferences. Cached discovery feeds, device-wide settings, source cookies, verification sessions, image files and download queues are excluded. Restoring metadata on a new device does not create offline image downloads.
+The file contains Library titles and their metadata, saved/liked/status flags, reading history and page/scroll positions, followed authors/artists, referenced chapter metadata, and per-title reader/scanlation/language preferences, categories and memberships, and reviewed source/edition links. Cached discovery feeds, device-wide settings, source cookies, verification sessions, image files and download queues are excluded. Restoring metadata on a new device does not create offline image downloads.
 
 ## Review and merge
 
@@ -16,13 +16,14 @@ All metadata changes commit in one Room transaction. Validation errors, identifi
 
 ## Format and limits
 
-Format identifier: `komori.metadata.backup`. Format version: `1`. Files use UTF-8 JSON and include the originating app version independently of the format version.
+Format identifier: `komori.metadata.backup`. Format version: `2`. Version 1 imports remain supported; missing organization fields use empty defaults. Files use UTF-8 JSON and include the originating app version independently of the format version.
 
 | Limit | Maximum |
 |---|---:|
 | Encoded file size | 16 MiB |
 | Titles, shelf entries, followed creators, title preferences | 10,000 of each |
 | Chapter metadata and reading positions | 50,000 of each |
+| Categories / category memberships / edition links | 1,000 / 50,000 / 10,000 |
 | JSON nesting | 24 levels |
 | JSON values | 500,000 |
 
@@ -30,4 +31,4 @@ The limits apply together. An export can reach the encoded byte or structure lim
 
 Unsupported versions, duplicate object keys, nonstandard JSON, invalid UTF-8, unsafe identifiers, invalid web addresses and broken title ownership are rejected. Unavailable source identifiers retain their metadata and appear as a warning in the preview; restoring a backup does not add support for a removed source.
 
-The JSON is readable metadata, including reading history. Choose a storage location appropriate for that data. Scheduled exports, retention management, device-wide settings backup and image/archive export remain separate roadmap items.
+The JSON is readable metadata, including reading history. Choose a storage location appropriate for that data. Scheduled exports, retention management, device-wide settings backup remain separate roadmap items. Completed chapters can be exported as CBZ separately. Imported local pages are excluded from metadata backups and must be kept as separate CBZ/folder copies.

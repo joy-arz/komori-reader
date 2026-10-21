@@ -16,7 +16,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 
 <br>
 
-[Download](#install) · [Features](#features) · [Sources](#sources) · [Build](#build) · [Limits](#current-limits) · [Docs](#documentation) · [Contributors](#contributors)
+[Download](#install) · [Features](#features) · [Sources](#sources) · [Build](#build) · [Limits](#current-limits) · [Docs](#documentation) · [Support](#support) · [Contributors](#contributors)
 
 <br>
 
@@ -28,7 +28,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 
 <br>
 
-> **Current release: 0.7.5.** Signed APK for Android 8.0 and newer. This is a full GitHub release. Source-specific limitations and planned features are listed below.
+> **0.8.0 release candidate on main.** The features below include the pending backlog pass. The latest published APK is still 0.7.5 until release validation completes. Android 8.0 and newer.
 
 ---
 
@@ -50,8 +50,8 @@ Built with Kotlin and Compose. Native online and offline reading.
 ### <img src="https://api.iconify.design/lucide/layout-dashboard.svg?color=%23A3E635" width="22" height="22" align="absmiddle"> Design and interface
 
 - Black-and-lime design with Outfit typography, outlined collection, setting and chapter cards, green gradient actions and floating navigation.
-- Dark appearance is the default. An explicitly saved light preference is retained.
-- Settings are grouped into **Reading**, **Sources** and **App**.
+- Choose System, Dark or Light appearance and compact or comfortable cover density. Existing appearance preferences are retained.
+- Settings are grouped into **Reading**, **Sources**, **App** and a full-page **Support** tab.
 - Background update checks and downloads use a nonblocking banner. Installation dialogs open from **Review/Install**.
 - Compact Library and Discover toolbars with icon-triggered search. Library collection tabs keep counts in a shorter row, leaving more room for covers.
 - Swipe left or right across the catalog to change sources in your Settings order.
@@ -60,15 +60,18 @@ Built with Kotlin and Compose. Native online and offline reading.
 ### Library backup and restore
 
 - **Settings → App → Library backup** exports a versioned JSON file through Android's document picker.
-- Backups contain saved/liked titles, history and reading positions, followed authors, chapter metadata and per-title reader/group preferences. Device settings, source sessions, download queues and image files are excluded.
+- Backups contain saved/liked titles, history and reading positions, followed authors, chapter metadata and per-title reader/group/language preferences, categories and edition links. Device settings, source sessions, download queues and image files are excluded.
 - Restore validates the complete file before showing a preview. New entries merge into the Library; existing values are kept by default. Select **Use backup values for matching entries** to replace them. Unrelated entries remain available.
-- [Backup format and merge details](docs/BACKUP.md). Metadata writes commit in one database transaction. Invalid files and conflicting chapter ownership are rejected. The format supports files up to 16 MiB; scheduled backups and image/archive export remain planned.
+- [Backup format and merge details](docs/BACKUP.md). Metadata writes commit in one database transaction. Invalid files and conflicting chapter ownership are rejected. The format supports files up to 16 MiB; scheduled backups remain planned. Completed chapters can be exported as CBZ separately.
 
 ### <img src="https://api.iconify.design/lucide/book-open.svg?color=%23A3E635" width="22" height="22" align="absmiddle"> Reading
 
 - Direct reading from cover play buttons, page resume, a restart-current-chapter preference and optional rereading when caught up.
 - Per-title **Left-to-right**, **Right-to-left** and **Webtoon** modes, with app-default fallback.
-- Continuous webtoon scrolling across chapters, with saved page and scroll position, bounded neighboring-chapter windows and image strips. Works offline, with a Paged/Webtoon switch.
+- Forward and backward continuous webtoon scrolling across chapters, with saved page and scroll position, bounded neighboring-chapter windows and image strips. Works offline, with a Paged/Webtoon switch.
+- Chapter/page jump and seek, numeric chapter-gap warnings, and navigation restoration from saved identifiers.
+- Brightness, artwork dimming, orientation lock, optional volume-key navigation, and conservative preload/cache choices.
+- Webtoon pinch zoom and opt-in tall-page detection; Smart Chapter explanations, alternate releases and per-title language.
 - Immersive reading. A center or image tap hides controls, and a floating page counter brings them back.
 - Direction-aware edge taps and swipes in paged mode.
 - Tiled pinch and double-tap zoom, plus optional keep-screen-awake.
@@ -76,12 +79,14 @@ Built with Kotlin and Compose. Native online and offline reading.
 
 ### <img src="https://api.iconify.design/lucide/library.svg?color=%23A3E635" width="22" height="22" align="absmiddle"> Library and organization
 
-- Personal library, likes, reading statuses and history stored locally with Room.
+- Personal library, likes, categories, unread badges, status filters and history stored locally with Room.
+- Opt-in daily/12-hour chapter checks, grouped Updates, and optional notifications. Author checks rotate through up to three follows per cycle, checking their latest source page; the first check establishes a baseline.
+- Reviewed source/edition transfer with explicit chapter mapping. Number, volume and language must agree for automatic suggestions; originals and progress remain available.
 - The **Downloaded** collection includes titles with saved pages and opens their offline chapter list.
 - Long-press a title, chapter, download or followed creator to select it. Batch controls appear only during selection; browsing has no idle Select bar.
 - Bulk actions: save, like, download, read-state changes, pause, resume, and confirmed deletion or unfollow. Select all applies to loaded or filtered items.
 - Possible-duplicate warnings for normalized matching titles already saved from another source. Titles are never merged automatically.
-- Dedicated **Authors** tab with compact creator chips, searchable follow management and paginated source catalogs. Source indexes can omit works; the confirmed HentaiZap completeness issue remains tracked in the TODO. Latest is the default, with Popularity / views, Alphabetical and Author ordering. Latest/popularity blend each creator’s source-ranked results; alphabetical and author ordering apply to loaded works. Local reordering retains loaded pages.
+- Dedicated **Authors** tab with compact creator chips, searchable follow management and paginated source catalogs. Source indexes can omit works. HentaiZap artist browsing supplements its index with exact-creator-verified search candidates, including the reported Kanamirubon case. Latest is the default, with Popularity / views, Alphabetical and Author ordering. Latest/popularity blend each creator’s source-ranked results; alphabetical and author ordering apply to loaded works. Local reordering retains loaded pages.
 - Saved titles keep their source order and receive no Library highlight.
 - Compact language badges overlay thumbnail corners when explicit language metadata is available: `en`, `jp`, `sp`, `fr`, `kr`, `ch` and other recognized languages. Browse flags are retained without fetching every gallery; unknown languages remain unlabelled.
 
@@ -97,8 +102,9 @@ Built with Kotlin and Compose. Native online and offline reading.
 
 ### <img src="https://api.iconify.design/lucide/download.svg?color=%23A3E635" width="22" height="22" align="absmiddle"> Downloads
 
-- Persistent chapter downloads with Wi-Fi constraint, retries, pause and resume, original or data-saving images, and offline access.
-- Bulk options: all readable, all unread and next 1, 5, 10 or 25 unread. Active and completed downloads are skipped.
+- Persistent ordered chapter downloads with Download now, reordering, cancel without file deletion, explicit network/storage waits, title grouping, Wi-Fi constraint, retries, pause and resume, original or data-saving images, and offline access.
+- Local CBZ/folder import and completed-chapter CBZ export through Android document providers, including a preferred export folder. Metadata backups exclude local pages.
+- Bulk options: custom reading-order ranges, all readable, all unread and next 1, 5, 10 or 25 unread. Active and completed downloads are skipped.
 - A compact Downloads header shows queued and offline counts. Queue options contain pause and resume/retry commands when available. Completed chapters omit redundant progress bars; active transfers retain detailed progress.
 - Configurable visible-image retries (off, 3, 5, 10 or 30 seconds, up to three attempts, 3 seconds by default).
 - Integrity checks when opening saved chapters, a persistent **Needs repair** status and targeted repair. Intact pages stay accessible with **Read saved pages**.
@@ -128,7 +134,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 
 ### <img src="https://api.iconify.design/lucide/refresh-cw.svg?color=%23A3E635" width="22" height="22" align="absmiddle"> App updates
 
-- GitHub release checks on launch and foreground, with a 30-second foreground debounce.
+- Stable/Preview channels, release notes and 24-hour snooze. Automatic checks persist a six-hour success cooldown and 30-minute failure cooldown; manual checks bypass it. HTTP caching supports conditional revalidation when GitHub supplies validators.
 - Automatic APK download on unmetered networks, plus manual checking and downloading.
 - Verified same-key upgrades through Android's installer.
 
@@ -191,16 +197,16 @@ Local signing is automated through JVM `keytool` validation and Gradle. See [rel
 
 ## <img src="https://api.iconify.design/lucide/bot.svg?color=%23A3E635" width="26" height="26" align="absmiddle"> Automated releases
 
-Every push to `main` and every pull request runs unit tests, lint and a debug APK build.
+Every push to `main` and every pull request runs unit tests, lint, a debug APK build, and API 26/API 36 instrumentation. A separate Signed upgrade checks workflow validates published APKs against the 0.7.5 baseline with synthetic data, process death and offline navigation.
 
-A version tag such as `v0.7.5` automatically tests, builds, signs and publishes a release APK plus a SHA-256 checksum and updater metadata (`update.json`).
+A version tag such as `v0.8.0` automatically tests, builds, signs and publishes a release APK plus a SHA-256 checksum and updater metadata (`update.json`).
 
 - Plain version tags publish full releases and mark them as **Latest**.
 - Tags containing a suffix remain prereleases.
 
 ```sh
-git tag v0.7.5
-git push origin v0.7.5
+git tag v0.8.0
+git push origin v0.8.0
 ```
 
 Signing secrets are already configured in repository Actions secrets. No signing material is committed. See [RELEASING.md](docs/RELEASING.md) for key backup and release details.
@@ -209,7 +215,7 @@ Signing secrets are already configured in repository Actions secrets. No signing
 
 ## <img src="https://api.iconify.design/lucide/refresh-cw.svg?color=%23A3E635" width="26" height="26" align="absmiddle"> How app updates work
 
-Install version 0.5 manually once if you are coming from an older build. After that, each launch checks public GitHub releases, including full releases and prereleases.
+Install version 0.5 manually once if you are coming from an older build. After that, automatic checks use public GitHub releases with a persistent cooldown. Stable excludes prereleases; Preview includes them.
 
 - Failed update checks do not block reading.
 - Automatic downloads default to unmetered connections. Change this in Settings, or choose a manual download on mobile data.
@@ -227,7 +233,7 @@ Install version 0.5 manually once if you are coming from an older build. After t
 <br>
 
 - Webtoon mode saves the vertical position within each source page. Paged mode saves the page, not its zoom and pan viewport.
-- Continuous chapters can be disabled in Settings. Webtoon pinch zoom and automatic mode detection remain planned.
+- Continuous chapters can be disabled in Settings. Webtoon zoom is bounded to 3×; tall-page mode detection is opt-in.
 
 </details>
 
@@ -236,8 +242,8 @@ Install version 0.5 manually once if you are coming from an older build. After t
 
 <br>
 
-- Creator follows are local. Automatic creator and title update feeds and MangaDex account sync are not implemented.
-- Collection management, backup and restore, storage-management UI and per-title language overrides are planned.
+- Library metadata and creator follows remain local. Scheduled source checks use best-effort source catalogs; a latest-page author check can miss uploads between runs.
+- AniList/MAL tracking is deferred until core acceptance. Scheduled metadata backups and broader storage-management UI remain planned.
 
 </details>
 
@@ -315,3 +321,11 @@ Maintained by [@joy-arz](https://github.com/joy-arz). Issues and pull requests a
 *Read quietly.*
 
 </div>
+
+## Support
+
+[<img src="docs/assets/kofi.svg" width="32" height="24" alt="Ko-fi"> **Support joyarz on Ko-fi**](https://ko-fi.com/joyarz)
+
+Komori is an open-source project. If it makes your reading day better, a coffee helps support continued development and maintenance. Support is always optional. Bug reports, translations, and code contributions are welcome too.
+
+You can also find the full Support page in **Settings → Support**.

@@ -80,7 +80,7 @@ class MigrationTest {
                     LibraryDatabase::class.java,
                     "reader-mode-test",
                 )
-                .addMigrations(app.komori.data.FEED_MIGRATION, app.komori.data.METADATA_MIGRATION)
+                .addMigrations(app.komori.data.FEED_MIGRATION, app.komori.data.METADATA_MIGRATION, app.komori.data.ORGANIZATION_MIGRATION)
                 .build()
         try {
             val pref = kotlinx.coroutines.runBlocking { db.dao().titlePreferences("manga") }
@@ -98,12 +98,13 @@ class MigrationTest {
         helper
             .runMigrationsAndValidate(
                 "full-upgrade-test",
-                5,
+                6,
                 true,
                 app.komori.data.SCROLL_MIGRATION,
                 app.komori.data.READER_MODE_MIGRATION,
                 app.komori.data.FEED_MIGRATION,
                 app.komori.data.METADATA_MIGRATION,
+                app.komori.data.ORGANIZATION_MIGRATION,
             )
             .close()
     }
@@ -143,7 +144,7 @@ class MigrationTest {
             execSQL("INSERT INTO progress (releaseId, mangaId, chapterKey, page, completed, scroll) VALUES ('release', 'manga', 'key', 7, 0, 0.5)")
             close()
         }
-        helper.runMigrationsAndValidate("metadata-test", 5, true, app.komori.data.METADATA_MIGRATION).use { db ->
+        helper.runMigrationsAndValidate("metadata-test", 5, true, app.komori.data.METADATA_MIGRATION, app.komori.data.ORGANIZATION_MIGRATION).use { db ->
             db.query("SELECT title, tagsJson FROM manga WHERE id = 'manga'").use {
                 assertTrue(it.moveToFirst())
                 assertEquals("Saved title", it.getString(0))
@@ -157,6 +158,28 @@ class MigrationTest {
                 assertTrue(it.moveToFirst())
                 assertEquals(7, it.getInt(0))
                 assertEquals(0.5f, it.getFloat(1), 0f)
+            }
+        }
+    }
+
+    @Test fun organizationUpgradeKeepsProgressAndIndexesCachedChapters() {
+        helper.createDatabase("organization-test", 5).apply {
+            execSQL("INSERT INTO chapter_preferences(mangaId,groupId,strict,readerMode) VALUES('book','group',1,'rtl')")
+            execSQL("INSERT INTO progress(releaseId,mangaId,chapterKey,page,completed,scroll) VALUES('release','book','book|en|?|1',3,1,0.5)")
+            val json = """{"id":"release","attributes":{"chapter":"1","translatedLanguage":"en","pages":10},"relationships":[{"id":"book","type":"manga"}]}"""
+            execSQL("INSERT INTO chapters(id,mangaId,json) VALUES(?,?,?)", arrayOf("release","book",json))
+            execSQL("INSERT INTO chapters(id,mangaId,json) VALUES('broken','book','not-json')")
+            close()
+        }
+        helper.runMigrationsAndValidate("organization-test", 6, true, app.komori.data.ORGANIZATION_MIGRATION).use { db ->
+            db.query("SELECT groupId,readerMode,language FROM chapter_preferences WHERE mangaId='book'").use {
+                assertTrue(it.moveToFirst()); assertEquals("group",it.getString(0)); assertEquals("rtl",it.getString(1)); assertEquals("",it.getString(2))
+            }
+            db.query("SELECT chapterKey,active FROM chapter_index WHERE releaseId='release'").use {
+                assertTrue(it.moveToFirst()); assertEquals("book|en|?|1",it.getString(0)); assertEquals(1,it.getInt(1))
+            }
+            db.query("SELECT page,completed,scroll FROM progress WHERE releaseId='release'").use {
+                assertTrue(it.moveToFirst()); assertEquals(3,it.getInt(0)); assertEquals(1,it.getInt(1)); assertEquals(0.5f,it.getFloat(2),0f)
             }
         }
     }

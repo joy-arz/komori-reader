@@ -16,23 +16,29 @@ import kotlinx.coroutines.launch
 
 class UpdateViewModel(application: Application) : AndroidViewModel(application) {
     val updater = AppUpdates(application)
-    val state = MutableStateFlow(UpdateState())
+    val state = MutableStateFlow(UpdateState(update = updater.cachedUpdate(), channel = updater.channel(), snoozedUntil = updater.snoozedUntil()))
     private var lastCheck = -60_000L
 
     fun check(manual: Boolean = false) {
+        if (state.value.snoozedUntil != 0L && state.value.snoozedUntil <= System.currentTimeMillis())
+            state.update { it.copy(snoozedUntil = 0) }
         val old = state.value
         if (old.checking || old.downloading) return
         // Rotation, permission screens and rapid foreground changes are not new checks.
-        if (!manual && (old.file != null || SystemClock.elapsedRealtime() - lastCheck < 30_000))
+        if (!manual && (old.file != null || !updater.automaticCheckAllowed() || SystemClock.elapsedRealtime() - lastCheck < 30_000))
             return
         lastCheck = SystemClock.elapsedRealtime()
-        state.value = UpdateState(checking = true, message = "Checking GitHub…")
+        updater.recordAttempt()
+        state.value = old.copy(checking = true, message = "Checking GitHub…")
         viewModelScope.launch {
             try {
                 val update = updater.check()
+                updater.recordSuccess()
                 state.value =
                     UpdateState(
                         update = update,
+                        channel = updater.channel(),
+                        snoozedUntil = updater.snoozedUntil(),
                         show = manual && update != null,
                         message =
                             if (update == null) "You're up to date (${BuildConfig.VERSION_NAME})."
@@ -40,6 +46,7 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
                     )
                 if (
                     update != null &&
+                        (manual || updater.snoozedUntil() <= System.currentTimeMillis()) &&
                         !BuildConfig.DEBUG &&
                         updater.unmetered() &&
                         (getApplication<KomoriApp>()).settings.flow.first().autoUpdateDownload
@@ -49,7 +56,7 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
                 throw e
             } catch (e: Exception) {
                 state.value =
-                    UpdateState(message = "Couldn't check for updates. ${e.message.orEmpty()}")
+                    old.copy(checking = false, message = "Couldn't check for updates. ${e.message.orEmpty()}")
             }
         }
     }
@@ -94,6 +101,18 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
                     )
             }
         }
+    }
+
+    fun channel(value: String) {
+        if (state.value.downloading) return
+        updater.channel(value)
+        state.value = UpdateState(channel = value, snoozedUntil = updater.snoozedUntil())
+        check(true)
+    }
+
+    fun snooze() {
+        updater.snooze()
+        state.update { it.copy(show = false, snoozedUntil = updater.snoozedUntil()) }
     }
 
     fun message(text: String) {

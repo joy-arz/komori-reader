@@ -40,7 +40,7 @@ data class ChapterFeed(
     val fetchedAt: Long,
 )
 
-@Entity(tableName = "progress")
+@Entity(tableName = "progress", indices = [Index("mangaId"), Index("chapterKey")])
 data class Progress(
     @PrimaryKey val releaseId: String,
     val mangaId: String,
@@ -60,6 +60,7 @@ data class Download(
     val state: String = "Queued",
     val error: String = "",
     val dataSaver: Boolean = true,
+    @ColumnInfo(defaultValue = "0") val queuePosition: Long = 0,
 )
 
 @Entity(tableName = "creators")
@@ -71,6 +72,7 @@ data class TitlePreferences(
     val groupId: String = "",
     val strict: Boolean = false,
     @ColumnInfo(defaultValue = "''") val readerMode: String = "",
+    @ColumnInfo(defaultValue = "''") val language: String = "",
 )
 
 data class BackupChapterOwner(val id: String, val mangaId: String)
@@ -93,7 +95,10 @@ interface LibraryDao {
         COALESCE((SELECT SUM(length(CAST(releaseId || mangaId || chapterKey AS BLOB))) FROM progress), 0) +
         COALESCE((SELECT SUM(length(CAST(mangaId || status || COALESCE(lastRelease, '') AS BLOB))) FROM shelf), 0) +
         COALESCE((SELECT SUM(length(CAST(id || name || role AS BLOB))) FROM creators), 0) +
-        COALESCE((SELECT SUM(length(CAST(mangaId || groupId || readerMode AS BLOB))) FROM chapter_preferences), 0)
+        COALESCE((SELECT SUM(length(CAST(mangaId || groupId || readerMode || language AS BLOB))) FROM chapter_preferences), 0) +
+        COALESCE((SELECT SUM(length(CAST(id || name AS BLOB))) FROM library_categories), 0) +
+        COALESCE((SELECT SUM(length(CAST(mangaId || categoryId AS BLOB))) FROM category_memberships), 0) +
+        COALESCE((SELECT SUM(length(CAST(fromId || toId AS BLOB))) FROM migration_links), 0)
     """)
     suspend fun backupSizeEstimate(): Long
 
@@ -116,9 +121,18 @@ interface LibraryDao {
 
     @Query("SELECT * FROM creators ORDER BY name") fun observeCreators(): Flow<List<Creator>>
 
-    @Query("SELECT * FROM downloads") fun observeDownloads(): Flow<List<Download>>
+    @Query("SELECT * FROM downloads ORDER BY queuePosition, releaseId") fun observeDownloads(): Flow<List<Download>>
+    @Query("SELECT * FROM downloads WHERE state IN ('Queued','Downloading','Retrying','Waiting for storage') ORDER BY queuePosition, releaseId")
+    suspend fun orderedQueue(): List<Download>
+    @Query("SELECT * FROM downloads WHERE state IN ('Queued','Downloading','Retrying','Waiting for storage') ORDER BY CASE WHEN state = 'Downloading' THEN 0 ELSE 1 END, queuePosition, releaseId LIMIT 1")
+    suspend fun queueHead(): Download?
+    @Query("SELECT COALESCE(MAX(queuePosition), -1) FROM downloads WHERE state IN ('Queued','Downloading','Retrying','Waiting for storage')")
+    suspend fun lastQueuePosition(): Long
+    @Query("UPDATE downloads SET queuePosition = :position WHERE releaseId = :id") suspend fun queuePosition(id: String, position: Long)
 
     @Query("SELECT * FROM progress") fun observeProgress(): Flow<List<Progress>>
+    @Query("SELECT * FROM progress WHERE mangaId = :id") fun observeProgressForManga(id: String): Flow<List<Progress>>
+    @Query("SELECT * FROM progress WHERE chapterKey IN (:keys)") suspend fun progressForKeys(keys: List<String>): List<Progress>
 
     @Query("SELECT * FROM chapter_preferences")
     fun observeTitlePreferences(): Flow<List<TitlePreferences>>
@@ -141,11 +155,50 @@ interface LibraryDao {
     @Query("SELECT * FROM chapter_preferences WHERE mangaId = :id")
     suspend fun titlePreferences(id: String): TitlePreferences?
 
+    @Query("""SELECT (SELECT COUNT(*) FROM library_categories) <= 1000 AND
+        (SELECT COUNT(*) FROM category_memberships) <= 50000 AND (SELECT COUNT(*) FROM migration_links) <= 10000""")
+    suspend fun backupOrganizationWithinLimits(): Boolean
+    @Query("SELECT * FROM library_categories ORDER BY name COLLATE NOCASE") fun observeCategories(): Flow<List<LibraryCategory>>
+    @Query("SELECT * FROM category_memberships") fun observeMemberships(): Flow<List<CategoryMembership>>
+    @Upsert suspend fun putCategory(category: LibraryCategory)
+    @Upsert suspend fun putMembership(membership: CategoryMembership)
+    @Query("DELETE FROM category_memberships WHERE mangaId = :id AND categoryId = :category") suspend fun removeMembership(id: String, category: String)
+    @Query("DELETE FROM category_memberships WHERE categoryId = :id") suspend fun removeCategoryMemberships(id: String)
+    @Query("DELETE FROM library_categories WHERE id = :id") suspend fun removeCategoryRow(id: String)
+    @Transaction suspend fun deleteCategory(id: String) { removeCategoryMemberships(id); removeCategoryRow(id) }
+    @Query("SELECT * FROM library_categories ORDER BY id") suspend fun backupCategories(): List<LibraryCategory>
+    @Query("SELECT * FROM category_memberships ORDER BY mangaId, categoryId") suspend fun backupMemberships(): List<CategoryMembership>
+    @Query("SELECT * FROM migration_links ORDER BY fromId, toId") suspend fun backupLinks(): List<MigrationLink>
+    @Query("SELECT * FROM migration_links") fun observeMigrationLinks(): Flow<List<MigrationLink>>
+    @Upsert suspend fun putLink(link: MigrationLink)
+    @Query("""SELECT c.mangaId, COUNT(DISTINCT c.chapterKey) AS total,
+        COUNT(DISTINCT CASE WHEN p.chapterKey IS NULL THEN c.chapterKey ELSE NULL END) AS unread
+        FROM chapter_index c LEFT JOIN (SELECT DISTINCT chapterKey FROM progress WHERE completed = 1) p ON p.chapterKey = c.chapterKey
+        LEFT JOIN chapter_preferences t ON t.mangaId = c.mangaId
+        WHERE c.active = 1 AND (COALESCE(NULLIF(t.language, ''), CASE WHEN instr(c.mangaId, ':') > 0 THEN 'en' ELSE :language END) = '*'
+            OR c.language = COALESCE(NULLIF(t.language, ''), CASE WHEN instr(c.mangaId, ':') > 0 THEN 'en' ELSE :language END))
+        GROUP BY c.mangaId""")
+    fun observeLibraryCounts(language: String): Flow<List<LibraryCount>>
+    @Query("SELECT * FROM library_updates ORDER BY detectedAt DESC, mangaId, releaseId") fun observeLibraryUpdates(): Flow<List<LibraryUpdate>>
+    @Upsert suspend fun putLibraryUpdates(rows: List<LibraryUpdate>)
+    @Query("UPDATE library_updates SET seen = 1 WHERE mangaId = :id") suspend fun markUpdatesSeen(id: String)
+    @Query("UPDATE library_updates SET seen = 1") suspend fun markAllUpdatesSeen()
+    @Query("DELETE FROM library_updates WHERE detectedAt < :before OR rowid NOT IN (SELECT rowid FROM library_updates ORDER BY detectedAt DESC LIMIT 10000)") suspend fun trimUpdates(before: Long)
+    @Query("SELECT * FROM creator_snapshots WHERE id = :id") suspend fun creatorSnapshot(id: String): CreatorSnapshot?
+    @Upsert suspend fun putCreatorSnapshot(snapshot: CreatorSnapshot)
+
     @Upsert suspend fun putManga(manga: Manga)
 
     @Upsert suspend fun putShelf(shelf: Shelf)
 
-    @Upsert suspend fun putChapters(chapters: List<Chapter>)
+    @Upsert suspend fun putChapterRows(chapters: List<Chapter>)
+    @Upsert suspend fun putChapterIndex(rows: List<ChapterIndex>)
+    @Transaction suspend fun putChapters(chapters: List<Chapter>) {
+        putChapterRows(chapters)
+        putChapterIndex(chapters.map { row -> row.release().let { ChapterIndex(row.id, row.mangaId, it.key, it.language, it.readable) } })
+    }
+    @Query("UPDATE chapter_index SET active = 0 WHERE mangaId = :id AND (:language = '*' OR language = :language)")
+    suspend fun retireChapterIndex(id: String, language: String)
 
     @Query("SELECT * FROM chapter_feeds WHERE mangaId = :id AND language = :language")
     suspend fun feed(id: String, language: String): ChapterFeed?
@@ -154,6 +207,7 @@ interface LibraryDao {
 
     @Transaction
     suspend fun saveFeed(id: String, language: String, chapters: List<Chapter>) {
+        retireChapterIndex(id, language)
         putChapters(chapters)
         putFeed(
             ChapterFeed(
@@ -191,8 +245,14 @@ interface LibraryDao {
             Download::class,
             Creator::class,
             TitlePreferences::class,
+            LibraryCategory::class,
+            CategoryMembership::class,
+            ChapterIndex::class,
+            LibraryUpdate::class,
+            CreatorSnapshot::class,
+            MigrationLink::class,
         ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class LibraryDatabase : RoomDatabase() {
@@ -261,3 +321,33 @@ val METADATA_MIGRATION =
             db.execSQL("ALTER TABLE manga ADD COLUMN tagsJson TEXT NOT NULL DEFAULT '[]'")
         }
     }
+
+
+val ORGANIZATION_MIGRATION = object : androidx.room.migration.Migration(5, 6) {
+    override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE chapter_preferences ADD COLUMN language TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE downloads ADD COLUMN queuePosition INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("UPDATE downloads SET queuePosition = rowid")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_progress_mangaId ON progress(mangaId)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_progress_chapterKey ON progress(chapterKey)")
+        db.execSQL("CREATE TABLE IF NOT EXISTS library_categories (id TEXT NOT NULL PRIMARY KEY, name TEXT NOT NULL)")
+        db.execSQL("CREATE TABLE IF NOT EXISTS category_memberships (mangaId TEXT NOT NULL, categoryId TEXT NOT NULL, PRIMARY KEY(mangaId, categoryId))")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_category_memberships_categoryId ON category_memberships(categoryId)")
+        db.execSQL("CREATE TABLE IF NOT EXISTS chapter_index (releaseId TEXT NOT NULL PRIMARY KEY, mangaId TEXT NOT NULL, chapterKey TEXT NOT NULL, language TEXT NOT NULL, active INTEGER NOT NULL)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_chapter_index_mangaId ON chapter_index(mangaId)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_chapter_index_chapterKey ON chapter_index(chapterKey)")
+        db.execSQL("CREATE TABLE IF NOT EXISTS library_updates (mangaId TEXT NOT NULL, releaseId TEXT NOT NULL, label TEXT NOT NULL, detectedAt INTEGER NOT NULL, kind TEXT NOT NULL, seen INTEGER NOT NULL, PRIMARY KEY(mangaId, releaseId))")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_library_updates_detectedAt ON library_updates(detectedAt)")
+        db.execSQL("CREATE TABLE IF NOT EXISTS creator_snapshots (id TEXT NOT NULL PRIMARY KEY, titleIds TEXT NOT NULL, checkedAt INTEGER NOT NULL)")
+        db.execSQL("CREATE TABLE IF NOT EXISTS migration_links (fromId TEXT NOT NULL, toId TEXT NOT NULL, createdAt INTEGER NOT NULL, PRIMARY KEY(fromId, toId))")
+        db.query("SELECT id, mangaId, json FROM chapters").use { rows ->
+            while (rows.moveToNext()) {
+                val release = try { releaseFromJson(JSONObject(rows.getString(2))) }
+                    catch (_: org.json.JSONException) { continue }
+                    catch (_: NoSuchElementException) { continue }
+                db.execSQL("INSERT OR REPLACE INTO chapter_index(releaseId,mangaId,chapterKey,language,active) VALUES(?,?,?,?,?)",
+                    arrayOf(rows.getString(0), rows.getString(1), release.key, release.language, if (release.readable) 1 else 0))
+            }
+        }
+    }
+}

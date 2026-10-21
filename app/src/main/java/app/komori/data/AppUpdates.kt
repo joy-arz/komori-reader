@@ -17,6 +17,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
+import okhttp3.Cache
+import okhttp3.CacheControl
 import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
@@ -30,6 +32,7 @@ data class AppUpdate(
     val url: String,
     val sha256: String,
     val size: Long,
+    val releaseNotes: String = "",
 )
 
 data class UpdateState(
@@ -38,11 +41,22 @@ data class UpdateState(
     val downloading: Boolean = false,
     val percent: Int = 0,
     val file: File? = null,
-    val message: String = "Checks GitHub whenever the app launches.",
+    val message: String = "Automatic checks are limited to once every six hours; failed checks cool down for thirty minutes.",
+    val channel: String = "stable",
+    val snoozedUntil: Long = 0,
     val show: Boolean = false,
 )
 
 object UpdatePolicy {
+    fun acceptsChannel(tag: String, prerelease: Boolean, channel: String): Boolean =
+        channel == "preview" || !prerelease && '-' !in tag
+
+    fun automaticCheckAllowed(now: Long, attempt: Long, success: Long): Boolean {
+        if (attempt <= 0 || now < attempt) return true
+        val interval = if (success >= attempt) TimeUnit.HOURS.toMillis(6) else TimeUnit.MINUTES.toMillis(30)
+        return now - attempt >= interval
+    }
+
     // GitHub's /latest excludes prereleases. Sort version tags rather than relying
     // on publication order, which can change when an old release is republished.
     fun compareVersions(a: String, b: String): Int {
@@ -107,13 +121,44 @@ object UpdatePolicy {
     }
 }
 
-class AppUpdates(private val context: Context) {
-    private val client =
-        OkHttpClient.Builder()
+private object UpdateNetwork {
+    private var shared: OkHttpClient? = null
+    @Synchronized fun client(context: Context): OkHttpClient = shared ?: (
+OkHttpClient.Builder()
+            .cache(Cache(File(context.cacheDir, "update-http"), 4L * 1024 * 1024))
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .callTimeout(3, TimeUnit.MINUTES)
             .build()
+    ).also { shared = it }
+}
+
+class AppUpdates(private val context: Context) {
+    private val preferences = context.getSharedPreferences("app-updates", Context.MODE_PRIVATE)
+    fun channel() = preferences.getString("channel", "stable").orEmpty().takeIf { it in listOf("stable", "preview") } ?: "stable"
+    fun channel(value: String) { require(value in listOf("stable", "preview")); preferences.edit().putString("channel", value).remove("available").apply() }
+    fun snoozedUntil() = preferences.getLong("snoozedUntil", 0)
+    fun snooze() = preferences.edit().putLong("snoozedUntil", System.currentTimeMillis() + TimeUnit.HOURS.toMillis(24)).apply()
+    fun automaticCheckAllowed() = UpdatePolicy.automaticCheckAllowed(System.currentTimeMillis(), preferences.getLong("attempt", 0), preferences.getLong("success", 0))
+    fun recordAttempt() = preferences.edit().putLong("attempt", System.currentTimeMillis()).apply()
+    fun recordSuccess() = preferences.edit().putLong("success", System.currentTimeMillis()).apply()
+    fun cachedUpdate(): AppUpdate? = runCatching {
+        val json = JSONObject(preferences.getString("available", null) ?: return@runCatching null)
+        val tag = "v${json.getString("versionName")}"
+        UpdatePolicy.manifest(json, tag).copy(releaseNotes = json.optString("notes").take(8000)).takeIf {
+            it.code > BuildConfig.VERSION_CODE && UpdatePolicy.compareVersions(it.version, BuildConfig.VERSION_NAME) > 0 && UpdatePolicy.acceptsChannel(tag, '-' in tag, channel())
+        }
+    }.getOrNull()
+
+    private fun remember(update: AppUpdate?) {
+        val edit = preferences.edit()
+        if (update == null) edit.remove("available") else edit.putString("available", JSONObject()
+            .put("versionName", update.version).put("versionCode", update.code).put("packageName", "app.komori.reader")
+            .put("apkUrl", update.url).put("sha256", update.sha256).put("size", update.size).put("notes", update.releaseNotes.take(8000)).toString())
+        edit.apply()
+    }
+
+    private val client = UpdateNetwork.client(context.applicationContext)
     private val directory
         get() = File(context.cacheDir, "updates").apply { mkdirs() }
 
@@ -123,6 +168,7 @@ class AppUpdates(private val context: Context) {
                 Request.Builder()
                     .url(url)
                     .header("Accept", "application/vnd.github+json")
+                    .cacheControl(CacheControl.Builder().maxAge(0, TimeUnit.SECONDS).build())
                     .header("User-Agent", "Komori/${BuildConfig.VERSION_NAME}")
                     .build()
             )
@@ -151,7 +197,7 @@ class AppUpdates(private val context: Context) {
             val candidate =
                 releases
                     .objects()
-                    .filter { !it.optBoolean("draft") }
+                    .filter { !it.optBoolean("draft") && UpdatePolicy.acceptsChannel(it.optString("tag_name"), it.optBoolean("prerelease"), channel()) }
                     .filter { release ->
                         runCatching {
                                 UpdatePolicy.compareVersions(
@@ -171,15 +217,15 @@ class AppUpdates(private val context: Context) {
                             a.getString("tag_name"),
                             b.getString("tag_name"),
                         )
-                    } ?: return@withContext null
+                    } ?: return@withContext null.also { remember(null) }
             val tag = candidate.getString("tag_name")
             val update =
                 UpdatePolicy.manifest(
                     JSONObject(text("$UPDATE_REPO/releases/download/$tag/update.json", 16 * 1024)),
                     tag,
                 )
-            if (update.code <= BuildConfig.VERSION_CODE) return@withContext null
-            update
+            if (update.code <= BuildConfig.VERSION_CODE) return@withContext null.also { remember(null) }
+            update.copy(releaseNotes = candidate.optString("body").take(8000)).also { remember(it) }
         }
 
     fun unmetered(): Boolean {

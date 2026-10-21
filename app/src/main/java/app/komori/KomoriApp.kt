@@ -6,11 +6,21 @@ import app.komori.data.*
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.memory.MemoryCache
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 
 class KomoriApp : Application(), ImageLoaderFactory {
+    override fun onCreate() {
+        super.onCreate()
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default).launch {
+            LibraryCheckScheduler.schedule(this@KomoriApp, settings.flow.first())
+            kickDownloadQueue(this@KomoriApp)
+        }
+    }
+
     val database by lazy {
         Room.databaseBuilder(this, LibraryDatabase::class.java, "komori.db")
-            .addMigrations(SCROLL_MIGRATION, READER_MODE_MIGRATION, FEED_MIGRATION, METADATA_MIGRATION)
+            .addMigrations(SCROLL_MIGRATION, READER_MODE_MIGRATION, FEED_MIGRATION, METADATA_MIGRATION, ORGANIZATION_MIGRATION)
             .build()
     }
     val dao

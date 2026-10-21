@@ -1,5 +1,12 @@
 package app.komori.ui
 
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.clipToBounds
+import app.komori.domain.ReaderContinuity
+
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -90,11 +97,17 @@ fun WebtoonReader(
     val initialFraction = remember { vm.readerScroll.value }
     var window by remember { mutableStateOf(listOf(chapter)) }
     val images = remember { mutableStateMapOf<String, ScrollImage>() }
-    val list = remember { LazyListState(initialPage) }
+    val list = remember { LazyListState(initialPage + 1) }
     var restored by remember { mutableStateOf(false) }
     var nextError by remember { mutableStateOf<Exception?>(null) }
     var nextLoading by remember { mutableStateOf(false) }
     var nextAttempt by remember { mutableIntStateOf(0) }
+    val head = window.first()
+    var previousError by remember { mutableStateOf<Exception?>(null) }
+    var previousLoading by remember { mutableStateOf(false) }
+    var previousAttempt by remember { mutableIntStateOf(0) }
+    val allowedGaps = remember { mutableStateListOf<String>() }
+    val previous = remember(head, chapterFeed, titlePreferences, shelf, settings) { vm.previousChapter(head) }
     val tail = window.last()
     val next =
         remember(tail, chapterFeed, titlePreferences, shelf, settings) { vm.nextChapter(tail) }
@@ -109,9 +122,10 @@ fun WebtoonReader(
             }
         }
 
-    LaunchedEffect(tail.id, next?.id, settings.continuousChapters, nextAttempt) {
+    LaunchedEffect(tail.id, next?.id, settings.continuousChapters, settings.gapWarnings, allowedGaps.toList(), nextAttempt) {
         nextError = null
-        if (!settings.continuousChapters || next == null) return@LaunchedEffect
+        if (!settings.continuousChapters || next == null ||
+            (settings.gapWarnings && ReaderContinuity.gap(tail, next) != null && next.id !in allowedGaps)) return@LaunchedEffect
         snapshotFlow {
                 list.layoutInfo.visibleItemsInfo.any {
                     val parts = it.key.toString().split('|')
@@ -134,7 +148,32 @@ fun WebtoonReader(
         }
     }
 
-    BoxWithConstraints(modifier.fillMaxWidth()) {
+    LaunchedEffect(head.id, previous?.id, settings.continuousChapters, previousAttempt, restored) {
+        previousError = null
+        if (!restored || !settings.continuousChapters || previous == null) return@LaunchedEffect
+        snapshotFlow { list.firstVisibleItemIndex <= 2 }.first { it }
+        if (settings.gapWarnings && ReaderContinuity.gap(previous, head) != null && previous.id !in allowedGaps)
+            return@LaunchedEffect
+        previousLoading = true
+        try {
+            val resolved = vm.resolveChapter(previous)
+            if (window.none { it.id == resolved.id }) window = listOf(resolved) + window
+        } catch (e: CancellationException) { throw e }
+        catch (e: Exception) { previousError = e }
+        finally { previousLoading = false }
+    }
+
+    var zoom by remember { mutableFloatStateOf(1f) }
+    var pan by remember { mutableStateOf(Offset.Zero) }
+    BoxWithConstraints(modifier.fillMaxWidth().clipToBounds()) {
+        val viewportWidth = with(LocalDensity.current) { maxWidth.toPx() }
+        val viewportHeight = with(LocalDensity.current) { maxHeight.toPx() }
+        val zoomState = rememberTransformableState { factor, movement, _ ->
+            zoom = (zoom * factor).coerceIn(1f, 3f)
+            val moved = pan + movement
+            pan = Offset(moved.x.coerceIn(-viewportWidth * (zoom - 1) / 2, viewportWidth * (zoom - 1) / 2),
+                moved.y.coerceIn(-viewportHeight * (zoom - 1) / 2, viewportHeight * (zoom - 1) / 2))
+        }
         val widthPixels = with(LocalDensity.current) { maxWidth.toPx() }
         fun position(): Triple<Release, Int, Float>? {
             val item =
@@ -160,7 +199,7 @@ fun WebtoonReader(
                 val preceding =
                     (0 until initialPage).sumOf { images["${initialChapter.id}|$it"]?.strips ?: 1 }
                 list.scrollToItem(
-                    preceding + sourceY / STRIP_HEIGHT,
+                    1 + preceding + sourceY / STRIP_HEIGHT,
                     ((sourceY % STRIP_HEIGHT) * widthPixels / image.width).toInt(),
                 )
                 restored = true
@@ -175,8 +214,8 @@ fun WebtoonReader(
                     .collect { (release, page, fraction) ->
                         vm.scrollChapterPosition(release, page, fraction, session)
                         val index = window.indexOfFirst { it.id == release.id }
-                        if (index > 1) {
-                            window = window.drop(index - 1)
+                        if (index > 1 || window.size > 3) {
+                            window = window.drop((index - 1).coerceAtLeast(0)).take(3)
                             val retained = window.map { it.id }.toSet()
                             images.keys
                                 .filter { it.substringBefore('|') !in retained }
@@ -192,9 +231,29 @@ fun WebtoonReader(
                     }
             }
         }
-        LazyColumn(state = list, modifier = Modifier.fillMaxSize().background(Color.Black)) {
-            window.forEach { release ->
-                if (release.id != initialChapter.id)
+        LazyColumn(state = list, modifier = Modifier.fillMaxSize().background(Color.Black)
+            .graphicsLayer(scaleX = zoom, scaleY = zoom, translationX = pan.x, translationY = pan.y)
+            .transformable(zoomState, canPan = { zoom > 1f })) {
+            item(key = "previous-chapter") {
+                Column(Modifier.fillMaxWidth().padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    if (previousLoading) CircularProgressIndicator(Modifier.size(24.dp))
+                    if (previousError != null) {
+                        Text(connectionMessage(previousError!!), color = Color.LightGray)
+                        if (requiresSourceAction(previousError)) VerifySourceButton(vm, sourceKey(head.mangaId))
+                    }
+                    if (previous != null && settings.continuousChapters) {
+                        val gap = ReaderContinuity.gap(previous, head)
+                        if (settings.gapWarnings && gap != null) Text(gap, color = Color.LightGray)
+                        TextButton(onClick = {
+                            allowedGaps.add(previous.id)
+                            vm.resetChapterRetries(previous)
+                            previousAttempt++
+                        }) { Text(if (previousError != null) "Retry previous chapter" else "Load previous chapter") }
+                    }
+                }
+            }
+            window.forEachIndexed { index, release ->
+                if (index > 0)
                     item(key = "chapter-${release.id}") { ChapterSeparator(release.label) }
                 repeat(release.pages.coerceAtLeast(0)) { page ->
                     val imageKey = "${release.id}|$page"
@@ -384,7 +443,11 @@ fun WebtoonReader(
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     if (settings.continuousChapters && next != null) {
-                        Text(
+                        val gap = ReaderContinuity.gap(tail, next)
+                        if (settings.gapWarnings && gap != null && next.id !in allowedGaps) {
+                            Text(gap, color = Color.LightGray)
+                            Button(onClick = { allowedGaps.add(next.id); nextAttempt++ }) { Text("Continue across gap") }
+                        } else Text(
                             nextError?.let(::connectionMessage) ?: "Loading ${next.label}…",
                             color = Color.LightGray,
                         )
@@ -415,6 +478,10 @@ fun WebtoonReader(
                     }
                 }
             }
+        }
+        if (zoom > 1.01f) TextButton(onClick = { zoom = 1f; pan = Offset.Zero },
+            modifier = Modifier.align(Alignment.TopEnd).background(Color.Black.copy(alpha = 0.9f))) {
+            Text("Reset zoom", color = Color.White)
         }
     }
 }

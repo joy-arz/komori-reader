@@ -2,6 +2,8 @@ package app.komori.data
 
 import android.content.Context
 import androidx.work.*
+import androidx.room.withTransaction
+import app.komori.domain.DownloadPolicy
 import app.komori.KomoriApp
 import java.io.File
 import java.util.concurrent.TimeUnit
@@ -49,24 +51,26 @@ suspend fun enqueueDownload(
     settings: Settings,
 ) {
     val app = context.applicationContext as KomoriApp
-    if (app.dao.download(chapter.id)?.state in setOf("Queued", "Downloading", "Retrying")) return
+    if (app.dao.download(chapter.id)?.state in DownloadPolicy.activeStates) return
     ChapterFiles.locked(chapter.id) {
         val existing = app.dao.download(chapter.id)
-        if (existing?.state in setOf("Complete", "Queued", "Downloading", "Retrying")) return@locked
+        if (existing?.state in (DownloadPolicy.activeStates + "Complete")) return@locked
         withContext(kotlinx.coroutines.NonCancellable) {
+            app.database.withTransaction {
+            val position = app.dao.lastQueuePosition().let { if (it == Long.MAX_VALUE) throw IllegalStateException("Download queue position limit reached.") else it + 1 }
             app.dao.putDownload(
-                existing?.copy(state = "Queued", error = "")
+                existing?.copy(state = "Queued", error = "", queuePosition = position)
                     ?: Download(
                         chapter.id,
                         chapter.mangaId,
                         chapter.label,
                         chapter.pages.coerceAtLeast(0),
                         dataSaver = settings.saver,
+                        queuePosition = position,
                     )
             )
-            val request = downloadRequest(chapter.id, settings)
-            WorkManager.getInstance(context)
-                .enqueueUniqueWork("download-${chapter.id}", ExistingWorkPolicy.KEEP, request)
+            }
+            kickDownloadQueue(app)
         }
     }
 }
@@ -100,22 +104,28 @@ internal fun downloadRequest(
 
 class ChapterDownloadWorker(context: Context, params: WorkerParameters) :
     CoroutineWorker(context, params) {
-    override suspend fun doWork(): Result = download((applicationContext as KomoriApp).source)
+    override suspend fun doWork(): Result {
+        try { return download((applicationContext as KomoriApp).source, enforceQueue = true) }
+        finally { if (!isStopped) withContext(kotlinx.coroutines.NonCancellable) { kickDownloadQueue(applicationContext) } }
+    }
 
-    internal suspend fun download(source: Sources): Result =
+    internal suspend fun download(source: Sources, enforceQueue: Boolean = false): Result =
         gate.withLock {
             withContext(Dispatchers.IO) {
                 val app = applicationContext as KomoriApp
                 val id = inputData.getString("chapter") ?: return@withContext Result.failure()
+                val head = app.dao.queueHead()
+                if (enforceQueue && head != null && head.releaseId != id) return@withContext Result.retry()
                 ChapterFiles.locked(id) chapter@{
                     kotlinx.coroutines.currentCoroutineContext().ensureActive()
                     var record = app.dao.download(id) ?: return@chapter Result.failure()
-                    if (record.state !in setOf("Queued", "Downloading", "Retrying"))
+                    if (record.state !in DownloadPolicy.activeStates)
                         return@chapter Result.failure()
                     val attempt =
                         inputData.getInt("attemptBase", 0).coerceAtLeast(0).toLong() +
                             runAttemptCount
                     try {
+                        if (app.filesDir.usableSpace < 64L * 1024 * 1024) throw StorageFailure("Free at least 64 MB to continue downloading.")
                         record = record.copy(state = "Downloading", error = "")
                         app.dao.putDownload(record)
                         DownloadTransfers.report(id, DownloadTransfer(resolving = true))
@@ -213,11 +223,13 @@ class ChapterDownloadWorker(context: Context, params: WorkerParameters) :
                     } catch (e: Exception) {
                         kotlinx.coroutines.currentCoroutineContext().ensureActive()
                         val needsAction = requiresSourceAction(e)
-                        val retry = automaticRetryAllowed(e) && attempt < 3
+                        val storageWait = failureKind(e) == FailureKind.STORAGE
+                        val retry = (automaticRetryAllowed(e) && attempt < 3) || storageWait
                         app.dao.putDownload(
                             record.copy(
                                 state =
                                     if (needsAction) "Verification required"
+                                    else if (storageWait) "Waiting for storage"
                                     else if (retry) "Retrying" else "Failed",
                                 error = connectionMessage(e),
                             )
