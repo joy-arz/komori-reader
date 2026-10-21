@@ -382,7 +382,9 @@ class WebSource(
                 val title = link.selectFirst(".caption")?.text().orEmpty()
                 val cover = link.selectFirst("img")?.absUrl("src").orEmpty()
                 if (!Regex("/g/\\d+/").matches(path) || title.isBlank() || !cover.startsWith("https://")) null
-                else Manga(sourceId(key, path), title, "", cover)
+                else Manga(sourceId(key, path), title, "", cover,
+                    tagsJson = coverLanguageTags(link.parent()?.classNames().orEmpty()
+                        .filter { it.startsWith("lang-") }.mapNotNull { coverLanguage(it.removePrefix("lang-")) }))
             }.distinctBy { it.id }
         if (key == "zap" || key == "imhentai") return parseGalleryBrowse(doc)
         return doc.select(
@@ -671,8 +673,22 @@ class WebSource(
                     ?: return@mapNotNull null
                 val path = link.absUrl("href").toHttpUrl().encodedPath
                 if (!Regex("/gallery/\\d+/").matches(path) || link.text().isBlank()) return@mapNotNull null
+                val languages = card.select("a[href]").mapNotNull { a ->
+                    val url = a.absUrl("href").toHttpUrlOrNull()
+                    if (url?.host == base.toHttpUrl().host &&
+                        Regex("/language/[^/?#]+/").matches(url.encodedPath))
+                        coverLanguage(url.encodedPath.trim('/').substringAfterLast('/'))
+                    else null
+                }.ifEmpty {
+                    card.select("img.thumb_flag, .hz-gallery-card__flag img").mapNotNull { flag ->
+                        coverLanguage(flag.attr("alt")) ?: coverLanguage(flag.attr("title"))
+                            ?: coverLanguage(flag.attr("src").substringBefore('?').substringAfterLast('/')
+                                .substringBeforeLast('.'))
+                    }
+                }
                 Manga(sourceId(key, path), link.text(), "",
-                    img.absUrl(if (img.hasAttr("data-src")) "data-src" else "src"))
+                    img.absUrl(if (img.hasAttr("data-src")) "data-src" else "src"),
+                    tagsJson = coverLanguageTags(languages))
             }.distinctBy { it.id }
 
     private fun parseZapPages(d: Document): List<String> {

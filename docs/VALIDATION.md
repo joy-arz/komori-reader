@@ -298,3 +298,12 @@ Installed the published APK over production `v0.7.0-alpha.1` without clearing da
 - Reconciled TODO delivery claims with release commits and source code. Distinguished the shipped manual backup from scheduled backup work, selected/next-N chapter downloads from arbitrary ranges, and existing batch pause/resume/delete from a future cancel-without-delete action. Corrected the pending connection-reset reproduction to include the user's Nhentai report.
 - Confirmed the user's HentaiZap gallery `1665352` has `/artist/kanamirubon/` metadata while the artist listing omits it. Native artist listing returned one work, keyword search twelve at 08:14 UTC, both HTTP 200. Recorded the reproduction, implementation cause and fix acceptance criteria in [AUTHOR_CATALOG_AUDIT_2026-10-21.md](AUTHOR_CATALOG_AUDIT_2026-10-21.md).
 - This reconciliation changes documentation only. The catalog completeness defect remains open; no app fix, new APK or device acceptance is claimed.
+
+
+## Thumbnail language badges — 0.7.5 change
+
+- Added a shared thumbnail cover with an upper-left language badge for Library/Discover/Authors grids, Continue reading and title details. It uses explicit language metadata only; unknown/missing language and MangaDex original-language hints do not create translation badges. Multiple known languages are deduplicated and shown together.
+- Requested display codes are `en`, `jp`, `sp`, `fr`, `kr`, `ch`; site/ISO aliases such as `es`, `ja`, `ko`, `zh`, `gb` and `cn` normalize to those codes. Additional recognized languages retain short codes. Full language names are exposed to accessibility services.
+- HentaiZap listing language links/flags, ImHentai flag metadata and Nhentai `lang-*` card classes are retained in existing typed language metadata, without detail-page requests or a Room schema change. HentaiZap markup was inspected live; ImHentai/Nhentai access returned HTTP 403 on this audit network, so their extraction is fixture-validated rather than claimed live-validated.
+- Local acceptance: 125 JVM tests total, **121 passed and four optional live tests skipped**; lint passed with zero errors and 24 warnings; debug APK assembled. The focused **API 30 interaction test passed**, checking the displayed codes, retained long-press selection and the title-detail badge. Grid, selected-grid and detail screenshots using synthetic covers were visually reviewed.
+- The earlier HentaiZap author-catalog completeness defect remains open. Language badges do not change author lookup or session recovery.

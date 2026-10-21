@@ -1,6 +1,6 @@
 # Komori development backlog
 
-Updated October 21, 2026 after fetching GitHub main at `b577b5b` and checking the published releases through `v0.7.4`. Reconciled against source code and [release validation](VALIDATION.md), rather than treating the October 15 comparison as current status. Komikku remains the main behavior reference and Mihon the secondary reference. Checkboxes mean delivered and validated, not merely started. Open items below are remaining work, not release promises. The reconciled checklist contains **37 completed groups and 34 open groups**; groups can contain several related tasks.
+Updated October 21, 2026 after fetching GitHub main at `b577b5b` and checking the published releases through `v0.7.4`. Reconciled against source code and [release validation](VALIDATION.md), rather than treating the October 15 comparison as current status. Komikku remains the main behavior reference and Mihon the secondary reference. Checkboxes mean delivered and validated, not merely started. Open items below are remaining work, not release promises. The reconciled checklist contains **38 completed groups and 34 open groups**; groups can contain several related tasks.
 
 ## Published delivery ledger
 
@@ -20,13 +20,14 @@ All five releases are published. The latest signed release is 0.7.4; its CI, sig
 
 Pagination support alone does not prove that a source's artist index contains every work. Keep the delivered pagination item checked while tracking this separate completeness defect. Latest/popularity follow native source rank; alphabetical/author sort loaded works, not an unseen complete catalog.
 
-## Delivered feature requests through 0.7.4
+## Delivered feature requests
 - [x] Remove Comix from the enabled sources.
 - [x] Parse source-provided authors/tags and add parody, language and category browsing for supported gallery sources.
 - [x] Keep Authors separate, follow creators, default to All works rather than saved-only works, and compact the toolbar without saved-title highlighting. The All filter does not guarantee completeness of the source index.
 - [x] Default Authors to Latest; add Popularity/views, Alphabetical and Author sorting. Latest/popularity blend each source's ranking; alphabetical/author apply to loaded works.
 - [x] Compact Library, Discover and Downloads; remove idle Select bars while retaining long-press selection.
 - [x] Use minimal chapter capsules between chapters in continuous scrolling.
+- [x] Overlay compact language badges on manga thumbnails using explicit metadata; retain supported gallery-card language flags before opening details (0.7.5 change). Unknown languages remain unlabelled.
 - [x] Publish signed 0.7.0–0.7.4 and verify in-place upgrades retain Library state.
 
 ## Delivered catalogs and batch actions

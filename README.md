@@ -9,7 +9,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 
 <br>
 
-[![Release](https://img.shields.io/badge/release-0.7.4-A3E635?style=for-the-badge&labelColor=0A0A0A)](https://github.com/joy-arz/komori-reader/releases/latest)
+[![Release](https://img.shields.io/badge/release-0.7.5-A3E635?style=for-the-badge&labelColor=0A0A0A)](https://github.com/joy-arz/komori-reader/releases/latest)
 [![Android](https://img.shields.io/badge/Android-8.0%2B-A3E635?style=for-the-badge&logo=android&logoColor=A3E635&labelColor=0A0A0A)](#install)
 [![Kotlin](https://img.shields.io/badge/Kotlin-Compose-A3E635?style=for-the-badge&logo=kotlin&logoColor=A3E635&labelColor=0A0A0A)](#build)
 [![No ads](https://img.shields.io/badge/no%20ads-no%20analytics-A3E635?style=for-the-badge&labelColor=0A0A0A)](#features)
@@ -28,7 +28,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 
 <br>
 
-> **Current release: 0.7.4.** Signed APK for Android 8.0 and newer. This is a full GitHub release. Source-specific limitations and planned features are listed below.
+> **Current release: 0.7.5.** Signed APK for Android 8.0 and newer. This is a full GitHub release. Source-specific limitations and planned features are listed below.
 
 ---
 
@@ -81,8 +81,9 @@ Built with Kotlin and Compose. Native online and offline reading.
 - Long-press a title, chapter, download or followed creator to select it. Batch controls appear only during selection; browsing has no idle Select bar.
 - Bulk actions: save, like, download, read-state changes, pause, resume, and confirmed deletion or unfollow. Select all applies to loaded or filtered items.
 - Possible-duplicate warnings for normalized matching titles already saved from another source. Titles are never merged automatically.
-- Dedicated **Authors** tab with compact creator chips, searchable follow management and complete paginated source catalogs. Latest is the default, with Popularity / views, Alphabetical and Author ordering. Latest/popularity blend each creator’s source-ranked results; alphabetical and author ordering apply to loaded works. Local reordering retains loaded pages.
+- Dedicated **Authors** tab with compact creator chips, searchable follow management and paginated source catalogs. Source indexes can omit works; the confirmed HentaiZap completeness issue remains tracked in the TODO. Latest is the default, with Popularity / views, Alphabetical and Author ordering. Latest/popularity blend each creator’s source-ranked results; alphabetical and author ordering apply to loaded works. Local reordering retains loaded pages.
 - Saved titles keep their source order and receive no Library highlight.
+- Compact language badges overlay thumbnail corners when explicit language metadata is available: `en`, `jp`, `sp`, `fr`, `kr`, `ch` and other recognized languages. Browse flags are retained without fetching every gallery; unknown languages remain unlabelled.
 
 ### <img src="https://api.iconify.design/lucide/list-filter.svg?color=%23A3E635" width="22" height="22" align="absmiddle"> Smart Chapters
 
@@ -158,7 +159,7 @@ MangaDex and scanlation groups are credited in the application. This is an indep
 
 <div align="center">
 
-### [Download komori-0.7.4.apk](https://github.com/joy-arz/komori-reader/releases/download/v0.7.4/komori-0.7.4.apk)
+### [Download komori-0.7.5.apk](https://github.com/joy-arz/komori-reader/releases/download/v0.7.5/komori-0.7.5.apk)
 
 </div>
 
@@ -192,14 +193,14 @@ Local signing is automated through JVM `keytool` validation and Gradle. See [rel
 
 Every push to `main` and every pull request runs unit tests, lint and a debug APK build.
 
-A version tag such as `v0.7.4` automatically tests, builds, signs and publishes a release APK plus a SHA-256 checksum and updater metadata (`update.json`).
+A version tag such as `v0.7.5` automatically tests, builds, signs and publishes a release APK plus a SHA-256 checksum and updater metadata (`update.json`).
 
 - Plain version tags publish full releases and mark them as **Latest**.
 - Tags containing a suffix remain prereleases.
 
 ```sh
-git tag v0.7.4
-git push origin v0.7.4
+git tag v0.7.5
+git push origin v0.7.5
 ```
 
 Signing secrets are already configured in repository Actions secrets. No signing material is committed. See [RELEASING.md](docs/RELEASING.md) for key backup and release details.

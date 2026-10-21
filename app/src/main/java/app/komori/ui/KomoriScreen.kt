@@ -265,6 +265,34 @@ private fun EmptyState(
 }
 
 @Composable
+private fun MangaCover(
+    manga: Manga,
+    description: String?,
+    modifier: Modifier,
+    contentScale: ContentScale = ContentScale.Crop,
+) {
+    val languages = remember(manga.tagsJson) { manga.coverLanguages() }
+    Box(modifier) {
+        AsyncImage(coverRequest(manga), description, Modifier.matchParentSize(), contentScale = contentScale)
+        if (languages.isNotEmpty()) {
+            Text(
+                languages.joinToString(" / ") { it.code },
+                Modifier.align(Alignment.TopStart).padding(6.dp)
+                    .clip(RoundedCornerShape(5.dp))
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.95f))
+                    .padding(horizontal = 6.dp, vertical = 3.dp)
+                    .semantics { contentDescription = "Language: ${languages.joinToString { it.name }}" },
+                color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
 private fun Library(vm: ReaderViewModel, discover: () -> Unit) {
     val manga by vm.library.collectAsStateWithLifecycle()
     val shelf by vm.shelf.collectAsStateWithLifecycle()
@@ -304,8 +332,8 @@ private fun Library(vm: ReaderViewModel, discover: () -> Unit) {
                 shape = RoundedCornerShape(18.dp),
             ) {
                 Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    AsyncImage(
-                        coverRequest(book),
+                    MangaCover(
+                        book,
                         null,
                         Modifier.size(52.dp, 76.dp).clip(RoundedCornerShape(8.dp)),
                         contentScale = ContentScale.Crop,
@@ -956,8 +984,8 @@ private fun MangaGrid(
             items(manga, key = { it.id }) { title ->
                 Column {
                     Box {
-                        AsyncImage(
-                            coverRequest(title),
+                        MangaCover(
+                            title,
                             title.title,
                             Modifier.fillMaxWidth()
                                 .aspectRatio(0.7f)
@@ -1113,8 +1141,8 @@ private fun Details(
     ) {
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                AsyncImage(
-                    coverRequest(manga),
+                MangaCover(
+                    manga,
                     null,
                     Modifier.width(112.dp)
                         .height(160.dp)
