@@ -324,8 +324,25 @@ Maintained by [@joy-arz](https://github.com/joy-arz). Issues and pull requests a
 
 ## Support
 
-[<img src="docs/assets/kofi.svg" width="32" height="24" alt="Ko-fi"> **Support joyarz on Ko-fi**](https://ko-fi.com/joyarz)
+<div align="center">
 
-Komori is an open-source project. If it makes your reading day better, a coffee helps support continued development and maintenance. Support is always optional. Bug reports, translations, and code contributions are welcome too.
+<a href="https://ko-fi.com/joyarz">
+  <img src="docs/assets/support-on-kofi.jpeg" width="100%" alt="Support Komori, the open-source comics and manga reader, on Ko-fi">
+</a>
 
-You can also find the full Support page in **Settings → Support**.
+### Help Komori keep growing
+
+Komori is a free, open-source project. If it makes your reading day better,<br>
+a coffee helps support continued development, maintenance, and improvements.
+
+<a href="https://ko-fi.com/joyarz">
+  <img src="docs/assets/kofi.svg" width="40" height="30" alt="Ko-fi">
+</a>
+
+**[Support joyarz on Ko-fi →](https://ko-fi.com/joyarz)**
+
+Support is always optional. Bug reports, translations, and code contributions help too.
+
+You can also find this link in **Settings → Support**.
+
+</div>
