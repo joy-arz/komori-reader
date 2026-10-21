@@ -10,20 +10,17 @@ import app.komori.ui.KomoriScreen
 class MainActivity : ComponentActivity() {
     var volumeNavigation: ((Int) -> Unit)? = null
 
-    override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent): Boolean {
-        val direction = when (keyCode) {
+    private fun routeVolumeKey(event: android.view.KeyEvent): Boolean {
+        val direction = when (event.keyCode) {
             android.view.KeyEvent.KEYCODE_VOLUME_DOWN -> 1
             android.view.KeyEvent.KEYCODE_VOLUME_UP -> -1
-            else -> return super.onKeyDown(keyCode, event)
+            else -> return false
         }
-        val handler = volumeNavigation ?: return super.onKeyDown(keyCode, event)
-        if (event.repeatCount == 0) handler(direction)
-        return true
-    }
-
-    override fun onKeyUp(keyCode: Int, event: android.view.KeyEvent): Boolean {
-        if (volumeNavigation != null && keyCode in listOf(android.view.KeyEvent.KEYCODE_VOLUME_DOWN, android.view.KeyEvent.KEYCODE_VOLUME_UP)) return true
-        return super.onKeyUp(keyCode, event)
+        val handler = volumeNavigation ?: return false
+        if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+            handler(direction)
+        }
+        return event.action == android.view.KeyEvent.ACTION_DOWN || event.action == android.view.KeyEvent.ACTION_UP
     }
 
     override fun onStart() {
@@ -43,6 +40,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val originalCallback = window.callback
+        window.callback = object : android.view.Window.Callback by originalCallback {
+            override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean =
+                routeVolumeKey(event) || originalCallback.dispatchKeyEvent(event)
+        }
         enableEdgeToEdge()
         setContent { KomoriScreen(viewModel()) }
     }
