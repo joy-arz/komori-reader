@@ -85,9 +85,10 @@ class BatchSelectionTest {
         fun tapDescription(description: String) {
             assertTrue(
                 "Missing $description",
-                device.wait(Until.hasObject(By.desc(description)), 8000),
+                device.wait(Until.hasObject(By.pkg(app.packageName).desc(description)), 8000),
             )
-            device.findObject(By.desc(description)).click()
+            device.findObject(By.pkg(app.packageName).desc(description)).click()
+            device.waitForIdle()
         }
         try {
             tapText("Downloaded")

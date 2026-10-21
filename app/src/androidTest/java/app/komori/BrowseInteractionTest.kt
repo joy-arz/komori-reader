@@ -36,9 +36,9 @@ class BrowseInteractionTest {
         fun tap(label: String) {
             assertTrue(
                 "Missing control: $label",
-                device.wait(Until.hasObject(By.desc(label)), 8_000),
+                device.wait(Until.hasObject(By.pkg(instrumentation.targetContext.packageName).desc(label)), 8_000),
             )
-            device.findObject(By.desc(label)).click()
+            device.findObject(By.pkg(instrumentation.targetContext.packageName).desc(label)).click()
             device.waitForIdle()
         }
         try {
@@ -72,6 +72,7 @@ class BrowseInteractionTest {
             val width = device.displayWidth
             val height = device.displayHeight
             device.swipe(width / 2, height * 3 / 4, width / 2, height / 2, 18)
+            device.waitForIdle()
             assertEquals(
                 "Vertical scrolling must not change the source",
                 "demonic",
@@ -79,6 +80,10 @@ class BrowseInteractionTest {
             )
             device.swipe(width * 4 / 5, height / 2, width / 5, height / 2, 18)
             device.waitForIdle()
+            val deadline = android.os.SystemClock.uptimeMillis() + 5000
+            while (vm.activeSource.value != "weeb" && android.os.SystemClock.uptimeMillis() < deadline) {
+                android.os.SystemClock.sleep(50)
+            }
             assertEquals("weeb", vm.activeSource.value)
             // Navigation must remain usable while a source request is in flight.
             tap("Library")
