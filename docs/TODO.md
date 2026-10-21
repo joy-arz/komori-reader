@@ -1,6 +1,6 @@
 # Komori development backlog
 
-Updated October 21, 2026 after fetching GitHub main at `b577b5b` and checking the published releases through `v0.7.4`. Reconciled against source code and [release validation](VALIDATION.md), rather than treating the October 15 comparison as current status. Komikku remains the main behavior reference and Mihon the secondary reference. Checkboxes mean delivered and validated, not merely started. Open items below are remaining work, not release promises. The reconciled checklist contains **38 completed groups and 34 open groups**; groups can contain several related tasks.
+Updated October 21, 2026 after fetching GitHub main at `b577b5b` and checking the published releases through `v0.7.5`. Reconciled against source code and [release validation](VALIDATION.md), rather than treating the October 15 comparison as current status. Komikku remains the main behavior reference and Mihon the secondary reference. Checkboxes mean delivered and validated, not merely started. Open items below are remaining work, not release promises. The reconciled checklist contains **38 completed groups and 34 open groups**; groups can contain several related tasks.
 
 ## Published delivery ledger
 
@@ -10,9 +10,10 @@ Updated October 21, 2026 after fetching GitHub main at `b577b5b` and checking th
 | 0.7.1 | `5994fc8` | Compact Library, Discover and Downloads; long-press selection without idle Select bars. |
 | 0.7.2 | `565085c` | Authors Latest default, Popularity/views, Alphabetical and Author ordering; minimal continuous-reader chapter capsules. |
 | 0.7.3 | `52f95de` | Typed recovery failures, Retry-After cooldowns, durable deferred download retries and stable reader retry budgets. |
+| 0.7.5 | `a78e2fd` | Language badges over thumbnail corners, including supported gallery browse flags. |
 | 0.7.4 | `c8c9d5f` | Manual metadata backup/export, strict validation, restore preview and transactional merge. |
 
-All five releases are published. The latest signed release is 0.7.4; its CI, signature, in-place upgrade and real document-picker checks are recorded in VALIDATION.md. The later `b577b5b` commit records that validation; it does not add app behavior. GitHub contributors list only `joy-arz`.
+All six releases are published. The latest signed release is 0.7.5; its CI, signature, in-place upgrade and real document-picker checks are recorded in VALIDATION.md. The later `b577b5b` commit records that validation; it does not add app behavior. GitHub contributors list only `joy-arz`.
 
 ## Highest-priority source defect: incomplete author catalogs
 
