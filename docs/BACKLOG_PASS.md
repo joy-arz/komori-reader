@@ -1,6 +1,6 @@
 # Broad backlog implementation pass
 
-Requested October 21, 2026 after the thumbnail badges. Core implementation is pushed to main. Signed 0.8.0 is published; additional cloud upgrade acceptance remains open. checked items below describe delivered implementation, not universal device or source acceptance. Tracker integration is deferred by the user until core features pass. Physical 2 GB phone benchmarks cannot be claimed from the API 30 emulator.
+Requested October 21, 2026 after the thumbnail badges. Core implementation is pushed to main. Signed 0.8.0 is published; cloud signed-upgrade acceptance subsequently passed on API 26/36. checked items below describe delivered implementation, not universal device or source acceptance. Tracker integration is deferred by the user until core features pass. Physical 2 GB phone benchmarks cannot be claimed from the API 30 emulator.
 
 Design: retain the existing black (#000000), panel (#0B100D), green (#39D353), lime (#D5FA39), pale text (#F2F6EF) palette and bundled Outfit type. Keep left-aligned compact lists and adaptive covers. Put occasional reader controls in a scrollable sheet, filters in compact chips, and explicit review dialogs around migration/destructive actions. No extra dashboard chrome. Review against the request: additional controls must not crowd author/manga browsing or reinstate idle Select bars.
 
@@ -57,7 +57,7 @@ The already-published language-badge release is v0.7.5 / a78e2fd; it has passed 
 - Device run `39620993524`: API 26 and API 36 each passed all 38 instrumentation cases, with zero skips. Local release lint: zero errors, 45 advisory warnings.
 - Downloaded signed APK: 2,502,223 bytes; SHA-256 `597d32f03fde8d965706102fabd57a0b8b8b414c5756a63c3e2fde6da8eaa3df`. Original signing identity verified.
 - Installed the published APK over production 0.7.5 on API 30. Schema 5→6 and every prior column/value in two manga/shelf/download rows, four progress rows, one creator and one title preference were retained.
-- Cloud signed-upgrade run `39626710821` remains failed: API 26 could not terminate the background process; API 36 had a transient empty UI hierarchy. The bounded diagnostic capture worked. These failures do not erase successful build/instrumentation/local-upgrade evidence, and they do not count as passed acceptance.
+- Historical cloud signed-upgrade run `39626710821` failed: API 26 could not terminate the background process; API 36 had a transient empty UI hierarchy. The bounded diagnostic capture worked. The revised harness passed both APIs in `39651649241`, retaining all assertions and verifying original PID exit before relaunch.
 - Warm API 30 query fixture: 1,000 titles / 50,000 progress rows, five samples. Median all-progress materialization 294.681 ms versus selected-title 50 rows 1.642 ms, using `index_progress_mangaId`. Physical 2 GB phone and cold-start/long-read benchmarks remain open.
 - Support initial viewport, exact Ko-fi URI and README banner were reviewed. Publication of the Ko-fi announcement remains pending; the draft includes GitHub and latest-release links.
 

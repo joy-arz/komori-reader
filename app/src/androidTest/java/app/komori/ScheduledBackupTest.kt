@@ -33,7 +33,8 @@ class ScheduledBackupTest {
             app.settings.configureBackup(tree.toString(), 1, 3)
             repeat(4) {
                 val worker = TestListenableWorkerBuilder<MetadataBackupWorker>(app).build()
-                assertEquals(ListenableWorker.Result.success(), worker.doWork())
+                val result = worker.doWork()
+                assertEquals(app.settings.flow.first().backupStatus, ListenableWorker.Result.success(), result)
             }
             val documents = folder.list()
             assertEquals(4, documents.size)

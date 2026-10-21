@@ -120,7 +120,7 @@ Released repair work: durable per-page repair markers, Needs repair counts, part
 - [ ] Audit TalkBack, large fonts, landscape, contrast, touch targets and RTL layouts.
 - [x] Replace repeated library scans with maps and scoped database queries; measure before adding paging.
 - [ ] Benchmark cold start (including source sessions), 1,000-title libraries/50,000 progress rows and long reads on a physical 2 GB phone.
-- [ ] Complete cloud signed-upgrade acceptance on API 26/36. The 0.8.0 build and all 38 instrumentation checks per API passed. Local signed API 30 upgrade preserved schema 5→6 and all prior metadata. Cloud run 39626710821 failed at background-process termination on API 26 and transient UI XML capture on API 36; these checks remain open.
+- [x] Complete 0.8.0 cloud signed-upgrade acceptance on API 26/36. Run 39651649241 passed both APIs: schema 5→6, saved/liked/progress retention, verified process death and offline reader navigation. The harness retries transient UI capture and uses targeted emulator SIGKILL when Android ignores am kill, without force-stopping the package.
 - [x] Add Stable/Preview updater channels, release notes, snooze and conditional requests with longer cooldown.
 
 ## Support

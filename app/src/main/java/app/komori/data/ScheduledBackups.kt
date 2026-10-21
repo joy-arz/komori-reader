@@ -128,7 +128,7 @@ class MetadataBackupWorker(context: Context, params: WorkerParameters) : Corouti
                 else -> "Backup failed. Check folder access and free storage. Previous backups were retained."
             }
             app.settings.backupResult(message)
-            if (e is IOException && runAttemptCount < 2) Result.retry() else Result.failure()
+            if (e is IOException && e !is InvalidBackup && runAttemptCount < 2) Result.retry() else Result.failure()
         }
     }
     companion object { private val gate = Mutex() }

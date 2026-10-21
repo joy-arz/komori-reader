@@ -15,7 +15,7 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class MaintenanceSettingsUiTest {
-    @Test fun storageReviewCancellationAndAutomaticBackupControlsAreAccessible() = runBlocking {
+    @Test fun storageReviewCancellationAndAutomaticBackupControlsAreAccessible() = runBlocking<Unit> {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val app = instrumentation.targetContext.applicationContext as KomoriApp
         val device = UiDevice.getInstance(instrumentation)

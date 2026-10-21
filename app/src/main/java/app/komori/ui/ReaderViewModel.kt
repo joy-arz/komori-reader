@@ -222,7 +222,7 @@ class ReaderViewModel(
                 }
                 if (reader.value?.id == current.id) {
                     val saved = dao.download(current.id)
-                    val offline = saved?.state == "Complete" || sourceKey(current.mangaId) == "local"
+                    val offline = current.local || saved?.state == "Complete" || sourceKey(current.mangaId) == "local"
                     read(if (offline) current else current.copy(pages = -1), requestedPage = page)
                 }
             } catch (e: CancellationException) { throw e }

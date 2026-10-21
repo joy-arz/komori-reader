@@ -75,8 +75,12 @@ class NavigationHistoryTest {
             assertEquals(bounds, device.findObject(By.text(label)).visibleBounds)
         } finally {
             instrumentation.runOnMainSync { activity.finish() }
+            instrumentation.waitForIdleSync()
             releases.forEach { chapterDirectory(app, it.id).deleteRecursively() }
-            kotlinx.coroutines.runBlocking { app.dao.resetProgress(id) }
+            kotlinx.coroutines.runBlocking {
+                app.dao.resetProgress(id)
+                app.database.openHelper.writableDatabase.execSQL("DELETE FROM shelf WHERE mangaId = ?", arrayOf(id))
+            }
         }
     }
 

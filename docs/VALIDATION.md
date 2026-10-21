@@ -319,3 +319,11 @@ Installed the published APK over production `v0.7.0-alpha.1` without clearing da
 - Additional signed cloud upgrade run `39626710821` failed: API 26 background-process termination did not occur within its deadline; API 36 returned an empty UI hierarchy during capture. These checks remain open. Their failures are separate from successful instrumentation/build/local-upgrade evidence.
 - Supplied README Support banner and centered layout were reviewed. The Ko-fi announcement draft has the supplied featured image and clickable GitHub/latest-release links; no public publication is claimed.
 - User confirmed the reported Nhentai connection is working on October 22. Broader live-source acceptance, accessibility and physical low-memory benchmarks remain open.
+
+
+## Backup/storage/refresh development — October 22
+
+- Main implementation commit `d13265a` adds optional daily/weekly metadata backups with verified retention, download checksums/scans/storage/delete-read review, cache clearing and compact manual refresh controls on five screens. Tracking remains deferred. JVM: 147 total, 142 passed, five optional live-source skips. GitHub Android checks `39651598354` passed.
+- Local API 30 first run: 41/42 passed. Integrity/deletion and refresh checks passed; automatic backup hit an orphan shelf entry left by a navigation fixture. Fixture cleanup and permanent validation-failure handling were corrected; focused provider/UI/partial-offline refresh checks and the next full CI run remain to verify those final fixes.
+- API 26 device job `119401060319` failed before building/testing because Google's downloaded system-image archive was invalid (`Error on ZipFile unknown archive`). This is an SDK provisioning failure, not a passed or failed app test.
+- Published 0.8.0 signed-upgrade run `39651649241` passed on API 26 and API 36 after the harness corrections: schema 5→6, saved/liked/progress retention, verified process death, reader restoration and offline next-page navigation. No published tag was moved.

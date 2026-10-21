@@ -130,7 +130,8 @@ class BatchSelectionTest {
             device.takeScreenshot(
                 java.io.File(app.getExternalFilesDir(null), "downloads-compact.png")
             )
-            device.findObject(By.text("Batch book 1")).longClick()
+            (device.wait(Until.findObject(By.text("Batch book 1")), 8000)
+                ?: throw AssertionError("Downloaded title group did not appear")).longClick()
             tapText("Batch book 2")
             tapText("Actions")
             tapText("Delete downloads")
