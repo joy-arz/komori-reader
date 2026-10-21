@@ -39,7 +39,7 @@ Design: retain the existing black (#000000), panel (#0B100D), green (#39D353), l
 ## Release gate
 - [x] 0.8.0 unit/instrumentation/migration checks; lint/build.
 - [x] Update TODO with actual results and outstanding external acceptance.
-- [x] Push user-authored commits, publish 0.8.0 and inspect build/artifact/signature/local in-place upgrade. No assistant attribution. Additional cloud upgrade checks remain open.
+- [x] Push user-authored commits, publish 0.8.0 and inspect build/artifact/signature/local in-place upgrade. No assistant attribution. The 0.8.0 cloud signed upgrade subsequently passed both APIs.
 
 The already-published language-badge release is v0.7.5 / a78e2fd; it has passed signed upgrade validation. Do not roll that feature back while extending the app.
 
@@ -64,3 +64,10 @@ The already-published language-badge release is v0.7.5 / a78e2fd; it has passed 
 ## October 22 follow-up
 
 User confirmed Nhentai connections are working. New implementation adds scheduled metadata backups, download storage/integrity/delete-read controls and manual refresh buttons. New-pass validation is recorded in VALIDATION.md when complete; these features are not part of the already-published 0.8.0 APK. Trackers remain deferred.
+
+## Published 0.8.1 follow-up
+
+- Immutable `v0.8.1` at `bbb288b`, version code 124. Android checks `39663349030`, device checks `39663348851` (45/45 on each API 26/36) and signed release `39664480684` passed. JVM: 146 passed, five optional live-source skips. Local API 30 cover/filter interaction checks passed 3/3.
+- Delivered scheduled metadata backups/verified retention, storage and integrity scans, reviewed delete-read cleanup, reachable Settings → Reading cache controls, all five manual refresh controls and bounded HentaiZap gallery-cover fallback. Tracker integration stays deferred.
+- APK: 2,518,607 bytes; SHA-256 `3aa5b3195a8892385381460147122ea6825425070146508dd8c29b57d8240107`. Updater identity/size/hash and original certificate verified; debug document-provider fixtures are absent from the release manifest.
+- Published-APK upgrade follow-up is recorded in VALIDATION.md. Broader source/network, accessibility, slow-transfer interruption and physical 2 GB benchmarks remain open.

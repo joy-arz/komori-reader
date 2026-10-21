@@ -9,7 +9,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 
 <br>
 
-[![Release](https://img.shields.io/badge/release-0.8.0-A3E635?style=for-the-badge&labelColor=0A0A0A)](https://github.com/joy-arz/komori-reader/releases/latest)
+[![Release](https://img.shields.io/badge/release-0.8.1-A3E635?style=for-the-badge&labelColor=0A0A0A)](https://github.com/joy-arz/komori-reader/releases/latest)
 [![Android](https://img.shields.io/badge/Android-8.0%2B-A3E635?style=for-the-badge&logo=android&logoColor=A3E635&labelColor=0A0A0A)](#install)
 [![Kotlin](https://img.shields.io/badge/Kotlin-Compose-A3E635?style=for-the-badge&logo=kotlin&logoColor=A3E635&labelColor=0A0A0A)](#build)
 [![No ads](https://img.shields.io/badge/no%20ads-no%20analytics-A3E635?style=for-the-badge&labelColor=0A0A0A)](#features)
@@ -28,7 +28,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 
 <br>
 
-> **Komori 0.8.0 is available.** Android 8.0 and newer. Install the signed APK over your existing app to preserve your Library, progress, and downloads.
+> **Komori 0.8.1 is available.** Android 8.0 and newer. Install the signed APK over your existing app to preserve your Library, progress, and downloads.
 
 ---
 
@@ -60,6 +60,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 ### Library backup and restore
 
 - **Settings → App → Library backup** exports a versioned JSON file through Android's document picker.
+- Optional daily/weekly backups use your chosen folder, verify each saved file before pruning, and retain 3, 7 or 14 verified automatic backups. **Back up now** also works with scheduling Off.
 - Backups contain saved/liked titles, history and reading positions, followed authors, chapter metadata and per-title reader/group/language preferences, categories and edition links. Device settings, source sessions, download queues and image files are excluded.
 - Restore validates the complete file before showing a preview. New entries merge into the Library; existing values are kept by default. Select **Use backup values for matching entries** to replace them. Unrelated entries remain available.
 - [Backup format and merge details](docs/BACKUP.md). Metadata writes commit in one database transaction. Invalid files and conflicting chapter ownership are rejected. The format supports files up to 16 MiB. Completed chapters can be exported as CBZ separately.
@@ -71,6 +72,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 - Forward and backward continuous webtoon scrolling across chapters, with saved page and scroll position, bounded neighboring-chapter windows and image strips. Works offline, with a Paged/Webtoon switch.
 - Chapter/page jump and seek, numeric chapter-gap warnings, and navigation restoration from saved identifiers.
 - Brightness, artwork dimming, orientation lock, optional volume-key navigation, and conservative preload/cache choices.
+- **Settings → Reading → Clear cached pages** removes temporary reader images while keeping downloads and imported comics. Close the reader first.
 - Webtoon pinch zoom and opt-in tall-page detection; Smart Chapter explanations, alternate releases and per-title language.
 - Immersive reading. A center or image tap hides controls, and a floating page counter brings them back.
 - Direction-aware edge taps and swipes in paged mode.
@@ -108,10 +110,13 @@ Built with Kotlin and Compose. Native online and offline reading.
 - A compact Downloads header shows queued and offline counts. Queue options contain pause and resume/retry commands when available. Completed chapters omit redundant progress bars; active transfers retain detailed progress.
 - Configurable visible-image retries (off, 3, 5, 10 or 30 seconds, up to three attempts, 3 seconds by default).
 - Integrity checks when opening saved chapters, a persistent **Needs repair** status and targeted repair. Intact pages stay accessible with **Read saved pages**.
+- **Queue options → Storage & integrity** shows file totals, scans images/checksums and previews delete-read cleanup. Deletion rechecks completed reading progress and skips active downloads; Library/history remain.
 
 ### <img src="https://api.iconify.design/lucide/search.svg?color=%23A3E635" width="22" height="22" align="absmiddle"> Discover and browsing
 
 - Source results load the next page automatically near the end. Failures keep a manual retry, and repeated pages stop automatic loading.
+- Compact refresh buttons on Discover, Authors, Library, title details and reading preserve the current browsing context and offline files.
+- Failed HentaiZap thumbnails get one gallery-cover fallback without opening the title. Successful thumbnails make no extra gallery request; verification and rate-limit failures stay distinct.
 - Exact **Tag**, **Author**, **Parody**, **Language** and **Category** name browsing, alongside title search.
 - Language and category are separate browse filters. Nhentai can combine them with tags, parodies and creators.
 - HentaiZap and ImHentai offer those filter combinations in title browsing, with explicit limits in metadata browsing.
@@ -165,7 +170,7 @@ MangaDex and scanlation groups are credited in the application. This is an indep
 
 <div align="center">
 
-### [Download komori-0.8.0.apk](https://github.com/joy-arz/komori-reader/releases/download/v0.8.0/komori-0.8.0.apk)
+### [Download komori-0.8.1.apk](https://github.com/joy-arz/komori-reader/releases/download/v0.8.1/komori-0.8.1.apk)
 
 </div>
 
@@ -199,14 +204,14 @@ Local signing is automated through JVM `keytool` validation and Gradle. See [rel
 
 Every push to `main` and every pull request runs unit tests, lint, a debug APK build, and API 26/API 36 instrumentation. A separate Signed upgrade checks workflow validates published APKs against the 0.7.5 baseline with synthetic data, process death and offline navigation.
 
-A version tag such as `v0.8.0` automatically tests, builds, signs and publishes a release APK plus a SHA-256 checksum and updater metadata (`update.json`).
+A version tag such as `v0.8.1` automatically tests, builds, signs and publishes a release APK plus a SHA-256 checksum and updater metadata (`update.json`).
 
 - Plain version tags publish full releases and mark them as **Latest**.
 - Tags containing a suffix remain prereleases.
 
 ```sh
-git tag v0.8.0
-git push origin v0.8.0
+git tag v0.8.1
+git push origin v0.8.1
 ```
 
 Signing secrets are already configured in repository Actions secrets. No signing material is committed. See [RELEASING.md](docs/RELEASING.md) for key backup and release details.
@@ -244,7 +249,7 @@ Install version 0.5 manually once if you are coming from an older build. After t
 
 - Library metadata and creator follows remain local. Scheduled source checks use best-effort source catalogs; a latest-page author check can miss uploads between runs.
 - AniList/MAL tracking is deferred until core acceptance.
-- **Next build on main:** optional daily/weekly metadata backups with verified retention; download integrity scans, storage totals and reviewed delete-read cleanup; compact refresh controls for Discover, Authors, Library, title details and reading. These additions are not in the 0.8.0 APK.
+- **Shipped in 0.8.1:** optional daily/weekly metadata backups with verified retention; download integrity scans, storage totals, reviewed delete-read cleanup and cache clearing in Settings → Reading; compact refresh controls for Discover, Authors, Library, title details and reading; automatic HentaiZap gallery-cover fallback after thumbnail failure.
 
 </details>
 

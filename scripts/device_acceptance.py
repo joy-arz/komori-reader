@@ -173,7 +173,9 @@ def main():
             running = set(shell(f"pidof {package} || true").split())
             return not running.intersection(original_pids)
         wait_for(original_processes_exited, "Original background app process did not exit")
-        shell(f"am start -W -n {package}/app.komori.MainActivity")
+        # API 26 can display the restored task while am start -W never returns.
+        # The actual page assertion below is the readiness check.
+        shell(f"am start -n {package}/app.komori.MainActivity")
         wait_for(lambda: visible("2 / 3"), "Reader navigation lost after process death")
         print("Reader restored after process death", flush=True)
         try:

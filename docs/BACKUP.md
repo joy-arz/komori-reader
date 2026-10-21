@@ -34,7 +34,7 @@ Unsupported versions, duplicate object keys, nonstandard JSON, invalid UTF-8, un
 The JSON is readable metadata, including reading history. Choose a storage location appropriate for that data. Device-wide settings remain outside the backup format. Completed chapters can be exported as CBZ separately. Imported local pages are excluded from metadata backups and must be kept as separate CBZ/folder copies.
 
 
-## Automatic metadata backups (next build)
+## Automatic metadata backups (0.8.1)
 
 Choose **Settings → App → Library backup → Choose backup folder**, grant lasting read/write access, then choose Daily or Weekly. Off disables periodic work. **Back up now** runs once in the chosen folder even when the schedule is Off. WorkManager persists the schedule across app restarts; Android may defer it for battery/storage conditions. Cloud document providers require their own connectivity and account access. No global storage permission is requested.
 

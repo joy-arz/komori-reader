@@ -13,16 +13,17 @@ Updated October 22, 2026 for the backup, storage and manual-refresh pass. Publis
 | 0.7.4 | `c8c9d5f` | Manual metadata backup/export, strict validation, restore preview and transactional merge. |
 | 0.7.5 | `a78e2fd` | Language badges over thumbnail corners, including supported gallery browse flags. |
 | 0.8.0 | `fad6beb` | Reader controls and continuity, Library organization/Updates, durable download queue, local imports, source tools, updater channels and Support. |
+| 0.8.1 | `bbb288b` | Scheduled metadata backups with verified retention, storage/integrity/delete-read/cache controls, five refresh buttons and HentaiZap cover recovery. |
 
-All seven releases are published. The latest signed release is 0.8.0 (version code 123). Its build, 76 API 26/36 device checks, signature and local signed in-place upgrade passed. Additional cloud signed-upgrade acceptance remains open below. GitHub contributors list only `joy-arz`.
+All eight releases are published. The latest signed release is 0.8.1 (version code 124). Its build, 90 API 26/36 device checks and original signing identity passed. Published-APK signed-upgrade acceptance is tracked in VALIDATION.md. The earlier 0.8.0 cloud upgrade passed both APIs. GitHub contributors list only `joy-arz`.
 
-## Current development pass (not yet in the 0.8.0 APK)
+## Published 0.8.1 follow-up
 
 - [x] Implement optional daily/weekly metadata backups to a selected document-provider folder, read-back verification, configurable 3/7/14 retention and an immediate backup action.
 - [x] Implement on-demand image/checksum integrity scans, downloaded-file size totals and a reviewed delete-read action that rechecks progress/queue state before deletion. Add temporary reader-cache clearing without deleting downloaded files.
 - [x] Add compact top refresh controls to Discover, Authors, Library, title details and reading; preserve query/filter context and offline files.
 - [x] Add a bounded HentaiZap gallery-cover fallback when a Discover thumbnail fails. Preserve verification/rate-limit failures; no gallery request is made for a successful thumbnail. Device acceptance is included in the release gate below.
-- [ ] Finish new-pass unit, lint, provider, storage and refresh interaction checks; push and inspect the resulting build. These implementation checks do not claim publication.
+- [x] Complete unit, lint, provider, storage and refresh interaction checks; push and publish signed 0.8.1. Android checks `39663349030` and device checks `39663348851` passed at the exact release commit; 45/45 on each API 26/36. Release `39664480684` passed; downloaded APK hash, updater metadata and original signer verified.
 
 ## Highest-priority source defect: incomplete author catalogs
 
