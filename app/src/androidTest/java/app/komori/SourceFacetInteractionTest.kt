@@ -18,7 +18,7 @@ class SourceFacetInteractionTest {
         val app = instrumentation.targetContext.applicationContext as KomoriApp
         val device = UiDevice.getInstance(instrumentation)
         val activity = instrumentation.startActivitySync(
-            Intent(app, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            Intent(app, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
         ) as MainActivity
         lateinit var vm: ReaderViewModel
         val book = Manga(sourceId("zap", "/gallery/1/"), "Metadata fixture", "", "",
@@ -48,17 +48,24 @@ class SourceFacetInteractionTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val device = UiDevice.getInstance(instrumentation)
         val activity = instrumentation.startActivitySync(
-            Intent(instrumentation.targetContext, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            Intent(instrumentation.targetContext, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
         ) as MainActivity
         lateinit var vm: ReaderViewModel
         instrumentation.runOnMainSync {
             vm = ViewModelProvider(activity)[ReaderViewModel::class.java]
             ViewModelProvider(activity)[UpdateViewModel::class.java].dismiss()
             vm.currentTab.value = 1
-            vm.activeSource.value = "nhentai"
+            vm.chooseSource("nhentai")
             vm.results.value = listOf(Manga(sourceId("nhentai", "/g/1/"), "Filter fixture", "", ""))
         }
         try {
+            val initialDeadline = android.os.SystemClock.uptimeMillis() + 35_000
+            while (vm.loading.value && android.os.SystemClock.uptimeMillis() < initialDeadline) {
+                android.os.SystemClock.sleep(50)
+            }
+            assertFalse("Initial source request did not settle", vm.loading.value)
+            assertEquals("nhentai", vm.activeSource.value)
+            device.waitForIdle()
             assertTrue(device.wait(Until.hasObject(By.desc("Filters and sorting")), 8000))
             device.findObject(By.desc("Filters and sorting")).click()
             assertTrue(device.wait(Until.hasObject(By.text("All languages")), 5000))
