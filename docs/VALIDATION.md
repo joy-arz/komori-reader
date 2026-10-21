@@ -309,3 +309,13 @@ Installed the published APK over production `v0.7.0-alpha.1` without clearing da
 - The earlier HentaiZap author-catalog completeness defect remains open. Language badges do not change author lookup or session recovery.
 
 - Published signed `v0.7.5` from `a78e2fd` (code 122). Android checks `39573637613` and release `39573645351` succeeded. The 2,354,215-byte APK matches both SHA256SUMS and updater metadata: SHA-256 `3e019c315abe422d82c344cf3197896e2603a0fd5a636604387b5e85c22b2bf9`. `apksigner` verified the original certificate. Installed over code 121; saved titles, Library labels and Saved=2/Liked=1/History=2/Downloaded=2 counts were unchanged. Contributors remain `joy-arz` only.
+
+
+## Published 0.8.0 acceptance
+
+- Immutable tag `v0.8.0` at `fad6beb`, version code 123. Release `39621002834` attempt 2 and exact-tag Android checks `39624937617` succeeded. JVM: 138 passed, five optional live-source skips, 143 total. Device run `39620993524` passed 38/38 on each API 26 and API 36, with zero skips. Local release lint: zero errors, 45 advisory warnings.
+- Published APK is 2,502,223 bytes, SHA-256 `597d32f03fde8d965706102fabd57a0b8b8b414c5756a63c3e2fde6da8eaa3df`. Original certificate SHA-256 `0f654f439d6059cf8caea9fa1d5403342cc47b1b5a8228bf90e2858ec423d5fd` verified with apksigner.
+- API 30 signed in-place upgrade from production 0.7.5 preserved every existing column/value in manga (2), shelf (2), progress (4), downloads (2), creators (1) and chapter preferences (1). Room advanced from schema 5 to 6.
+- Additional signed cloud upgrade run `39626710821` failed: API 26 background-process termination did not occur within its deadline; API 36 returned an empty UI hierarchy during capture. These checks remain open. Their failures are separate from successful instrumentation/build/local-upgrade evidence.
+- Supplied README Support banner and centered layout were reviewed. The Ko-fi announcement draft has the supplied featured image and clickable GitHub/latest-release links; no public publication is claimed.
+- User confirmed the reported Nhentai connection is working on October 22. Broader live-source acceptance, accessibility and physical low-memory benchmarks remain open.

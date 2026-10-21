@@ -45,6 +45,7 @@ fun ReaderScreen(vm: ReaderViewModel, chapter: Release) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val preferences by vm.preferences.collectAsStateWithLifecycle()
     val ready by vm.readerReady.collectAsStateWithLifecycle()
+    val refreshing by vm.refreshingReader.collectAsStateWithLifecycle()
     val retryCountdown =
         key(chapter.id, page) {
             imageRetryCountdown(error != null && retryAllowed, settings.retrySeconds, retryAt) {
@@ -101,6 +102,7 @@ fun ReaderScreen(vm: ReaderViewModel, chapter: Release) {
                         Modifier.clickable { jump = true }.heightIn(min = 48.dp).wrapContentHeight().padding(8.dp),
                         style = MaterialTheme.typography.labelLarge,
                     )
+                    RefreshControl("Refresh reading", refreshing || !ready && error == null, vm::refreshReader)
                     RoundControl(KomoriIcons.Tune, "Reader settings", { options = true })
                 }
             if (mode == ReadingMode.WEBTOON && ready) {

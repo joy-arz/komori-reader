@@ -1,6 +1,6 @@
 # Komori development backlog
 
-Updated October 21, 2026 for the 0.8.0 implementation pass. Published delivery is listed separately below. Checkboxes record implemented features with local checks; device/network acceptance that remains unverified stays open. See [the pass log](BACKLOG_PASS.md) for exact results and release gates. Tracking is deferred by the user until core acceptance.
+Updated October 22, 2026 for the backup, storage and manual-refresh pass. Published delivery is listed separately below. Checkboxes record implemented features with local checks; device/network acceptance that remains unverified stays open. See [the pass log](BACKLOG_PASS.md) for exact results and release gates. Tracking is deferred by the user until core acceptance.
 
 ## Published delivery ledger
 
@@ -10,10 +10,18 @@ Updated October 21, 2026 for the 0.8.0 implementation pass. Published delivery i
 | 0.7.1 | `5994fc8` | Compact Library, Discover and Downloads; long-press selection without idle Select bars. |
 | 0.7.2 | `565085c` | Authors Latest default, Popularity/views, Alphabetical and Author ordering; minimal continuous-reader chapter capsules. |
 | 0.7.3 | `52f95de` | Typed recovery failures, Retry-After cooldowns, durable deferred download retries and stable reader retry budgets. |
-| 0.7.5 | `a78e2fd` | Language badges over thumbnail corners, including supported gallery browse flags. |
 | 0.7.4 | `c8c9d5f` | Manual metadata backup/export, strict validation, restore preview and transactional merge. |
+| 0.7.5 | `a78e2fd` | Language badges over thumbnail corners, including supported gallery browse flags. |
+| 0.8.0 | `fad6beb` | Reader controls and continuity, Library organization/Updates, durable download queue, local imports, source tools, updater channels and Support. |
 
-All six releases are published. The latest signed release is 0.7.5; its CI, signature, in-place upgrade and real document-picker checks are recorded in VALIDATION.md. The later `b577b5b` commit records that validation; it does not add app behavior. GitHub contributors list only `joy-arz`.
+All seven releases are published. The latest signed release is 0.8.0 (version code 123). Its build, 76 API 26/36 device checks, signature and local signed in-place upgrade passed. Additional cloud signed-upgrade acceptance remains open below. GitHub contributors list only `joy-arz`.
+
+## Current development pass (not yet in the 0.8.0 APK)
+
+- [x] Implement optional daily/weekly metadata backups to a selected document-provider folder, read-back verification, configurable 3/7/14 retention and an immediate backup action.
+- [x] Implement on-demand image/checksum integrity scans, downloaded-file size totals and a reviewed delete-read action that rechecks progress/queue state before deletion. Add temporary reader-cache clearing without deleting downloaded files.
+- [x] Add compact top refresh controls to Discover, Authors, Library, title details and reading; preserve query/filter context and offline files.
+- [ ] Finish new-pass unit, lint, provider, storage and refresh interaction checks; push and inspect the resulting build. These implementation checks do not claim publication.
 
 ## Highest-priority source defect: incomplete author catalogs
 
@@ -37,7 +45,7 @@ Pagination support alone does not prove that a source's artist index contains ev
 - [x] Add selection/batch actions to title grids, chapters, downloads and followed creators; confirm destructive actions.
 - [x] Clip round toolbar touch feedback to prevent square highlights.
 - [x] Isolate MangaDex API transport from browser sessions and retain a successful HTTP/1.1 fallback temporarily.
-- [ ] Confirm intermittent source connection-reset recovery and toolbar rendering on the affected Android 14 phone, including the reported Nhentai failure that Verify source did not resolve.
+- [x] Close the reported Nhentai connection-reset issue: user confirmed the connection is working on October 22. Broader source/network and toolbar acceptance remains separate.
 
 ## Reader, downloads and navigation follow-up
 - [x] Default image retry to 3 seconds while preserving explicit preferences.
@@ -47,7 +55,7 @@ Pagination support alone does not prove that a source's artist index contains ev
 - [x] Add creator subscription strip, saved-works filters and follow management.
 - [x] Restore exact grid/chapter-list scroll position after title/reader navigation.
 - [x] Keep filters scoped to their query; restore search/result/tag-origin history on Back.
-- [ ] Reproduce the reported Nhentai connection reset on the affected device/network and separately check MangaDex transport recovery; verify live reading/downloads across every enabled source. Synthetic worker/transfer tests do not establish every site's availability.
+- [ ] Check MangaDex transport recovery and live reading/downloads across every enabled source. The reported Nhentai connection reset is user-confirmed resolved; synthetic worker/transfer tests do not establish every site's availability.
 
 ## Reference-led visual redesign
 - [x] Replace shared chrome, typography, colors and controls with the black/green/lime design; retain all existing destinations and settings.
@@ -73,8 +81,8 @@ Released repair work: durable per-page repair markers, Needs repair counts, part
 - [ ] Stress-test repair across process death and real WorkManager pause/delete during slow network transfers.
 - [x] Add typed offline/rate-limit/missing-page/storage handling, Retry-After support and stable page retry budgets (0.7.3; JVM and API 30 checks).
 - [x] Add document-picker metadata backup/export, strict validation, restore preview and transactional restore; exclude cookies/images by default (0.7.4). Device-wide settings remain excluded.
-- [ ] Add optional scheduled backups with retention and tests of scheduled exports/restores. Manual metadata backup round trips, merge policies and rollback are already validated in 0.7.4; global device settings and downloaded images remain outside that format.
-- [ ] Add downloaded-file integrity scan, size totals, cache controls and delete-read preview.
+- [x] Implement optional scheduled backups with retention; new-pass export/restore validation is tracked above. Manual metadata backup round trips, merge policies and rollback are already validated in 0.7.4; global device settings and downloaded images remain outside that format.
+- [x] Implement downloaded-file integrity scan, size totals, cache controls and delete-read preview; new-pass acceptance is tracked above.
 
 ## Reader
 - [x] Load previous chapters on backward scrolling with stable anchors and bounded memory.
@@ -112,7 +120,7 @@ Released repair work: durable per-page repair markers, Needs repair counts, part
 - [ ] Audit TalkBack, large fonts, landscape, contrast, touch targets and RTL layouts.
 - [x] Replace repeated library scans with maps and scoped database queries; measure before adding paging.
 - [ ] Benchmark cold start (including source sessions), 1,000-title libraries/50,000 progress rows and long reads on a physical 2 GB phone.
-- [ ] Complete the first API 26/API 36 CI and signed-upgrade runs. Workflows and a disposable-emulator script are implemented; API 30 schema 5→6, process-death restoration and offline navigation passed locally. CI results remain a release gate.
+- [ ] Complete cloud signed-upgrade acceptance on API 26/36. The 0.8.0 build and all 38 instrumentation checks per API passed. Local signed API 30 upgrade preserved schema 5→6 and all prior metadata. Cloud run 39626710821 failed at background-process termination on API 26 and transient UI XML capture on API 36; these checks remain open.
 - [x] Add Stable/Preview updater channels, release notes, snooze and conditional requests with longer cooldown.
 
 ## Support
@@ -122,4 +130,4 @@ Released repair work: durable per-page repair markers, Needs repair counts, part
 ## Acceptance boundaries
 - Webtoon forward/backward continuity and reader controls have API 30 checks; sustained zoom/detection, notifications, document-provider variations and source migration still need broader hands-on acceptance.
 - A 1,000-title / 50,000-progress synthetic emulator query measurement is recorded in BACKLOG_PASS.md. It does not close the physical 2 GB cold-start/long-read benchmark.
-- Core implementation does not imply the reported Nhentai restriction is resolved on the affected phone/network.
+- Nhentai connection recovery is user-confirmed on October 22; this does not establish availability on every network.

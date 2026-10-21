@@ -163,6 +163,7 @@ fun KomoriScreen(vm: ReaderViewModel) {
                                     )[tab],
                                 if (selected != null) vm::back else null,
                                 browse = { vm.currentTab.value = 1 },
+                                refresh = if (selected != null) ({ RefreshControl("Refresh title details", loading, vm::refreshDetails) }) else null,
                             )
                     },
                     bottomBar = {
@@ -360,6 +361,8 @@ private fun Library(vm: ReaderViewModel, discover: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("Your library", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+            val checking by vm.libraryRefreshing.collectAsStateWithLifecycle()
+            RefreshControl("Refresh library", checking, vm::checkLibraryNow)
             RoundControl(KomoriIcons.CheckCircle, "Library updates", { vm.updatesVisible.value = true })
             RoundControl(KomoriIcons.Tune, "Filter library", { showLibraryFilters = true })
             if (!searchExpanded)
@@ -558,6 +561,7 @@ private fun Authors(vm: ReaderViewModel) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
             }
+            if (!manage && creators.isNotEmpty()) RefreshControl("Refresh author works", feed.loading, vm::refreshAuthors)
             if (!manage && creators.isNotEmpty())
                 Box {
                     RoundControl(KomoriIcons.FilterList, "Sort author works", { sortMenu = true })
@@ -861,6 +865,7 @@ private fun Discover(vm: ReaderViewModel) {
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
+                RefreshControl("Refresh discover", loading, vm::refreshDiscover, activeSource.isNotEmpty())
                 RoundControl(KomoriIcons.Search, "Open search", { searchExpanded = true })
                 RoundControl(
                     KomoriIcons.FilterList,
@@ -1356,7 +1361,6 @@ private fun Details(
                 )
             Row {
                 TextButton(onClick = { showLanguages = true }) { Text("Language") }
-                TextButton(onClick = { vm.open(manga) }, enabled = !loading) { Text("Refresh") }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("All", "Unread", "Downloaded").forEach { label ->
@@ -1632,6 +1636,8 @@ private fun Downloads(vm: ReaderViewModel) {
         }
     val exportComic = rememberComicExporter(vm)
     var queueMenu by remember { mutableStateOf(false) }
+    var storageDialog by remember { mutableStateOf(false) }
+    if (storageDialog) DownloadMaintenanceDialog({ storageDialog = false })
     var groupByTitle by rememberSaveable { mutableStateOf(true) }
     val environment by remember(vm.app) { downloadEnvironment(vm.app) }.collectAsStateWithLifecycle(DownloadEnvironment())
     val mangaById = remember(manga) { manga.associateBy { it.id } }
@@ -1651,10 +1657,10 @@ private fun Downloads(vm: ReaderViewModel) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
             }
-            if (downloads.isNotEmpty())
-                Box {
+            Box {
                     RoundControl(KomoriIcons.More, "Queue options", { queueMenu = true })
                     DropdownMenu(queueMenu, { queueMenu = false }) {
+                        DropdownMenuItem(text = { Text("Storage & integrity") }, onClick = { queueMenu = false; storageDialog = true })
                         DropdownMenuItem(text = { Text(if (groupByTitle) "Show queue order" else "Group by title") },
                             onClick = { groupByTitle = !groupByTitle; queueMenu = false })
                         if (active > 0)

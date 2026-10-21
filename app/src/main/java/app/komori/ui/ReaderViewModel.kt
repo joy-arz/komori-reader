@@ -48,6 +48,9 @@ class ReaderViewModel(
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val libraryCounts = settings.map { it.language }.distinctUntilChanged()
         .flatMapLatest { dao.observeLibraryCounts(it) }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val libraryRefreshing = WorkManager.getInstance(app).getWorkInfosByTagFlow("library-manual-refresh")
+        .map { rows -> rows.any { !it.state.isFinished } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val libraryUpdates = dao.observeLibraryUpdates().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val results = MutableStateFlow<List<Manga>>(emptyList())
     val activeSource = MutableStateFlow("")
@@ -162,6 +165,71 @@ class ReaderViewModel(
     private var authorCatalog: AuthorCatalog? = null
     private var authorSort = AuthorSort.LATEST
     private var authorJob: Job? = null
+
+    fun refreshAuthors() {
+        if (authorFeed.value.loading) return
+        val current = authorContext ?: return
+        authorContext = null
+        app.source.clearCreatorMetadata()
+        showAuthorWorks(current, authorSort)
+    }
+
+    fun refreshDiscover() { if (!loading.value) search() }
+    fun refreshDetails() { if (!loading.value) selected.value?.let { open(it) } }
+
+    val clearingCache = MutableStateFlow(false)
+    fun clearReaderCache() {
+        if (clearingCache.value || reader.value != null) return
+        clearingCache.value = true
+        viewModelScope.launch {
+            try {
+                val removed = withContext(Dispatchers.IO) {
+                    var bytes = 0L
+                    val files = File(app.cacheDir, "reader").listFiles().orEmpty().filter { it.extension == "img" }
+                    for (file in files) {
+                        currentCoroutineContext().ensureActive()
+                        val chapter = reader.value?.id
+                        if (chapter != null) break
+                        val size = file.length()
+                        if (file.delete()) bytes += size
+                    }
+                    bytes
+                }
+                notice.value = "Cleared ${storageLabel(removed)} of cached pages. Downloaded chapters were kept."
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { notice.value = "Could not clear cached pages. Downloaded chapters were kept." }
+            finally { clearingCache.value = false }
+        }
+    }
+
+    val refreshingReader = MutableStateFlow(false)
+    fun refreshReader() {
+        if (refreshingReader.value) return
+        val current = reader.value ?: return
+        val page = readerPage.value
+        if (!readerReady.value && pageJob?.isActive == true) return
+        refreshingReader.value = true
+        // Offline pages remain authoritative. Only transient manifests and online cache are refreshed.
+        pageManifests.remove("${current.id}-${settings.value.saver}")
+        pageRetries.clear()
+        pageJob?.cancel()
+        pageJob = viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    imageFetch[("${current.id}-$page".hashCode() and Int.MAX_VALUE) % imageFetch.size].withLock {
+                        File(app.cacheDir, "reader/${current.id}-$page-${settings.value.saver}.img").delete()
+                    }
+                }
+                if (reader.value?.id == current.id) {
+                    val saved = dao.download(current.id)
+                    val offline = saved?.state == "Complete" || sourceKey(current.mangaId) == "local"
+                    read(if (offline) current else current.copy(pages = -1), requestedPage = page)
+                }
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { readerError.value = connectionMessage(e) }
+            finally { refreshingReader.value = false }
+        }
+    }
 
     fun showAuthorWorks(creators: List<Creator>, sort: AuthorSort = AuthorSort.LATEST) {
         if (authorContext == creators && authorSort == sort) return
@@ -934,7 +1002,7 @@ class ReaderViewModel(
         app.settings.number(key, value)
         if (key == "libraryCheckHours") LibraryCheckScheduler.schedule(app, app.settings.flow.first())
     }
-    fun checkLibraryNow() = task { LibraryCheckScheduler.now(app, app.settings.flow.first()); notice.value = "Chapter check queued. It runs when network and battery constraints allow." }
+    fun checkLibraryNow() = task { LibraryCheckScheduler.now(app, app.settings.flow.first()); notice.value = "Library refresh queued. Your chapter-check Wi-Fi and battery constraints still apply." }
     fun markUpdatesSeen(id: String) = task { dao.markUpdatesSeen(id) }
     fun markAllUpdatesSeen() = task { dao.markAllUpdatesSeen() }
     fun openLibraryUpdate(update: LibraryUpdate) = task {
@@ -1210,6 +1278,7 @@ class ReaderViewModel(
                                             throw StorageFailure(
                                                 "Could not repair the downloaded page."
                                             )
+                                        writePageDigest(downloaded)
                                         repairMarker(app, chapter.id, page).delete()
                                         reconcileDownload(app, chapter.id)
                                     } finally {

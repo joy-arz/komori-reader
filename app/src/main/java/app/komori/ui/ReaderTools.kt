@@ -14,6 +14,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.komori.data.Settings
 import app.komori.domain.Release
 import kotlin.math.roundToInt
@@ -39,6 +40,10 @@ internal fun ReaderTools(vm: ReaderViewModel, settings: Settings) {
     SettingSlider(settings.preloadPages, 0..2, "Pages to preload", steps = 1) { vm.numberSetting("preloadPages", it) }
     Text("Reader disk cache: ${settings.readerCacheMb} MB")
     SettingSlider(settings.readerCacheMb, 32..256, "Reader disk cache in megabytes", steps = 6) { vm.numberSetting("readerCacheMb", it) }
+    val reader by vm.reader.collectAsStateWithLifecycle()
+    val clearing by vm.clearingCache.collectAsStateWithLifecycle()
+    TextButton(enabled = reader == null && !clearing, onClick = vm::clearReaderCache) { Text(if (clearing) "Clearing cached pages…" else "Clear cached pages") }
+    Text(if (reader != null) "Close the reader to clear its temporary cache." else "Downloaded chapters and imported comics are kept.", style = MaterialTheme.typography.bodySmall)
 }
 
 @Composable

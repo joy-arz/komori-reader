@@ -121,8 +121,14 @@ def main():
         shell(f"am start -W -n {package}/app.komori.MainActivity")
 
         def tree():
+            shell("rm -f /data/local/tmp/komori-acceptance.xml")
             shell("uiautomator dump /data/local/tmp/komori-acceptance.xml >/dev/null")
-            return ET.fromstring(run("exec-out", "cat", "/data/local/tmp/komori-acceptance.xml"))
+            try:
+                return ET.fromstring(shell("cat /data/local/tmp/komori-acceptance.xml 2>/dev/null || true"))
+            except ET.ParseError:
+                # UIAutomator can return a null root during the first activity frame.
+                # Return no nodes so the existing bounded wait retries the capture.
+                return ET.Element("hierarchy")
 
         def tap(text):
             for node in tree().iter("node"):
@@ -139,24 +145,40 @@ def main():
         if visible("Snooze 24h"):
             tap("Snooze 24h")
         print("Checking upgraded Library fixture", flush=True)
-        wait_for(lambda: visible("Recovery fixture"), "Library fixture missing after upgrade")
-        tap("Downloads")
+        def library_ready():
+            if visible("Snooze 24h"):
+                tap("Snooze 24h")
+            return visible("Recovery fixture")
+        wait_for(library_ready, "Library fixture missing after upgrade")
+        wait_for(lambda: tap("Downloads"), "Downloads action missing")
         wait_for(lambda: visible("Read offline"), "Offline reading action missing")
-        tap("Read offline")
+        wait_for(lambda: tap("Read offline"), "Offline reading action could not be tapped")
         wait_for(lambda: visible("2 / 3"), "Saved page was not restored")
         print("Saved page restored; killing background process", flush=True)
         shell("am start -W -a android.intent.action.MAIN -c android.intent.category.HOME")
         time.sleep(2)
-        def kill_background():
-            shell(f"am kill {package}")
-            return not shell(f"pidof {package} || true")
-        wait_for(kill_background, "Background app process did not exit")
+        original_pids = shell(f"pidof {package} || true").split()
+        assert original_pids, "App process disappeared before the process-death exercise"
+        shell(f"am kill {package}")
+        time.sleep(1)
+        # Some API levels retain an important background process despite am kill.
+        # Root-only emulator SIGKILL models process eviction without force-stopping
+        # the package or removing its saved activity/task state.
+        remaining = set(shell(f"pidof {package} || true").split())
+        for pid in original_pids:
+            if pid in remaining:
+                assert pid.isdecimal()
+                shell(f"kill -9 {pid}")
+        def original_processes_exited():
+            running = set(shell(f"pidof {package} || true").split())
+            return not running.intersection(original_pids)
+        wait_for(original_processes_exited, "Original background app process did not exit")
         shell(f"am start -W -n {package}/app.komori.MainActivity")
         wait_for(lambda: visible("2 / 3"), "Reader navigation lost after process death")
         print("Reader restored after process death", flush=True)
         try:
             shell("svc wifi disable"); shell("svc data disable")
-            tap("Next page")
+            wait_for(lambda: tap("Next page"), "Next-page action missing")
             wait_for(lambda: visible("3 / 3"), "Cached reading failed without network")
         finally:
             shell("svc wifi enable"); shell("svc data enable")

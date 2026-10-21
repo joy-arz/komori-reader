@@ -4,12 +4,16 @@
 
 1. Merge a passing change to `main`.
 2. Create and push a new immutable version tag: `vMAJOR.MINOR.PATCH` or `vMAJOR.MINOR.PATCH-alpha.N`.
-3. `Release APK` runs JVM tests and release lint, assembles a shrunk signed APK, verifies the APK signature and publishes it with `SHA256SUMS.txt`.
+3. `Release APK` runs JVM tests and release lint, assembles a shrunk signed APK and verifies its signature. Before publishing, it requires successful `Android checks` and `Android device checks` for the exact tagged commit. The tagged commit must have been pushed to `main` first so those workflows exist. Signing/building can run alongside device checks; failed, cancelled or missing checks block publication. The gate waits up to 20 minutes for pending checks. Published assets include the APK, `SHA256SUMS.txt` and `update.json`.
 4. Download and install on a test device. Android signing identity must match previous releases to update in place.
 
 The release version name comes from the tag. Version code is `100 + github.run_number`, monotonically increasing within the release workflow. Keep that workflow identity and never reset version codes when changing build infrastructure.
 
 The workflow intentionally fails if signing secrets are missing; it never substitutes a debug key. For a failed publication after an existing release was created, inspect the existing release and assets before rerunning. Published version tags must not be moved.
+
+If GitHub reports a workflow aggregate as running after its job completed, do not move the release tag or bypass the gate. Dispatch `android.yml` on the exact immutable tag, wait for its successful run, then retry the failed release job after checking existing assets. This resolved the 0.8.0 aggregate-status inconsistency.
+
+Signed-upgrade diagnostics must be captured inside the live emulator action. `scripts/run_signed_upgrade.sh` bounds individual diagnostic commands and preserves the acceptance script's exit code before emulator shutdown.
 
 ## Repository Actions secrets
 

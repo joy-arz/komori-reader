@@ -1,69 +1,66 @@
 # Broad backlog implementation pass
 
-Requested October 21, 2026 after the thumbnail badges. Work is ongoing; this document is an execution checklist, not a completion claim. Tracker integration is deferred by the user until core features pass. Physical 2 GB phone benchmarks cannot be claimed from the API 30 emulator.
+Requested October 21, 2026 after the thumbnail badges. Core implementation is pushed to main. Signed 0.8.0 is published; additional cloud upgrade acceptance remains open. checked items below describe delivered implementation, not universal device or source acceptance. Tracker integration is deferred by the user until core features pass. Physical 2 GB phone benchmarks cannot be claimed from the API 30 emulator.
 
 Design: retain the existing black (#000000), panel (#0B100D), green (#39D353), lime (#D5FA39), pale text (#F2F6EF) palette and bundled Outfit type. Keep left-aligned compact lists and adaptive covers. Put occasional reader controls in a scrollable sheet, filters in compact chips, and explicit review dialogs around migration/destructive actions. No extra dashboard chrome. Review against the request: additional controls must not crowd author/manga browsing or reinstate idle Select bars.
 
 ## Reader
-- [ ] Backward chapter loading with stable anchors/bounded window; numeric gap warning/confirmation.
-- [ ] Chapter/page jump, seek and previous chapter at first paged page.
-- [ ] Saved navigation identifiers and process-death recovery.
-- [ ] Brightness/dim/orientation/volume controls.
-- [ ] Webtoon zoom and opt-in detection.
-- [ ] Configurable conservative preloading and disk cache budget.
-- [ ] Explain selected Smart Chapter release; alternate picker and per-title language.
+- [x] Backward chapter loading with stable anchors/bounded window; numeric gap warning/confirmation.
+- [x] Chapter/page jump, seek and previous chapter at first paged page.
+- [x] Saved navigation identifiers and process-death recovery.
+- [x] Brightness/dim/orientation/volume controls.
+- [x] Webtoon zoom and opt-in detection.
+- [x] Configurable conservative preloading and disk cache budget.
+- [x] Explain selected Smart Chapter release; alternate picker and per-title language.
 
 ## Library
-- [ ] Categories, unread counts/status filters; bulk mark unread.
-- [ ] Scheduled chapter checks, grouped Updates and opt-in notifications.
-- [ ] Conservative followed-author checks/notifications; source artist completeness fallback.
-- [ ] Explicit reviewed migration, aliases/progress transfer and edition choices.
+- [x] Categories, unread counts/status filters; bulk mark unread.
+- [x] Scheduled chapter checks, grouped Updates and opt-in notifications.
+- [x] Conservative followed-author checks/notifications; source artist completeness fallback.
+- [x] Explicit reviewed migration, aliases/progress transfer and edition choices.
 
 ## Downloads and sources
-- [ ] Durable queue order/Download now/reorder/cancel retaining files.
-- [ ] Distinct real network/storage wait messages.
-- [ ] Grouping/ranges and document-provider export.
-- [ ] Source toggles/capabilities/status and saved searches.
-- [ ] Verified redirect allowlists/browser fallback/targeted reset.
-- [ ] Bounded local CBZ/folder import.
+- [x] Durable queue order/Download now/reorder/cancel retaining files.
+- [x] Distinct real network/storage wait messages.
+- [x] Grouping/ranges and document-provider export.
+- [x] Source toggles/capabilities/status and saved searches.
+- [x] Verified redirect allowlists/browser fallback/targeted reset.
+- [x] Bounded local CBZ/folder import.
 - [ ] Trackers: deferred by user until core acceptance.
 
 ## Appearance and quality
-- [ ] System theme/density, cover states and consistent badges.
+- [x] System theme/density, cover states and consistent badges.
 - [ ] Accessibility checks at large fonts/landscape/RTL.
-- [ ] Measured query improvements and reproducible synthetic performance fixture.
+- [x] Measured query improvements and reproducible synthetic performance fixture.
 - [ ] Broader Android CI/migration/upgrade/process/network interruption checks.
-- [ ] Updater channels/release notes/snooze/conditional HTTP/cooldown.
+- [x] Updater channels/release notes/snooze/conditional HTTP/cooldown.
 - [ ] Physical low-memory benchmarks and real protected-source challenge tests remain hardware/network acceptance items.
 
 ## Release gate
-- [ ] Meaningful unit/instrumentation/migration checks; lint/build.
-- [ ] Update TODO with actual results and outstanding external acceptance.
-- [ ] Push user-authored commits, trigger signed build, inspect CI/artifact/signature and in-place upgrade. No assistant attribution.
+- [x] 0.8.0 unit/instrumentation/migration checks; lint/build.
+- [x] Update TODO with actual results and outstanding external acceptance.
+- [x] Push user-authored commits, publish 0.8.0 and inspect build/artifact/signature/local in-place upgrade. No assistant attribution. Additional cloud upgrade checks remain open.
 
 The already-published language-badge release is v0.7.5 / a78e2fd; it has passed signed upgrade validation. Do not roll that feature back while extending the app.
 
 ## Queued follow-up: Support (requested during this pass)
-- [ ] After core backlog implementation, add a new Support tab inside Settings occupying the full content page.
-- [ ] Use https://www.ui-layouts.com/components/buy-me-coffee as the element reference, adapted to native Compose and the existing app design.
-- [ ] Link the support action to https://ko-fi.com/joyarz and identify the service accurately as Ko-fi.
-- [ ] Add concise, voluntary support copy explaining that Komori is an open-source project.
-- [ ] Add a README Support section with a Ko-fi icon and the same link; validate link/touch behavior and include in the final build.
+- [x] After core backlog implementation, add a new Support tab inside Settings occupying the full content page.
+- [x] Use https://www.ui-layouts.com/components/buy-me-coffee as the element reference, adapted to native Compose and the existing app design.
+- [x] Link the support action to https://ko-fi.com/joyarz and identify the service accurately as Ko-fi.
+- [x] Add concise, voluntary support copy explaining that Komori is an open-source project.
+- [x] Add a README Support section with a Ko-fi icon and the same link; validate link/touch behavior and include in the final build.
 
-## Validation checkpoints (work in progress)
+## Published 0.8.0 validation
 
-- Debug APK and instrumentation APK assembly passed after resolving an inline Compose return that D8 rejected.
-- JVM run: 141 cases, 137 passed, 4 existing network-gated skips. The opt-in HentaiZap live test passed in this run: 19 exact-creator works, including reported gallery 1665352. No reader images fetched by that audit. This verifies the reported case, not every artist or every source.
-- API 30 selected device run: 18/18 passed, covering schema migrations, backup merge/rollback, forward continuous reading, organization/count SQL, durable queue ordering, CBZ page validation/order, source-scoped cookie reset and the exact Ko-fi URI.
-- API 30 synthetic warm-query fixture: 1,000 titles, 50,000 progress rows, five samples. Median all-progress materialization 294.681 ms; selected-title 50-row query 1.642 ms. EXPLAIN confirms `index_progress_mangaId`. This is an emulator database measurement, not a physical-device/cold-start or long-read benchmark.
-- First Support screenshot reviewed; reduced the illustration for constrained viewports so the support action appears earlier. Final screenshot/full-suite validation pending.
+- Release tag `v0.8.0` / `fad6beb`, code 123. Release run `39621002834` attempt 2 and exact-tag Android checks `39624937617` succeeded.
+- JVM: 143 total, 138 passed, five optional live-source skips. The explicit earlier HentaiZap audit returned 19 verified Kanamirubon works including gallery 1665352; this is point-in-time evidence.
+- Device run `39620993524`: API 26 and API 36 each passed all 38 instrumentation cases, with zero skips. Local release lint: zero errors, 45 advisory warnings.
+- Downloaded signed APK: 2,502,223 bytes; SHA-256 `597d32f03fde8d965706102fabd57a0b8b8b414c5756a63c3e2fde6da8eaa3df`. Original signing identity verified.
+- Installed the published APK over production 0.7.5 on API 30. Schema 5→6 and every prior column/value in two manga/shelf/download rows, four progress rows, one creator and one title preference were retained.
+- Cloud signed-upgrade run `39626710821` remains failed: API 26 could not terminate the background process; API 36 had a transient empty UI hierarchy. The bounded diagnostic capture worked. These failures do not erase successful build/instrumentation/local-upgrade evidence, and they do not count as passed acceptance.
+- Warm API 30 query fixture: 1,000 titles / 50,000 progress rows, five samples. Median all-progress materialization 294.681 ms versus selected-title 50 rows 1.642 ms, using `index_progress_mangaId`. Physical 2 GB phone and cold-start/long-read benchmarks remain open.
+- Support initial viewport, exact Ko-fi URI and README banner were reviewed. Publication of the Ko-fi announcement remains pending; the draft includes GitHub and latest-release links.
 
-- Full API 30 suite: 36/37 passed, exposing a Downloads group-header selection regression. Fixed group-header long press; isolated batch-selection rerun passed. A combined rerun also exposed differing navigation state across tests; fixtures now start a fresh Android task.
-- Added reader-control device case passed with volume navigation, previous chapter, gap confirmation, page jump, brightness restoration, and cancel preserving files. Release lint then rejected the AndroidX dispatch override; replaced with public Android key callbacks and queued the case again.
-- Disposable API 30 process script passed schema 5→6, saved/liked/progress retention, verified background process exit, reader/page restoration and offline next-page navigation. Signed APK upgrade and API 26/36 runs remain pending.
+## October 22 follow-up
 
-- Final JVM pass after creator pagination hardening: 143 total, 138 passed, 5 skipped (including the opt-in live check; its earlier explicit run passed). HTTP 404 artist-index continuation and HTTP 403 propagation have separate passing fixtures.
-- Reader display overrides moved above per-chapter session composition so chapter changes cannot recapture reader brightness as the normal app baseline. Device/lint recheck pending.
-
-- API 30 process acceptance passed with a synthetic offline fixture. The background-kill harness now waits/retries Android's kill request and verifies PID exit before relaunch; it never substitutes force-stop for process-death acceptance.
-- Fixed a chapter-session cleanup race: an old reader can clear only its own volume handler, not a newer chapter's handler. Reader window overrides now live outside the chapter key. Rechecking before push.
+User confirmed Nhentai connections are working. New implementation adds scheduled metadata backups, download storage/integrity/delete-read controls and manual refresh buttons. New-pass validation is recorded in VALIDATION.md when complete; these features are not part of the already-published 0.8.0 APK. Trackers remain deferred.

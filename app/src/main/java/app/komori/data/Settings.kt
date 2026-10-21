@@ -45,6 +45,11 @@ data class Settings(
     val enabledSources: String = sourceNames.keys.joinToString(","),
     val savedSearches: String = "[]",
     val exportFolder: String = "",
+    val backupFolder: String = "",
+    val backupDays: Int = 0,
+    val backupRetention: Int = 7,
+    val backupStatus: String = "No automatic backup has run.",
+    val backupLastSuccess: Long = 0,
 )
 
 class SettingsStore(private val context: Context) {
@@ -90,6 +95,11 @@ class SettingsStore(private val context: Context) {
                 enabledSources = p[stringPreferencesKey("enabledSources")] ?: sourceNames.keys.joinToString(","),
                 savedSearches = p[stringPreferencesKey("savedSearches")] ?: "[]",
                 exportFolder = p[stringPreferencesKey("exportFolder")] ?: "",
+                backupFolder = p[stringPreferencesKey("backupFolder")] ?: "",
+                backupDays = (p[intPreferencesKey("backupDays")] ?: 0).takeIf { it in setOf(0, 1, 7) } ?: 0,
+                backupRetention = (p[intPreferencesKey("backupRetention")] ?: 7).takeIf { it in setOf(3, 7, 14) } ?: 7,
+                backupStatus = p[stringPreferencesKey("backupStatus")] ?: "No automatic backup has run.",
+                backupLastSuccess = p[longPreferencesKey("backupLastSuccess")] ?: 0,
             )
         }
 
@@ -118,6 +128,23 @@ class SettingsStore(private val context: Context) {
         }
         require(value in choices)
         context.settingsStore.edit { it[stringPreferencesKey(key)] = value }
+    }
+
+    suspend fun configureBackup(folder: String, days: Int, retention: Int) {
+        require(folder.isEmpty() || folder.startsWith("content://") && folder.length <= 4096)
+        require(days in setOf(0, 1, 7) && retention in setOf(3, 7, 14))
+        context.settingsStore.edit {
+            it[stringPreferencesKey("backupFolder")] = folder
+            it[intPreferencesKey("backupDays")] = if (folder.isEmpty()) 0 else days
+            it[intPreferencesKey("backupRetention")] = retention
+        }
+    }
+
+    suspend fun backupResult(status: String, success: Long? = null) {
+        context.settingsStore.edit {
+            it[stringPreferencesKey("backupStatus")] = status.take(2000)
+            if (success != null) it[longPreferencesKey("backupLastSuccess")] = success
+        }
     }
 
     suspend fun exportFolder(value: String) {

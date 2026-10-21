@@ -145,7 +145,9 @@ object LocalFiles {
             val pages = read(stage).sortedWith(compareBy<Pair<String, File>> { naturalFileKey(it.first) }.thenBy { it.first })
             if (pages.isEmpty()) throw ContentFailure("No supported JPEG, PNG or WebP pages were found.")
             pages.forEachIndexed { index, (_, file) ->
-                if (!file.renameTo(File(stage, "$index.img"))) throw StorageFailure("Could not order imported pages.")
+                val target = File(stage, "$index.img")
+                if (!file.renameTo(target)) throw StorageFailure("Could not order imported pages.")
+                writePageDigest(target)
             }
             val mangaId = sourceId("local", "/book/$token/")
             val manga = Manga(mangaId, title, "Imported on this device. Original files are unchanged.", Uri.fromFile(File(destination, "0.img")).toString())

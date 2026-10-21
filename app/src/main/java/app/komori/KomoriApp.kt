@@ -13,7 +13,9 @@ class KomoriApp : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default).launch {
-            LibraryCheckScheduler.schedule(this@KomoriApp, settings.flow.first())
+            val current = settings.flow.first()
+            LibraryCheckScheduler.schedule(this@KomoriApp, current)
+            BackupScheduler.schedule(this@KomoriApp, current)
             kickDownloadQueue(this@KomoriApp)
         }
     }

@@ -11,6 +11,7 @@ import app.komori.data.*
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -18,9 +19,26 @@ import kotlinx.coroutines.withContext
 class BackupViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as KomoriApp
     private val repository = BackupRepository(app.database)
+    val settings = app.settings.flow
     val busy = MutableStateFlow(false)
     val preview = MutableStateFlow<BackupPreview?>(null)
     val message = MutableStateFlow<String?>(null)
+
+    fun configure(folder: Uri? = null, days: Int? = null, retention: Int? = null) = operation {
+        val current = app.settings.flow.first()
+        if (folder != null) {
+            app.contentResolver.takePersistableUriPermission(folder,
+                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+        }
+        app.settings.configureBackup(folder?.toString() ?: current.backupFolder, days ?: current.backupDays, retention ?: current.backupRetention)
+        BackupScheduler.schedule(app, app.settings.flow.first())
+        message.value = "Backup preferences saved."
+    }
+
+    fun backupNow() = operation {
+        withContext(Dispatchers.IO) { BackupScheduler.now(app).result.get() }
+        message.value = "Backup queued. Open this section again to see its result."
+    }
 
     fun export(uri: Uri) = operation {
         try {

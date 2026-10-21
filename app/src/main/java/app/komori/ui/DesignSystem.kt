@@ -186,11 +186,20 @@ internal fun RoundControl(
 }
 
 @Composable
+internal fun RefreshControl(label: String, refreshing: Boolean, onClick: () -> Unit, enabled: Boolean = true) {
+    IconButton(onClick = onClick, enabled = enabled && !refreshing, modifier = Modifier.size(48.dp).clip(CircleShape).semantics { contentDescription = if (refreshing) "$label in progress" else label }) {
+        if (refreshing) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+        else Icon(KomoriIcons.Refresh, null, Modifier.size(18.dp))
+    }
+}
+
+@Composable
 internal fun AppHeading(
     title: String,
     subtitle: String,
     back: (() -> Unit)? = null,
     browse: () -> Unit = {},
+    refresh: (@Composable () -> Unit)? = null,
 ) {
     Row(
         Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 18.dp, vertical = 12.dp),
@@ -207,6 +216,7 @@ internal fun AppHeading(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
         }
+        refresh?.invoke()
         if (back == null) RoundControl(KomoriIcons.Explore, "Browse sources", browse)
     }
 }

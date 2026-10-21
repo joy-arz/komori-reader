@@ -25,6 +25,8 @@ import java.util.Date
 
 @Composable
 internal fun BackupSettings(vm: BackupViewModel = viewModel()) {
+    val settings by vm.settings.collectAsStateWithLifecycle(app.komori.data.Settings())
+    val folder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> uri?.let { vm.configure(folder = it) } }
     val busy by vm.busy.collectAsStateWithLifecycle()
     val preview by vm.preview.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
@@ -70,6 +72,24 @@ internal fun BackupSettings(vm: BackupViewModel = viewModel()) {
                 Text("Restore backup")
             }
         }
+        Text("Automatic backups", style = MaterialTheme.typography.titleMedium)
+        Text("Choose a folder outside Komori to keep metadata backups after uninstalling. Android runs scheduled work when battery and storage allow. Cloud folders also need provider connectivity.", style = MaterialTheme.typography.bodySmall)
+        OutlinedButton(enabled = !busy, onClick = { folder.launch(settings.backupFolder.takeIf { it.isNotEmpty() }?.let(android.net.Uri::parse)) }) {
+            Text(if (settings.backupFolder.isEmpty()) "Choose backup folder" else "Change backup folder")
+        }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(0 to "Off", 1 to "Daily", 7 to "Weekly").forEach { (days, label) ->
+                FilterChip(settings.backupDays == days, { vm.configure(days = days) }, { Text(label) }, enabled = !busy && (days == 0 || settings.backupFolder.isNotEmpty()))
+            }
+        }
+        Text("Keep recent backups", style = MaterialTheme.typography.labelLarge)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(3, 7, 14).forEach { count -> FilterChip(settings.backupRetention == count, { vm.configure(retention = count) }, { Text("$count") }, enabled = !busy) }
+        }
+        Text("Only Komori automatic backup files are pruned, after a new backup passes read-back verification. Manual exports remain untouched.", style = MaterialTheme.typography.bodySmall)
+        Text(settings.backupStatus, style = MaterialTheme.typography.bodySmall, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+        if (settings.backupLastSuccess > 0) Text("Last verified: ${DateFormat.getDateTimeInstance().format(Date(settings.backupLastSuccess))}", style = MaterialTheme.typography.bodySmall)
+        TextButton(enabled = !busy && settings.backupFolder.isNotEmpty(), onClick = vm::backupNow) { Text("Back up now") }
         if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         message?.let {
             Text(

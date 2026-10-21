@@ -40,3 +40,8 @@ Until that fix ships, ordinary Title/name search for `kanamirubon` exposes addit
 The pending backlog implementation supplements HentaiZap's native artist listing with name-search candidates, then checks each candidate's detail metadata for the exact artist path before accepting it. Raw candidate IDs drive pagination even when a page has no verified matches. Metadata verification uses bounded concurrency and a short-lived in-memory cache.
 
 `KOMORI_LIVE_SOURCE_AUDIT=1 ./gradlew testDebugUnitTest` passed the reported case: 19 verified Kanamirubon works on the current live response, including gallery 1665352. Fixture checks also reject unrelated name matches and retain continuation through filtered-empty pages. The observed count differs from the earlier reproduction; the result is a point-in-time verification, not proof that the site's catalog is universally complete. Release/device integration is still pending in this checkpoint.
+
+
+## Shipped fix
+
+The fallback above shipped in signed `v0.8.0` (`fad6beb`). Exact-tag JVM fixtures and all 38 instrumentation cases per API 26/36 passed. The 19-work live audit remains a point-in-time check of the reported Kanamirubon case, not a completeness guarantee for all authors.

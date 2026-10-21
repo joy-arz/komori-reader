@@ -9,7 +9,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 
 <br>
 
-[![Release](https://img.shields.io/badge/release-0.7.5-A3E635?style=for-the-badge&labelColor=0A0A0A)](https://github.com/joy-arz/komori-reader/releases/latest)
+[![Release](https://img.shields.io/badge/release-0.8.0-A3E635?style=for-the-badge&labelColor=0A0A0A)](https://github.com/joy-arz/komori-reader/releases/latest)
 [![Android](https://img.shields.io/badge/Android-8.0%2B-A3E635?style=for-the-badge&logo=android&logoColor=A3E635&labelColor=0A0A0A)](#install)
 [![Kotlin](https://img.shields.io/badge/Kotlin-Compose-A3E635?style=for-the-badge&logo=kotlin&logoColor=A3E635&labelColor=0A0A0A)](#build)
 [![No ads](https://img.shields.io/badge/no%20ads-no%20analytics-A3E635?style=for-the-badge&labelColor=0A0A0A)](#features)
@@ -28,7 +28,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 
 <br>
 
-> **0.8.0 release candidate on main.** The features below include the pending backlog pass. The latest published APK is still 0.7.5 until release validation completes. Android 8.0 and newer.
+> **Komori 0.8.0 is available.** Android 8.0 and newer. Install the signed APK over your existing app to preserve your Library, progress, and downloads.
 
 ---
 
@@ -62,7 +62,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 - **Settings → App → Library backup** exports a versioned JSON file through Android's document picker.
 - Backups contain saved/liked titles, history and reading positions, followed authors, chapter metadata and per-title reader/group/language preferences, categories and edition links. Device settings, source sessions, download queues and image files are excluded.
 - Restore validates the complete file before showing a preview. New entries merge into the Library; existing values are kept by default. Select **Use backup values for matching entries** to replace them. Unrelated entries remain available.
-- [Backup format and merge details](docs/BACKUP.md). Metadata writes commit in one database transaction. Invalid files and conflicting chapter ownership are rejected. The format supports files up to 16 MiB; scheduled backups remain planned. Completed chapters can be exported as CBZ separately.
+- [Backup format and merge details](docs/BACKUP.md). Metadata writes commit in one database transaction. Invalid files and conflicting chapter ownership are rejected. The format supports files up to 16 MiB. Completed chapters can be exported as CBZ separately.
 
 ### <img src="https://api.iconify.design/lucide/book-open.svg?color=%23A3E635" width="22" height="22" align="absmiddle"> Reading
 
@@ -165,7 +165,7 @@ MangaDex and scanlation groups are credited in the application. This is an indep
 
 <div align="center">
 
-### [Download komori-0.7.5.apk](https://github.com/joy-arz/komori-reader/releases/download/v0.7.5/komori-0.7.5.apk)
+### [Download komori-0.8.0.apk](https://github.com/joy-arz/komori-reader/releases/download/v0.8.0/komori-0.8.0.apk)
 
 </div>
 
@@ -243,7 +243,8 @@ Install version 0.5 manually once if you are coming from an older build. After t
 <br>
 
 - Library metadata and creator follows remain local. Scheduled source checks use best-effort source catalogs; a latest-page author check can miss uploads between runs.
-- AniList/MAL tracking is deferred until core acceptance. Scheduled metadata backups and broader storage-management UI remain planned.
+- AniList/MAL tracking is deferred until core acceptance.
+- **Next build on main:** optional daily/weekly metadata backups with verified retention; download integrity scans, storage totals and reviewed delete-read cleanup; compact refresh controls for Discover, Authors, Library, title details and reading. These additions are not in the 0.8.0 APK.
 
 </details>
 
@@ -297,31 +298,6 @@ Install version 0.5 manually once if you are coming from an older build. After t
 
 ---
 
-## <img src="https://api.iconify.design/lucide/users.svg?color=%23A3E635" width="26" height="26" align="absmiddle"> Contributors
-
-<a href="https://github.com/joy-arz/komori-reader/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=joy-arz/komori-reader" alt="Komori contributors">
-</a>
-
-Maintained by [@joy-arz](https://github.com/joy-arz). Issues and pull requests are welcome.
-
----
-
-## <img src="https://api.iconify.design/lucide/heart.svg?color=%23A3E635" width="26" height="26" align="absmiddle"> Credits
-
-- **Typography:** Outfit is bundled under the SIL Open Font License. See `app/src/main/assets/licenses/Outfit-OFL.txt`.
-- **Icon:** Supplied bat-and-manga artwork, cropped to remove the outer surround. Android applies the launcher shape through an adaptive icon, and the original illustration is preserved.
-- **Icons:** [Lucide](https://lucide.dev) via [Iconify](https://iconify.design), ISC license.
-- **Sources:** MangaDex and scanlation groups are credited in the application.
-
-<div align="center">
-
-<br>
-
-*Read quietly.*
-
-</div>
-
 ## Support
 
 <div align="center">
@@ -344,5 +320,32 @@ a coffee helps support continued development, maintenance, and improvements.
 Support is always optional. Bug reports, translations, and code contributions help too.
 
 You can also find this link in **Settings → Support**.
+
+</div>
+
+---
+
+## <img src="https://api.iconify.design/lucide/users.svg?color=%23A3E635" width="26" height="26" align="absmiddle"> Contributors
+
+<a href="https://github.com/joy-arz/komori-reader/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=joy-arz/komori-reader" alt="Komori contributors">
+</a>
+
+Maintained by [@joy-arz](https://github.com/joy-arz). Issues and pull requests are welcome.
+
+---
+
+## <img src="https://api.iconify.design/lucide/heart.svg?color=%23A3E635" width="26" height="26" align="absmiddle"> Credits
+
+- **Typography:** Outfit is bundled under the SIL Open Font License. See `app/src/main/assets/licenses/Outfit-OFL.txt`.
+- **Icon:** Supplied bat-and-manga artwork, cropped to remove the outer surround. Android applies the launcher shape through an adaptive icon, and the original illustration is preserved.
+- **Icons:** [Lucide](https://lucide.dev) via [Iconify](https://iconify.design), ISC license.
+- **Sources:** MangaDex and scanlation groups are credited in the application.
+
+<div align="center">
+
+<br>
+
+*Read quietly.*
 
 </div>

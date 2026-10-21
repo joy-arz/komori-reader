@@ -206,6 +206,7 @@ class ChapterDownloadWorker(context: Context, params: WorkerParameters) :
                                     kotlinx.coroutines.currentCoroutineContext().ensureActive()
                                     if (!temporary.renameTo(file))
                                         throw StorageFailure("Could not save page ${index + 1}")
+                                    writePageDigest(file)
                                     repairMarker(app, id, index).delete()
                                     record = record.copy(done = record.done + 1)
                                 } finally {

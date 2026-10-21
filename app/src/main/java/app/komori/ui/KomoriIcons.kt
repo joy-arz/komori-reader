@@ -18,6 +18,7 @@ object KomoriIcons {
             )
             .build()
 
+    val Refresh = icon("Refresh", "M17.65,6.35A7.95,7.95 0,0 0,12 4a8,8 0,1 0,7.75 10h-2.1A6,6 0,1 1,12 6c1.65,0 3.14,0.69 4.22,1.78L13,11h7V4Z")
     val ArrowBack = icon("Back", "M20,11H7.8l5.6,-5.6L12,4l-8,8 8,8 1.4,-1.4L7.8,13H20Z")
     val MenuBook = icon("Book", "M3,4h8v16H3ZM5,6v12h4V6ZM13,4h8v16h-8ZM15,6v12h4V6Z")
     val CollectionsBookmark =

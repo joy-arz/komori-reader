@@ -39,7 +39,7 @@ object LibraryCheckScheduler {
     fun now(context: Context, settings: Settings) = WorkManager.getInstance(context)
         .enqueueUniqueWork("library-check-now", ExistingWorkPolicy.KEEP,
             OneTimeWorkRequestBuilder<LibraryCheckWorker>().setInputData(workDataOf("manual" to true))
-                .setConstraints(constraints(settings)).build())
+                .addTag("library-manual-refresh").setConstraints(constraints(settings)).build())
 
     internal fun constraints(settings: Settings) = Constraints.Builder()
         .setRequiredNetworkType(if (settings.checkWifi) NetworkType.UNMETERED else NetworkType.CONNECTED)
@@ -85,7 +85,8 @@ class LibraryCheckWorker(context: Context, params: WorkerParameters) : Coroutine
             val continuation = OneTimeWorkRequestBuilder<LibraryCheckWorker>()
                 .setInputData(workDataOf("after" to cursor, "cycle" to cycle, "manual" to manual))
                 .setConstraints(LibraryCheckScheduler.constraints(settings))
-                .addTag(if (manual) "library-manual-continuation" else "library-check-continuation").build()
+                .addTag(if (manual) "library-manual-continuation" else "library-check-continuation")
+                .addTag(if (manual) "library-manual-refresh" else "library-scheduled-refresh").build()
             WorkManager.getInstance(app).enqueueUniqueWork("library-check-$cycle-$cursor", ExistingWorkPolicy.KEEP, continuation).result.get()
             app.settings.checkStatus("Chapter checks continuing · ${if (failed > 0) "$failed refresh errors in this batch" else "next batch queued"}")
         } else {

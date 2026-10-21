@@ -31,4 +31,13 @@ The limits apply together. An export can reach the encoded byte or structure lim
 
 Unsupported versions, duplicate object keys, nonstandard JSON, invalid UTF-8, unsafe identifiers, invalid web addresses and broken title ownership are rejected. Unavailable source identifiers retain their metadata and appear as a warning in the preview; restoring a backup does not add support for a removed source.
 
-The JSON is readable metadata, including reading history. Choose a storage location appropriate for that data. Scheduled exports, retention management, device-wide settings backup remain separate roadmap items. Completed chapters can be exported as CBZ separately. Imported local pages are excluded from metadata backups and must be kept as separate CBZ/folder copies.
+The JSON is readable metadata, including reading history. Choose a storage location appropriate for that data. Device-wide settings remain outside the backup format. Completed chapters can be exported as CBZ separately. Imported local pages are excluded from metadata backups and must be kept as separate CBZ/folder copies.
+
+
+## Automatic metadata backups (next build)
+
+Choose **Settings → App → Library backup → Choose backup folder**, grant lasting read/write access, then choose Daily or Weekly. Off disables periodic work. **Back up now** runs once in the chosen folder even when the schedule is Off. WorkManager persists the schedule across app restarts; Android may defer it for battery/storage conditions. Cloud document providers require their own connectivity and account access. No global storage permission is requested.
+
+Keep 3, 7 or 14 verified automatic backups. New files are read back, compared byte-for-byte and parsed before retention runs. Only names in Komori's `komori-auto-<timestamp>-<uuid>.json` format are candidates; manual exports and unrelated documents remain. Older unreadable files do not count toward the verified retention target. Verification/pruning failures appear in the backup status, alongside the last successful timestamp. Re-select a folder if its access expires.
+
+Automatic files use the same format and reviewed restore flow as manual exports. Choose **Restore backup**, open the chosen backup folder and select a JSON file. Metadata and exclusions are identical; local comics/downloaded pages still need separate copies. Automatic backup settings are opt-in and device-specific.

@@ -115,6 +115,8 @@ class Sources(val client: OkHttpClient, apiClient: OkHttpClient = client) {
     private val imhentai = WebSource("imhentai", "https://imhentai.xxx", client)
     private val nhentai = WebSource("nhentai", "https://nhentai.net", client)
 
+    fun clearCreatorMetadata() { listOf(demonic, weeb, zap, imhentai, nhentai).forEach { it.clearCreatorMetadata() } }
+
     private fun web(key: String) =
         when (key) {
             "demonic" -> demonic
@@ -190,6 +192,8 @@ class WebSource(
 ) {
     private val connectionRecovery = SourceConnectionRecovery(client, key)
     private data class CreatorMetadata(val manga: Manga, val checkedAt: Long)
+    fun clearCreatorMetadata() { synchronized(creatorMetadata) { creatorMetadata.clear() } }
+
     private val creatorMetadata = object : LinkedHashMap<String, CreatorMetadata>(64, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CreatorMetadata>?) = size > 256
     }
