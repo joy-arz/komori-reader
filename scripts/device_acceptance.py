@@ -69,6 +69,11 @@ def main():
         for service in ("wifi", "data"):
             subprocess.run([*adb, "shell", f"svc {service} enable"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15)
     atexit.register(restore_network)
+    shell("svc power stayon true")
+    shell("settings put system screen_off_timeout 2147483647")
+    shell("input keyevent KEYCODE_WAKEUP")
+    shell("wm dismiss-keyguard || true")
+    shell("input keyevent 82")
     baseline = args.baseline or args.candidate
     run("install", "-r", str(baseline.resolve()))
     package = args.package
