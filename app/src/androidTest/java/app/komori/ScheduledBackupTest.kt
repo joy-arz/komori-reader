@@ -31,6 +31,9 @@ class ScheduledBackupTest {
             app.dao.putManga(Manga(id, "Scheduled backup fixture", "", ""))
             app.dao.putShelf(Shelf(id, saved = true, liked = true))
             app.settings.configureBackup(tree.toString(), 1, 3)
+            val known = app.dao.backupManga().map { it.id }.toSet()
+            val orphaned = (app.dao.backupShelf().map { it.mangaId } + app.dao.backupProgress().map { it.mangaId } + app.dao.backupPreferences().map { it.mangaId }).filter { it !in known }.distinct()
+            assertTrue("Earlier fixtures left orphan metadata: $orphaned", orphaned.isEmpty())
             repeat(4) {
                 val worker = TestListenableWorkerBuilder<MetadataBackupWorker>(app).build()
                 val result = worker.doWork()

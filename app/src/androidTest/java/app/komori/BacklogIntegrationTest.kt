@@ -9,6 +9,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.ViewModelProvider
 import androidx.room.Room
 import androidx.test.platform.app.InstrumentationRegistry
@@ -266,7 +267,12 @@ class BacklogIntegrationTest {
             withTimeout(8000) { while (app.dao.download(queued.releaseId)?.state != "Cancelled") delay(30) }
             assertTrue(pageFile(app, queued.releaseId, 0).exists())
         } finally {
-            activity?.let { instrumentation.runOnMainSync { it.finish() } }
+            activity?.let { owner ->
+                val model = withContext(Dispatchers.Main) { ViewModelProvider(owner)[ReaderViewModel::class.java] }
+                instrumentation.runOnMainSync { model.closeReader(); model.viewModelScope.coroutineContext[Job]?.cancel(); owner.finish() }
+                model.viewModelScope.coroutineContext[Job]?.join()
+            }
+            instrumentation.waitForIdleSync()
             app.settings.set("webtoon", old.webtoon); app.settings.set("volumeKeys", old.volumeKeys)
             app.settings.set("gapWarnings", old.gapWarnings); app.settings.number("preloadPages", old.preloadPages)
             app.settings.number("brightness", old.brightness)

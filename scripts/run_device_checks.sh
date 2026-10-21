@@ -13,6 +13,9 @@ adb shell dumpsys window > device-diagnostics/windows-before.txt
 
 test_status=0
 ./gradlew connectedDebugAndroidTest --no-daemon || test_status=$?
+for capture in download-maintenance scheduled-backup-settings reader-manual-refresh; do
+    adb pull "/data/local/tmp/komori-$capture.png" "device-diagnostics/$capture.png" || true
+done
 adb shell dumpsys power > device-diagnostics/power-after.txt || true
 adb shell dumpsys window > device-diagnostics/windows-after.txt || true
 adb exec-out screencap -p > device-diagnostics/screen-after.png || true

@@ -1,6 +1,7 @@
 package app.komori
 
 import android.content.Intent
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
@@ -36,7 +37,7 @@ class NavigationHistoryTest {
         bitmap.recycle()
         val activity =
             instrumentation.startActivitySync(
-                Intent(app, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                Intent(app, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
             ) as MainActivity
         lateinit var vm: ReaderViewModel
         instrumentation.runOnMainSync {
@@ -74,7 +75,8 @@ class NavigationHistoryTest {
             device.waitForIdle()
             assertEquals(bounds, device.findObject(By.text(label)).visibleBounds)
         } finally {
-            instrumentation.runOnMainSync { activity.finish() }
+            instrumentation.runOnMainSync { vm.closeReader(); vm.viewModelScope.coroutineContext[kotlinx.coroutines.Job]?.cancel(); activity.finish() }
+            kotlinx.coroutines.runBlocking { vm.viewModelScope.coroutineContext[kotlinx.coroutines.Job]?.join() }
             instrumentation.waitForIdleSync()
             releases.forEach { chapterDirectory(app, it.id).deleteRecursively() }
             kotlinx.coroutines.runBlocking {
@@ -91,7 +93,7 @@ class NavigationHistoryTest {
         val activity =
             instrumentation.startActivitySync(
                 Intent(instrumentation.targetContext, MainActivity::class.java)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
             ) as MainActivity
         lateinit var vm: ReaderViewModel
         instrumentation.runOnMainSync {

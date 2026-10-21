@@ -56,6 +56,13 @@ class SourceFacetInteractionTest {
             assertNotNull("Missing control: $selector", control)
             control.click()
         }
+        fun openFilters() {
+            repeat(3) {
+                tap(By.pkg(instrumentation.targetContext.packageName).desc("Filters and sorting"))
+                if (device.wait(Until.hasObject(By.text("Browse filters")), 1500)) return
+            }
+            fail("Filter dialog did not open after the toolbar settled")
+        }
         lateinit var vm: ReaderViewModel
         instrumentation.runOnMainSync {
             vm = ViewModelProvider(activity)[ReaderViewModel::class.java]
@@ -73,7 +80,7 @@ class SourceFacetInteractionTest {
             assertEquals("nhentai", vm.activeSource.value)
             device.waitForIdle()
             assertTrue(device.wait(Until.hasObject(By.desc("Filters and sorting")), 8000))
-            tap(By.desc("Filters and sorting"))
+            openFilters()
             assertTrue(device.wait(Until.hasObject(By.text("All languages")), 5000))
             tap(By.text("English"))
             tap(By.text("Manga"))
@@ -90,7 +97,7 @@ class SourceFacetInteractionTest {
             }
             assertFalse("Source request did not settle", vm.loading.value)
             device.waitForIdle()
-            tap(By.pkg(instrumentation.targetContext.packageName).desc("Filters and sorting"))
+            openFilters()
             assertTrue(device.wait(Until.hasObject(By.text("Reset")), 5000))
             tap(By.text("Reset"))
             assertTrue(device.wait(Until.gone(By.text("Browse filters")), 5000))

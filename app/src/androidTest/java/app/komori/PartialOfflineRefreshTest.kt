@@ -41,6 +41,7 @@ class PartialOfflineRefreshTest {
             assertEquals("Needs repair", app.dao.download(id)!!.state)
         } finally {
             withContext(Dispatchers.Main) { vm.closeReader(); vm.viewModelScope.cancel() }
+            vm.viewModelScope.coroutineContext[Job]?.join()
             chapterDirectory(app, id).deleteRecursively()
             app.dao.removeDownload(id); app.dao.resetProgress(book)
             app.database.openHelper.writableDatabase.execSQL("DELETE FROM shelf WHERE mangaId = ?", arrayOf(book))

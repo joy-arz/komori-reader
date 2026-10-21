@@ -89,7 +89,7 @@ class ManualRefreshTest {
             assertArrayEquals(original, pageFile(app, id, 1).readBytes())
             assertFalse(repairMarker(app, id, 1).exists())
             assertEquals("Complete", app.dao.download(id)!!.state)
-            device.takeScreenshot(File(app.getExternalFilesDir(null), "reader-manual-refresh.png"))
+            device.executeShellCommand("screencap -p /data/local/tmp/komori-reader-manual-refresh.png")
             val cached = File(app.cacheDir, "reader/$id-1-true.img")
             cached.parentFile!!.mkdirs()
             cached.writeBytes(original)
@@ -101,6 +101,8 @@ class ManualRefreshTest {
             assertArrayEquals(original, pageFile(app, id, 1).readBytes())
         } finally {
             instrumentation.runOnMainSync { vm.closeReader(); vm.viewModelScope.cancel(); activity.finish() }
+            vm.viewModelScope.coroutineContext[Job]?.join()
+            instrumentation.waitForIdleSync()
             chapterDirectory(app, id).deleteRecursively()
             app.dao.removeDownload(id); app.dao.resetProgress(book.id); app.dao.removeCreator(creator.id)
             val db = app.database.openHelper.writableDatabase

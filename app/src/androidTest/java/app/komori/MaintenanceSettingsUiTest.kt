@@ -9,7 +9,6 @@ import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.Until
 import app.komori.ui.ReaderViewModel
 import app.komori.ui.UpdateViewModel
-import java.io.File
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
@@ -39,7 +38,7 @@ class MaintenanceSettingsUiTest {
             clickText("Cancel")
             assertTrue(device.wait(Until.gone(By.text("Delete read downloads?")), 8000))
             assertEquals(before, app.dao.backupProgress())
-            device.takeScreenshot(File(app.getExternalFilesDir(null), "download-maintenance.png"))
+            device.executeShellCommand("screencap -p /data/local/tmp/komori-download-maintenance.png")
             clickText("Close")
             instrumentation.runOnMainSync { vm.currentTab.value = 4 }
             clickText("App")
@@ -53,7 +52,7 @@ class MaintenanceSettingsUiTest {
             assertTrue("Automatic retention controls should be reachable", device.hasObject(By.text("Keep recent backups")))
             assertTrue(device.hasObject(By.text("Daily")))
             assertTrue(device.hasObject(By.text("Weekly")))
-            device.takeScreenshot(File(app.getExternalFilesDir(null), "scheduled-backup-settings.png"))
+            device.executeShellCommand("screencap -p /data/local/tmp/komori-scheduled-backup-settings.png")
         } finally { instrumentation.runOnMainSync { activity.finish() } }
     }
 }

@@ -7,6 +7,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.os.SystemClock
 import android.view.MotionEvent
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.platform.app.InstrumentationRegistry
 import app.komori.data.*
@@ -14,6 +15,7 @@ import app.komori.ui.ReaderViewModel
 import java.util.UUID
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.*
@@ -149,7 +151,11 @@ class ContinuousReaderTest {
                 )
             }
         } finally {
-            activity?.let { instrumentation.runOnMainSync { it.finish() } }
+            activity?.let { owner ->
+                val model = withContext(kotlinx.coroutines.Dispatchers.Main) { ViewModelProvider(owner)[ReaderViewModel::class.java] }
+                instrumentation.runOnMainSync { model.closeReader(); model.viewModelScope.coroutineContext[kotlinx.coroutines.Job]?.cancel(); owner.finish() }
+                model.viewModelScope.coroutineContext[kotlinx.coroutines.Job]?.join()
+            }
             instrumentation.waitForIdleSync()
             app.settings.set("webtoon", old.webtoon)
             app.settings.set("continuousChapters", old.continuousChapters)
