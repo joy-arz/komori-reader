@@ -15,7 +15,7 @@ Updated October 22, 2026 for the backup, storage and manual-refresh pass. Publis
 | 0.8.0 | `fad6beb` | Reader controls and continuity, Library organization/Updates, durable download queue, local imports, source tools, updater channels and Support. |
 | 0.8.1 | `bbb288b` | Scheduled metadata backups with verified retention, storage/integrity/delete-read/cache controls, five refresh buttons and HentaiZap cover recovery. |
 
-All eight releases are published. The latest signed release is 0.8.1 (version code 124). Its build, 90 API 26/36 device checks and original signing identity passed. Published-APK signed-upgrade acceptance is tracked in VALIDATION.md. The earlier 0.8.0 cloud upgrade passed both APIs. GitHub contributors list only `joy-arz`.
+All eight releases are published. The latest signed release is 0.8.1 (version code 124). Its build, 90 API 26/36 device checks and original signing identity passed. Published-APK signed-upgrade run `39673007949` also passed both APIs, including process-death restoration and offline navigation. The earlier 0.8.0 cloud upgrade passed both APIs. GitHub contributors list only `joy-arz`.
 
 ## Published 0.8.1 follow-up
 
