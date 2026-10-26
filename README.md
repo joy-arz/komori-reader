@@ -9,7 +9,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 
 <br>
 
-[![Release](https://img.shields.io/badge/release-0.8.1-A3E635?style=for-the-badge&labelColor=0A0A0A)](https://github.com/joy-arz/komori-reader/releases/latest)
+[![Release](https://img.shields.io/badge/release-0.8.2-A3E635?style=for-the-badge&labelColor=0A0A0A)](https://github.com/joy-arz/komori-reader/releases/latest)
 [![Android](https://img.shields.io/badge/Android-8.0%2B-A3E635?style=for-the-badge&logo=android&logoColor=A3E635&labelColor=0A0A0A)](#install)
 [![Kotlin](https://img.shields.io/badge/Kotlin-Compose-A3E635?style=for-the-badge&logo=kotlin&logoColor=A3E635&labelColor=0A0A0A)](#build)
 [![No ads](https://img.shields.io/badge/no%20ads-no%20analytics-A3E635?style=for-the-badge&labelColor=0A0A0A)](#features)
@@ -28,7 +28,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 
 <br>
 
-> **Komori 0.8.1 is available.** Android 8.0 and newer. Install the signed APK over your existing app to preserve your Library, progress, and downloads.
+> **Komori 0.8.2 is available.** Android 8.0 and newer. Install the signed APK over your existing app to preserve your Library, progress, and downloads.
 
 ---
 
@@ -39,9 +39,9 @@ Built with Kotlin and Compose. Native online and offline reading.
 | <img src="https://api.iconify.design/lucide/layout-dashboard.svg?color=%23A3E635" width="18" height="18" align="absmiddle">&nbsp; **Design** | Black and lime, Outfit typography, floating navigation |
 | <img src="https://api.iconify.design/lucide/book-open.svg?color=%23A3E635" width="18" height="18" align="absmiddle">&nbsp; **Reading** | Paged and Webtoon modes, zoom, immersive controls |
 | <img src="https://api.iconify.design/lucide/download.svg?color=%23A3E635" width="18" height="18" align="absmiddle">&nbsp; **Offline** | Persistent downloads with integrity checks and repair |
-| <img src="https://api.iconify.design/lucide/search.svg?color=%23A3E635" width="18" height="18" align="absmiddle">&nbsp; **Discover** | Six sources, tag, author, parody, language and category browsing |
+| <img src="https://api.iconify.design/lucide/search.svg?color=%23A3E635" width="18" height="18" align="absmiddle">&nbsp; **Discover** | Eight sources, language/category/genre filters and author browsing where supported |
 | <img src="https://api.iconify.design/lucide/refresh-cw.svg?color=%23A3E635" width="18" height="18" align="absmiddle">&nbsp; **Updates** | Verified in-app updates from GitHub releases |
-| <img src="https://api.iconify.design/lucide/lock.svg?color=%23A3E635" width="18" height="18" align="absmiddle">&nbsp; **Private** | No account, no ads, no analytics. Everything stays on your device |
+| <img src="https://api.iconify.design/lucide/lock.svg?color=%23A3E635" width="18" height="18" align="absmiddle">&nbsp; **Private** | No account, no ads, no analytics. Library and reading progress stay on your device |
 
 ---
 
@@ -67,7 +67,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 
 ### <img src="https://api.iconify.design/lucide/book-open.svg?color=%23A3E635" width="22" height="22" align="absmiddle"> Reading
 
-- Direct reading from cover play buttons, page resume, a restart-current-chapter preference and optional rereading when caught up.
+- Direct reading from cover play buttons and page resume. Completion is recorded without an extra Finish action; Read again starts from the first readable chapter.
 - Per-title **Left-to-right**, **Right-to-left** and **Webtoon** modes, with app-default fallback.
 - Forward and backward continuous webtoon scrolling across chapters, with saved page and scroll position, bounded neighboring-chapter windows and image strips. Works offline, with a Paged/Webtoon switch.
 - Chapter/page jump and seek, numeric chapter-gap warnings, and navigation restoration from saved identifiers.
@@ -104,6 +104,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 
 ### <img src="https://api.iconify.design/lucide/download.svg?color=%23A3E635" width="22" height="22" align="absmiddle"> Downloads
 
+- Background downloads use persisted WorkManager jobs and a foreground progress notification. Closing the activity does not cancel them. Android Force stop and system/device quotas still apply; Android 13+ notification permission controls drawer visibility.
 - Persistent ordered chapter downloads with Download now, reordering, cancel without file deletion, explicit network/storage waits, title grouping, Wi-Fi constraint, retries, pause and resume, original or data-saving images, and offline access.
 - Local CBZ/folder import and completed-chapter CBZ export through Android document providers, including a preferred export folder. Metadata backups exclude local pages.
 - Bulk options: custom reading-order ranges, all readable, all unread and next 1, 5, 10 or 25 unread. Active and completed downloads are skipped.
@@ -119,7 +120,9 @@ Built with Kotlin and Compose. Native online and offline reading.
 - Failed HentaiZap thumbnails get one gallery-cover fallback without opening the title. Successful thumbnails make no extra gallery request; verification and rate-limit failures stay distinct.
 - Exact **Tag**, **Author**, **Parody**, **Language** and **Category** name browsing, alongside title search.
 - Language and category are separate browse filters. Nhentai can combine them with tags, parodies and creators.
-- HentaiZap and ImHentai offer those filter combinations in title browsing, with explicit limits in metadata browsing.
+- HentaiZap and ImHentai retain native title filters and refine metadata-search language/category combinations per fetched page. DemonicScans can refine text search by genre.
+- MangaDex adds translated-language availability, original language/origin, publication status and content-rating choices, retaining safe/suggestive defaults. Saved searches preserve the new choices.
+- Manhwa18 sources add genre/category/status filters where supported. Page-scoped alphabetical text-search sorting is labelled explicitly; local refinements preserve native pagination.
 - Gallery details group tappable tags, parodies, languages and categories, alongside authors and artists.
 - Source-native popularity sorting:
   - **HentaiZap:** Popular, Top Rated, Downloaded
@@ -129,6 +132,8 @@ Built with Kotlin and Compose. Native online and offline reading.
 
 ### <img src="https://api.iconify.design/lucide/shield-check.svg?color=%23A3E635" width="22" height="22" align="absmiddle"> Source verification and network
 
+- Native source/CDN resolution uses Cloudflare DNS-over-HTTPS with device DNS as a connectivity fallback. HTTPS certificate verification stays enabled. Browser verification uses your device/browser network configuration.
+- MangaDex image transfers use the dedicated API client and retain a recovered HTTP/1.1 path for 15 minutes after a bounded reset retry. Empty preferred-quality lists fall back to the available image quality.
 - The user-operated **Verify source** screen shares source cookies and user agent with native requests and cover loading.
 - Reader retries stop automatically for missing pages, invalid content, storage failures and TLS errors. Transient failures have a page-specific session budget; manual retry resets it.
 - HTTP 429 and HTTP 503 honor `Retry-After` (seconds or HTTP date). Rate-limited downloads schedule a durable continuation instead of holding the queue; pause/delete cancels the same work chain.
@@ -147,20 +152,22 @@ Built with Kotlin and Compose. Native online and offline reading.
 
 ## <img src="https://api.iconify.design/lucide/library.svg?color=%23A3E635" width="26" height="26" align="absmiddle"> Sources
 
-Reorderable source tabs in this order: DemonicScans, WeebCentral, MangaDex, HentaiZap, ImHentai and Nhentai.
+Reorderable source tabs: DemonicScans, WeebCentral, MangaDex, HentaiZap, ImHentai, Nhentai, Manhwa18.com and Manhwa18.cc. Custom enabled-source choices are retained; enable the new sources in Settings → Sources if needed.
 
 | Source | Status | Highlights |
 |---|---|---|
-| **DemonicScans** | Native | Reading and downloads. Views, new and title browsing, genre selection. Title search is separate from genre browsing. |
+| **DemonicScans** | Native | Reading and downloads. Views, new and title browsing, genre selection. Genre refinement also works during title search. |
 | **WeebCentral** | Experimental | Native paged and webtoon reader. Parser and request routing have fixture coverage. |
-| **MangaDex** | Native | Search, popularity, rating, update and title sorting, tag filters, safe and suggestive catalog filtering. |
+| **MangaDex** | Native | Search, popularity, rating, update and title sorting, genre, language/origin, publication-status and content-rating filters. |
 | **HentaiZap** | Native | Popular, Top Rated and Downloaded sorting. Tag, parody, language and category filters. |
 | **ImHentai** | Native | Tag, parody, language and category filter combinations in title browsing. |
 | **Nhentai** | Native | Daily, weekly, monthly and all-time popularity. Filters combine with tags, parodies and creators. |
+| **Manhwa18.com** | Native | Catalog search, genres/categories, status and ranking; translated/raw chapters and lazy reader images. |
+| **Manhwa18.cc** | Native | Catalog ranking, translated/raw feeds, genre routes and page-scoped text-search refinements. |
 
 > **Comix is removed.** Existing source preferences are filtered automatically.
 
-MangaDex must be reachable on your network. If a network redirects or blocks it, the app reports a connection error and keeps certificate verification enabled.
+Encrypted DNS addresses the tested network’s DNS redirection. Direct endpoint/IP restrictions and site verification can still affect availability. [Source, filter and background-download details](docs/SOURCES_2026-10-26.md).
 
 MangaDex and scanlation groups are credited in the application. This is an independent client, not an official MangaDex app. Source availability and policy can change.
 
@@ -170,7 +177,7 @@ MangaDex and scanlation groups are credited in the application. This is an indep
 
 <div align="center">
 
-### [Download komori-0.8.1.apk](https://github.com/joy-arz/komori-reader/releases/download/v0.8.1/komori-0.8.1.apk)
+### [Download komori-0.8.2.apk](https://github.com/joy-arz/komori-reader/releases/download/v0.8.2/komori-0.8.2.apk)
 
 </div>
 

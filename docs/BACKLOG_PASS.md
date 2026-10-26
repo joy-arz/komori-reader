@@ -71,3 +71,9 @@ User confirmed Nhentai connections are working. New implementation adds schedule
 - Delivered scheduled metadata backups/verified retention, storage and integrity scans, reviewed delete-read cleanup, reachable Settings → Reading cache controls, all five manual refresh controls and bounded HentaiZap gallery-cover fallback. Tracker integration stays deferred.
 - APK: 2,518,607 bytes; SHA-256 `3aa5b3195a8892385381460147122ea6825425070146508dd8c29b57d8240107`. Updater identity/size/hash and original certificate verified; debug document-provider fixtures are absent from the release manifest.
 - Published-APK signed upgrade `39673007949` passed API 26 and API 36: schema 5→6, saved/liked/progress retention, verified process death, reader restoration and offline page navigation. Broader source/network, accessibility, slow-transfer interruption and physical 2 GB benchmarks remain open.
+
+## Published 0.8.2 — October 26
+
+- `v0.8.2` / `d644594`, code 125. Adds Manhwa18.com/.cc, encrypted source/CDN DNS, dedicated/recovered MangaDex image transport, expanded source-aware search filters, final-page completion/Read again and foreground downloads.
+- Android checks `40305624000`, device checks `40305623963` (47/47 on each API 26/36) and signed release `40306953126` passed. Local API 30 targeted reader/download/filter/refresh checks passed 5/5. Live source and actual image checks passed on the tested network.
+- APK checksum/size/updater metadata/original signing identity verified. Published-APK signed-upgrade run `40307898798` passed both API 26/36 with data retention, verified process death, restored reading and offline navigation. Force stop/system quotas remain Android constraints; no claim of unrestricted background execution is made.
