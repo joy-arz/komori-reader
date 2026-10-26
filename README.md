@@ -9,7 +9,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 
 <br>
 
-[![Release](https://img.shields.io/badge/release-0.8.2-A3E635?style=for-the-badge&labelColor=0A0A0A)](https://github.com/joy-arz/komori-reader/releases/latest)
+[![Release](https://img.shields.io/badge/release-0.8.3-A3E635?style=for-the-badge&labelColor=0A0A0A)](https://github.com/joy-arz/komori-reader/releases/latest)
 [![Android](https://img.shields.io/badge/Android-8.0%2B-A3E635?style=for-the-badge&logo=android&logoColor=A3E635&labelColor=0A0A0A)](#install)
 [![Kotlin](https://img.shields.io/badge/Kotlin-Compose-A3E635?style=for-the-badge&logo=kotlin&logoColor=A3E635&labelColor=0A0A0A)](#build)
 [![No ads](https://img.shields.io/badge/no%20ads-no%20analytics-A3E635?style=for-the-badge&labelColor=0A0A0A)](#features)
@@ -28,7 +28,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 
 <br>
 
-> **Komori 0.8.2 is available.** Android 8.0 and newer. Install the signed APK over your existing app to preserve your Library, progress, and downloads.
+> **Komori 0.8.3 is available.** Android 8.0 and newer. Install the signed APK over your existing app to preserve your Library, progress, and downloads.
 
 ---
 
@@ -71,7 +71,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 - Per-title **Left-to-right**, **Right-to-left** and **Webtoon** modes, with app-default fallback.
 - Forward and backward continuous webtoon scrolling across chapters, with saved page and scroll position, bounded neighboring-chapter windows and image strips. Works offline, with a Paged/Webtoon switch.
 - Chapter/page jump and seek, numeric chapter-gap warnings, and navigation restoration from saved identifiers.
-- Brightness, artwork dimming, orientation lock, optional volume-key navigation, and conservative preload/cache choices.
+- Brightness, artwork dimming, orientation lock, optional volume-key navigation, and adjustable preload/cache choices. Images load sequentially up to ten pages ahead in paged and webtoon reading, including continuous chapter boundaries; speculative loading never advances reading progress.
 - **Settings → Reading → Clear cached pages** removes temporary reader images while keeping downloads and imported comics. Close the reader first.
 - Webtoon pinch zoom and opt-in tall-page detection; Smart Chapter explanations, alternate releases and per-title language.
 - Immersive reading. A center or image tap hides controls, and a floating page counter brings them back.
@@ -104,7 +104,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 
 ### <img src="https://api.iconify.design/lucide/download.svg?color=%23A3E635" width="22" height="22" align="absmiddle"> Downloads
 
-- Background downloads use persisted WorkManager jobs and a foreground progress notification. Closing the activity does not cancel them. Android Force stop and system/device quotas still apply; Android 13+ notification permission controls drawer visibility.
+- Background downloads use persisted WorkManager jobs, a foreground progress notification and a timed CPU wake lock. Returning to the app or regaining connectivity reconciles interrupted queued work while preserving paused downloads and intentional retry delays. Closing the activity does not cancel them. Android Force stop and system/device quotas still apply; Android 13+ notification permission controls drawer visibility.
 - Persistent ordered chapter downloads with Download now, reordering, cancel without file deletion, explicit network/storage waits, title grouping, Wi-Fi constraint, retries, pause and resume, original or data-saving images, and offline access.
 - Local CBZ/folder import and completed-chapter CBZ export through Android document providers, including a preferred export folder. Metadata backups exclude local pages.
 - Bulk options: custom reading-order ranges, all readable, all unread and next 1, 5, 10 or 25 unread. Active and completed downloads are skipped.
@@ -177,7 +177,7 @@ MangaDex and scanlation groups are credited in the application. This is an indep
 
 <div align="center">
 
-### [Download komori-0.8.2.apk](https://github.com/joy-arz/komori-reader/releases/download/v0.8.2/komori-0.8.2.apk)
+### [Download komori-0.8.3.apk](https://github.com/joy-arz/komori-reader/releases/download/v0.8.3/komori-0.8.3.apk)
 
 </div>
 

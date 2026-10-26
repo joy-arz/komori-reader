@@ -1,6 +1,6 @@
 # Komori development backlog
 
-Updated October 26, 2026 for the new-source, search, rereading and background-download pass. Published delivery is listed separately below. Checkboxes record implemented features with local checks; device/network acceptance that remains unverified stays open. See [the pass log](BACKLOG_PASS.md) for exact results and release gates. Tracking is deferred by the user until core acceptance.
+Updated October 26, 2026 for download sleep recovery and ten-image reader lookahead. Published delivery is listed separately below. Checkboxes record implemented features with local checks; device/network acceptance that remains unverified stays open. See [the pass log](BACKLOG_PASS.md) for exact results and release gates. Tracking is deferred by the user until core acceptance.
 
 ## Published delivery ledger
 
@@ -15,15 +15,16 @@ Updated October 26, 2026 for the new-source, search, rereading and background-do
 | 0.8.0 | `fad6beb` | Reader controls and continuity, Library organization/Updates, durable download queue, local imports, source tools, updater channels and Support. |
 | 0.8.1 | `bbb288b` | Scheduled metadata backups with verified retention, storage/integrity/delete-read/cache controls, five refresh buttons and HentaiZap cover recovery. |
 | 0.8.2 | `d644594` | Manhwa18.com/.cc, encrypted DNS and MangaDex image recovery, expanded filters, automatic final-page completion/Read again and foreground downloads. |
+| 0.8.3 | `d9c0b65` | Interrupted queue recovery on app/network return, bounded transfer wake lock and sequential reader lookahead up to ten images across continuous chapters. |
 
-All nine releases are published. The latest signed release is 0.8.2 (version code 125). Its build, 94 API 26/36 device checks and original signing identity passed. Published-APK signed-upgrade run `40307898798` passed both APIs, including process-death reader restoration and offline navigation. The earlier 0.8.0 cloud upgrade passed both APIs. GitHub contributors list only `joy-arz`.
+All ten releases are published. The latest signed release is 0.8.3 (version code 126). Its build, 96 API 26/36 device checks and original signing identity passed. The preceding 0.8.2 published-APK signed-upgrade run `40307898798` passed both APIs, including process-death reader restoration and offline navigation. The earlier 0.8.0 cloud upgrade passed both APIs. GitHub contributors list only `joy-arz`.
 
-## In validation: sleep recovery and reader lookahead (0.8.3)
+## Published 0.8.3: sleep recovery and reader lookahead
 
 - [x] Reconcile interrupted queued/downloading WorkManager requests on app return and network return; preserve retry delays and paused rows.
 - [x] Hold a bounded CPU wake lock during foreground chapter transfers and release it on completion or cancellation.
 - [x] Preload up to ten images sequentially after the visible image, independently of scrolling, with shared lookahead across continuous chapters and cancellation on navigation.
-- [ ] Complete new scheduler/preload regression checks, exact-commit device gates and signed release verification.
+- [x] Complete new scheduler/preload regression checks, exact-commit device gates and signed release verification. Android checks `40357415070`, device checks `40357414941` (48/48 each API 26/36) and release `40358899789` passed; published APK checksum/size/updater/original signer verified.
 - [ ] Confirm sustained screen-off transfers on physical devices with manufacturer battery restrictions; emulator checks cannot establish this.
 
 ## Published October 26: 0.8.2

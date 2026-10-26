@@ -77,3 +77,11 @@ User confirmed Nhentai connections are working. New implementation adds schedule
 - `v0.8.2` / `d644594`, code 125. Adds Manhwa18.com/.cc, encrypted source/CDN DNS, dedicated/recovered MangaDex image transport, expanded source-aware search filters, final-page completion/Read again and foreground downloads.
 - Android checks `40305624000`, device checks `40305623963` (47/47 on each API 26/36) and signed release `40306953126` passed. Local API 30 targeted reader/download/filter/refresh checks passed 5/5. Live source and actual image checks passed on the tested network.
 - APK checksum/size/updater metadata/original signing identity verified. Published-APK signed-upgrade run `40307898798` passed both API 26/36 with data retention, verified process death, restored reading and offline navigation. Force stop/system quotas remain Android constraints; no claim of unrestricted background execution is made.
+
+
+## Published 0.8.3 — October 26
+
+- Immutable `v0.8.3` at `d9c0b65`, version code 126. Recovers interrupted queue work when the activity/network returns, retains intentional retry delays and paused rows, and holds a bounded CPU wake lock during transfers.
+- Reader lookahead waits for the current image and then loads up to ten files sequentially, independent of scrolling. One budget spans continuous chapters, respects gap warnings and cancels on navigation; visible images are protected from cache eviction and speculative loads never mark pages read. Existing selected preload values are retained; the unset default is ten.
+- JVM: 164 passed, six optional live-network skips. Local API 30 reader/background checks passed 3/3. Android checks `40357415070`, device checks `40357414941` (48/48 per API 26/36) and release `40358899789` passed.
+- Published APK: 2,551,435 bytes; SHA-256 `0677fe765d382ae94d3eb66ac21dfdcaa2da82b14544c539f69c45eff66f9a22`. Updater size/hash, package identity, original signer and foreground/wake-lock manifest verified. Physical screen-off/manufacturer restriction acceptance remains open.
