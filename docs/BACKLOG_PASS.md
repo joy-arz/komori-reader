@@ -85,3 +85,10 @@ User confirmed Nhentai connections are working. New implementation adds schedule
 - Reader lookahead waits for the current image and then loads up to ten files sequentially, independent of scrolling. One budget spans continuous chapters, respects gap warnings and cancels on navigation; visible images are protected from cache eviction and speculative loads never mark pages read. Existing selected preload values are retained; the unset default is ten.
 - JVM: 164 passed, six optional live-network skips. Local API 30 reader/background checks passed 3/3. Android checks `40357415070`, device checks `40357414941` (48/48 per API 26/36) and release `40358899789` passed.
 - Published APK: 2,551,435 bytes; SHA-256 `0677fe765d382ae94d3eb66ac21dfdcaa2da82b14544c539f69c45eff66f9a22`. Updater size/hash, package identity, original signer and foreground/wake-lock manifest verified. Physical screen-off/manufacturer restriction acceptance remains open.
+
+
+## Published 0.8.4 — October 27
+
+- Immutable `v0.8.4` at `18b194f`, version code 127. Fixes cache-triggered scrolling image blinking: cached file reads no longer change decoded strip keys; bounded access tracking maintains cache eviction order separately. Real image replacements still invalidate decoded strips. Ten-image lookahead and download recovery remain enabled.
+- Local JVM/lint/app/test builds passed (164 JVM passes, six optional live-network skips). Android checks `40370932866`, device checks `40370932701` (50/50 each API 26/36, zero skips) and release `40372315984` passed. Both platforms verified repeated cache hits reuse the exact decoded bitmap and replacement files produce the new pixels.
+- Published APK: 2,551,435 bytes; SHA-256 `f62b8f21255845d1af5cf46b06e6bd6c394deee5cfaf85f669fadb00b09fbc73`. Updater metadata, package identity, original signing certificate and manifest verified.

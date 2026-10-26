@@ -1,6 +1,6 @@
 # Komori development backlog
 
-Updated October 26, 2026 for download sleep recovery and ten-image reader lookahead. Published delivery is listed separately below. Checkboxes record implemented features with local checks; device/network acceptance that remains unverified stays open. See [the pass log](BACKLOG_PASS.md) for exact results and release gates. Tracking is deferred by the user until core acceptance.
+Updated October 27, 2026 for scrolling reader image stability. Published delivery is listed separately below. Checkboxes record implemented features with local checks; device/network acceptance that remains unverified stays open. See [the pass log](BACKLOG_PASS.md) for exact results and release gates. Tracking is deferred by the user until core acceptance.
 
 ## Published delivery ledger
 
@@ -16,13 +16,14 @@ Updated October 26, 2026 for download sleep recovery and ten-image reader lookah
 | 0.8.1 | `bbb288b` | Scheduled metadata backups with verified retention, storage/integrity/delete-read/cache controls, five refresh buttons and HentaiZap cover recovery. |
 | 0.8.2 | `d644594` | Manhwa18.com/.cc, encrypted DNS and MangaDex image recovery, expanded filters, automatic final-page completion/Read again and foreground downloads. |
 | 0.8.3 | `d9c0b65` | Interrupted queue recovery on app/network return, bounded transfer wake lock and sequential reader lookahead up to ten images across continuous chapters. |
+| 0.8.4 | `18b194f` | Stable decoded reader images during cache hits/preloading; separate cache access tracking from image revision timestamps. |
 
-All ten releases are published. The latest signed release is 0.8.3 (version code 126). Its build, 96 API 26/36 device checks and original signing identity passed. The preceding 0.8.2 published-APK signed-upgrade run `40307898798` passed both APIs, including process-death reader restoration and offline navigation. The earlier 0.8.0 cloud upgrade passed both APIs. GitHub contributors list only `joy-arz`.
+All eleven releases are published. The latest signed release is 0.8.4 (version code 127). Its build, 100 API 26/36 device checks and original signing identity passed. The earlier 0.8.2 published-APK signed-upgrade run `40307898798` passed both APIs, including process-death reader restoration and offline navigation. The earlier 0.8.0 cloud upgrade passed both APIs. GitHub contributors list only `joy-arz`.
 
-## In validation: scrolling image stability (0.8.4)
+## Published 0.8.4: scrolling image stability
 
 - [x] Separate reader cache access tracking from file modification timestamps so lookahead cannot invalidate visible decoded strips.
-- [ ] Verify repeated cache hits reuse the decoded bitmap while actual image replacements invalidate it; complete build/device gates and signed release verification.
+- [x] Verify repeated cache hits reuse the decoded bitmap while actual image replacements invalidate it; complete build/device gates and signed release verification. Android checks `40370932866`, device checks `40370932701` (50/50 each API 26/36) and release `40372315984` passed. Published updater metadata, APK checksum/size/package and original signer verified.
 
 ## Published 0.8.3: sleep recovery and reader lookahead
 
