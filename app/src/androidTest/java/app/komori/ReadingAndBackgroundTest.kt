@@ -66,6 +66,31 @@ class ReadingAndBackgroundTest {
         }
     }
 
+    @Test fun foregroundRecoveryReplacesInterruptedWorkButPreservesRetryDelay() = runBlocking<Unit> {
+        val manager = androidx.work.WorkManager.getInstance(app)
+        val id = "recovery-${UUID.randomUUID()}"
+        val name = "download-$id"
+        try {
+            val delayed = downloadRequest(id, Settings(), attemptBase = 2, delayMillis = TimeUnit.HOURS.toMillis(1))
+            manager.enqueueUniqueWork(name, androidx.work.ExistingWorkPolicy.KEEP, delayed).result.get()
+            app.dao.putDownload(Download(id, id, "Interrupted fixture", 0, state = "Retrying"))
+            kickDownloadQueue(app, recoverInterrupted = true)
+            assertEquals(androidx.work.WorkInfo.State.ENQUEUED, manager.getWorkInfoById(delayed.id).get()!!.state)
+            assertEquals(listOf(delayed.id), manager.getWorkInfosForUniqueWork(name).get().filter { !it.state.isFinished }.map { it.id })
+
+            app.dao.putDownload(Download(id, id, "Interrupted fixture", 0, state = "Downloading"))
+            kickDownloadQueue(app, recoverInterrupted = true)
+            val old = manager.getWorkInfoById(delayed.id).get()
+            assertTrue(old == null || old.state == androidx.work.WorkInfo.State.CANCELLED)
+            assertTrue(manager.getWorkInfosForUniqueWork(name).get().any { it.id != delayed.id })
+        } finally {
+            manager.cancelUniqueWork(name).result.get()
+            ChapterFiles.locked(id) { app.dao.removeDownload(id) }
+            chapterDirectory(app, id).deleteRecursively()
+            kickDownloadQueue(app)
+        }
+    }
+
     @Test fun mangaDexDownloadRecoversResetAndContinuesAfterActivityCloses() = runBlocking<Unit> {
         val id = "background-fixture-${UUID.randomUUID()}"
         val started = CountDownLatch(1); val proceed = CountDownLatch(1)

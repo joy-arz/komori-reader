@@ -34,7 +34,7 @@ data class Settings(
     val orientation: String = "auto",
     val volumeKeys: Boolean = false,
     val detectWebtoon: Boolean = false,
-    val preloadPages: Int = 1,
+    val preloadPages: Int = 10,
     val readerCacheMb: Int = 64,
     val gapWarnings: Boolean = true,
     val libraryCheckHours: Int = 0,
@@ -84,7 +84,7 @@ class SettingsStore(private val context: Context) {
                 orientation = p[stringPreferencesKey("orientation")]?.takeIf { it in listOf("auto", "portrait", "landscape", "locked") } ?: "auto",
                 volumeKeys = p[booleanPreferencesKey("volumeKeys")] ?: false,
                 detectWebtoon = p[booleanPreferencesKey("detectWebtoon")] ?: false,
-                preloadPages = (p[intPreferencesKey("preloadPages")] ?: 1).coerceIn(0, 2),
+                preloadPages = (p[intPreferencesKey("preloadPages")] ?: 10).coerceIn(0, 10),
                 readerCacheMb = (p[intPreferencesKey("readerCacheMb")] ?: 64).coerceIn(32, 256),
                 gapWarnings = p[booleanPreferencesKey("gapWarnings")] ?: true,
                 libraryCheckHours = (p[intPreferencesKey("libraryCheckHours")] ?: 0).takeIf { it in listOf(0, 12, 24) } ?: 0,
@@ -111,7 +111,7 @@ class SettingsStore(private val context: Context) {
         val range = when (key) {
             "brightness" -> -1..100
             "dim" -> 0..80
-            "preloadPages" -> 0..2
+            "preloadPages" -> 0..10
             "readerCacheMb" -> 32..256
             "libraryCheckHours" -> 0..24
             else -> error("Unknown numeric preference")

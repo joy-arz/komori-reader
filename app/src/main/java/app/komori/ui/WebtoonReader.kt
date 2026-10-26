@@ -275,6 +275,7 @@ fun WebtoonReader(
                                 try {
                                     if (attempt > 0) vm.invalidateCachedPage(release, page)
                                     val file = vm.pageFileFor(release, page)
+                                    vm.prefetchAfter(release, page)
                                     images[imageKey] =
                                         withContext(Dispatchers.IO) {
                                             val bounds =
@@ -350,6 +351,7 @@ fun WebtoonReader(
                                     try {
                                         if (retry > 0) vm.invalidateCachedPage(release, page)
                                         availableFile = vm.pageFileFor(release, page)
+                                        vm.prefetchAfter(release, page)
                                     } catch (e: CancellationException) {
                                         throw e
                                     } catch (e: Exception) {

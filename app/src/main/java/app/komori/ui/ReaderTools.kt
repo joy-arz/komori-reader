@@ -43,7 +43,7 @@ internal fun ReaderTools(vm: ReaderViewModel, settings: Settings) {
 internal fun ReaderCacheSettings(vm: ReaderViewModel, settings: Settings) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text("Preload pages: ${settings.preloadPages}")
-        SettingSlider(settings.preloadPages, 0..2, "Pages to preload", steps = 1) { vm.numberSetting("preloadPages", it) }
+        SettingSlider(settings.preloadPages, 0..10, "Pages to preload", steps = 9) { vm.numberSetting("preloadPages", it) }
         Text("Reader disk cache: ${settings.readerCacheMb} MB")
         SettingSlider(settings.readerCacheMb, 32..256, "Reader disk cache in megabytes", steps = 6) { vm.numberSetting("readerCacheMb", it) }
         val reader by vm.reader.collectAsStateWithLifecycle()

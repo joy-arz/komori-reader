@@ -102,6 +102,8 @@ class ReaderViewModel(
     private var searchJob: Job? = null
     private var detailJob: Job? = null
     private var pageJob: Job? = null
+    private var prefetchJob: Job? = null
+    private var prefetchAnchor: Pair<String, Int>? = null
     private val pageManifests = java.util.concurrent.ConcurrentHashMap<String, List<String>>()
     private val mutation = Mutex()
 
@@ -212,6 +214,8 @@ class ReaderViewModel(
         // Offline pages remain authoritative. Only transient manifests and online cache are refreshed.
         pageManifests.remove("${current.id}-${settings.value.saver}")
         pageRetries.clear()
+        prefetchJob?.cancel()
+        prefetchAnchor = null
         pageJob?.cancel()
         pageJob = viewModelScope.launch {
             try {
@@ -902,6 +906,8 @@ class ReaderViewModel(
             return
         }
         if (offlineLanguage != null) offlineLanguage = chapter.language
+        prefetchJob?.cancel()
+        prefetchAnchor = null
         pageJob?.cancel()
         readerReady.value = false
         if (!preserveRetries) pageRetries.clear()
@@ -1034,6 +1040,7 @@ class ReaderViewModel(
         }
         readerPage.value = page
         readerScroll.value = fraction.coerceIn(0f, 1f)
+        if (prefetchAnchor != (chapter.id to page)) prefetchAfter(chapter, page)
         task {
             for (passed in completed) savePage(
                 passed,
@@ -1282,11 +1289,14 @@ class ReaderViewModel(
                             }
                         if (!temporary.renameTo(target))
                             throw StorageFailure("Could not cache page")
-                        // Keep the current file; trim oldest pages to a bounded 128 MB cache.
+                        val visible = reader.value?.let {
+                            File(cacheDir, "${it.id}-${readerPage.value}-${settings.value.saver}.img")
+                        }
+                        // Speculative lookahead must not evict the page currently being displayed.
                         var total = cacheDir.listFiles()?.sumOf { it.length() } ?: 0L
                         cacheDir
                             .listFiles()
-                            ?.filter { it != target && it.extension == "img" }
+                            ?.filter { it != target && it != visible && it.extension == "img" }
                             ?.sortedBy { it.lastModified() }
                             ?.forEach {
                                 if (total > settings.value.readerCacheMb.toLong() * 1024 * 1024) {
@@ -1325,14 +1335,35 @@ class ReaderViewModel(
             if (dimensions.outWidth > 0 && dimensions.outHeight.toLong() > dimensions.outWidth * 3L)
                 titleReaderMode("webtoon")
         }
-        coroutineScope {
-            launch {
-                for (next in (page + 1)..minOf(page + settings.value.preloadPages, chapter.pages - 1)) {
-                    if (reader.value?.id != chapter.id) break
-                    try { pageFileFor(chapter, next) }
-                    catch (e: CancellationException) { throw e }
-                    catch (_: IOException) { break }
-                }
+        prefetchAfter(chapter, page)
+    }
+
+    fun prefetchAfter(chapter: Release, page: Int) {
+        if (reader.value?.id != chapter.id || page != readerPage.value) return
+        val anchor = chapter.id to page
+        if (prefetchAnchor == anchor && prefetchJob?.isActive == true) return
+        prefetchJob?.cancel()
+        prefetchAnchor = anchor
+        val session = readerSession.value
+        val count = settings.value.preloadPages.coerceIn(0, 10)
+        prefetchJob = viewModelScope.launch {
+            try {
+                if (count == 0) return@launch
+                pageFileFor(chapter, page)
+                prefetchReaderPages(chapter, page, count,
+                    nextChapter = { current ->
+                        if (!settings.value.continuousChapters || readerSession.value != session) null
+                        else nextChapter(current)?.takeUnless {
+                            settings.value.gapWarnings && ReaderContinuity.gap(current, it) != null
+                        }
+                    },
+                    resolve = { resolveChapter(it) },
+                    fetch = { target, nextPage -> pageFileFor(target, nextPage); Unit },
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // Speculation never changes the visible page or its error state.
             }
         }
     }
@@ -1341,6 +1372,7 @@ class ReaderViewModel(
         if (reader.value?.id != chapter.id) return
         readerPage.value = page
         readerScroll.value = fraction.coerceIn(0f, 1f)
+        if (prefetchAnchor != (chapter.id to page)) prefetchAfter(chapter, page)
         task {
             savePage(chapter, page, scroll = fraction.coerceIn(0f, 1f), preserveCompleted = true)
         }
@@ -1349,6 +1381,8 @@ class ReaderViewModel(
     fun page(index: Int) {
         val chapter = reader.value ?: return
         if (index !in 0 until pageCount.value) return
+        prefetchJob?.cancel()
+        prefetchAnchor = null
         pageJob?.cancel()
         readerPage.value = index
         readerScroll.value = 0f
@@ -1409,6 +1443,8 @@ class ReaderViewModel(
 
     fun closeReader() {
         readerGapTarget.value = null
+        prefetchJob?.cancel()
+        prefetchAnchor = null
         pageJob?.cancel()
         reader.value = null
         readerFile.value = null

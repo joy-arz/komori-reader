@@ -5,6 +5,10 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.collect
 import app.komori.ui.KomoriScreen
 
 class MainActivity : ComponentActivity() {
@@ -59,6 +63,14 @@ class MainActivity : ComponentActivity() {
         window.callback = object : android.view.Window.Callback by originalCallback {
             override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean =
                 routeVolumeKey(event) || originalCallback.dispatchKeyEvent(event)
+        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+                app.komori.data.downloadEnvironment(this@MainActivity).collect { environment ->
+                    if (environment.connected && !environment.lowStorage)
+                        app.komori.data.kickDownloadQueue(this@MainActivity, recoverInterrupted = true)
+                }
+            }
         }
         enableEdgeToEdge()
         setContent { KomoriScreen(viewModel()) }

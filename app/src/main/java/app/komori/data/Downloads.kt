@@ -110,9 +110,16 @@ class ChapterDownloadWorker(context: Context, params: WorkerParameters) :
         return downloadForegroundInfo(applicationContext, record?.label ?: "Komori download")
     }
     override suspend fun doWork(): Result {
-        setForeground(getForegroundInfo())
-        try { return download((applicationContext as KomoriApp).source, enforceQueue = true) }
-        finally { if (!isStopped) withContext(kotlinx.coroutines.NonCancellable) { kickDownloadQueue(applicationContext) } }
+        val power = applicationContext.getSystemService(android.os.PowerManager::class.java)
+        val wakeLock = power.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "Komori:ChapterDownload")
+        try {
+            setForeground(getForegroundInfo())
+            wakeLock.acquire(TimeUnit.MINUTES.toMillis(9))
+            return download((applicationContext as KomoriApp).source, enforceQueue = true)
+        } finally {
+            if (wakeLock.isHeld) wakeLock.release()
+            if (!isStopped) withContext(kotlinx.coroutines.NonCancellable) { kickDownloadQueue(applicationContext) }
+        }
     }
 
     internal suspend fun download(source: Sources, enforceQueue: Boolean = false): Result =

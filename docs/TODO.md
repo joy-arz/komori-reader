@@ -18,6 +18,14 @@ Updated October 26, 2026 for the new-source, search, rereading and background-do
 
 All nine releases are published. The latest signed release is 0.8.2 (version code 125). Its build, 94 API 26/36 device checks and original signing identity passed. Published-APK signed-upgrade run `40307898798` passed both APIs, including process-death reader restoration and offline navigation. The earlier 0.8.0 cloud upgrade passed both APIs. GitHub contributors list only `joy-arz`.
 
+## In validation: sleep recovery and reader lookahead (0.8.3)
+
+- [x] Reconcile interrupted queued/downloading WorkManager requests on app return and network return; preserve retry delays and paused rows.
+- [x] Hold a bounded CPU wake lock during foreground chapter transfers and release it on completion or cancellation.
+- [x] Preload up to ten images sequentially after the visible image, independently of scrolling, with shared lookahead across continuous chapters and cancellation on navigation.
+- [ ] Complete new scheduler/preload regression checks, exact-commit device gates and signed release verification.
+- [ ] Confirm sustained screen-off transfers on physical devices with manufacturer battery restrictions; emulator checks cannot establish this.
+
 ## Published October 26: 0.8.2
 
 - [x] Implement Manhwa18.com and Manhwa18.cc catalogs, filters, details, chapters and reader images with separate source/session identities.
