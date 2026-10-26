@@ -19,6 +19,11 @@ Updated October 26, 2026 for download sleep recovery and ten-image reader lookah
 
 All ten releases are published. The latest signed release is 0.8.3 (version code 126). Its build, 96 API 26/36 device checks and original signing identity passed. The preceding 0.8.2 published-APK signed-upgrade run `40307898798` passed both APIs, including process-death reader restoration and offline navigation. The earlier 0.8.0 cloud upgrade passed both APIs. GitHub contributors list only `joy-arz`.
 
+## In validation: scrolling image stability (0.8.4)
+
+- [x] Separate reader cache access tracking from file modification timestamps so lookahead cannot invalidate visible decoded strips.
+- [ ] Verify repeated cache hits reuse the decoded bitmap while actual image replacements invalidate it; complete build/device gates and signed release verification.
+
 ## Published 0.8.3: sleep recovery and reader lookahead
 
 - [x] Reconcile interrupted queued/downloading WorkManager requests on app return and network return; preserve retry delays and paused rows.

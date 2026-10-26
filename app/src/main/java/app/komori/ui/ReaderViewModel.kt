@@ -1207,7 +1207,7 @@ class ReaderViewModel(
                     when {
                         validImage(offline) -> offline
                         validImage(online) ->
-                            online.also { it.setLastModified(System.currentTimeMillis()) }
+                            online.also { ReaderCacheAccess.touch(it) }
                         else -> null
                     }
                 }
@@ -1231,7 +1231,7 @@ class ReaderViewModel(
                 val cacheDir = File(app.cacheDir, "reader").apply { mkdirs() }
                 val target = File(cacheDir, "${chapter.id}-$page-${settings.value.saver}.img")
                 if (validImage(target) && !repairMarker(app, chapter.id, page).exists()) {
-                    target.setLastModified(System.currentTimeMillis())
+                    ReaderCacheAccess.touch(target)
                     return@withContext target
                 }
                 val retryKey = "$key-${settings.value.saver}"
@@ -1297,7 +1297,7 @@ class ReaderViewModel(
                         cacheDir
                             .listFiles()
                             ?.filter { it != target && it != visible && it.extension == "img" }
-                            ?.sortedBy { it.lastModified() }
+                            ?.sortedBy { ReaderCacheAccess.lastAccess(it) }
                             ?.forEach {
                                 if (total > settings.value.readerCacheMb.toLong() * 1024 * 1024) {
                                     total -= it.length()
