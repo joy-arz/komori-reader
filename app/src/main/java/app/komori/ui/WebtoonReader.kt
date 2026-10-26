@@ -128,10 +128,11 @@ fun WebtoonReader(
         if (!settings.continuousChapters || next == null ||
             (settings.gapWarnings && ReaderContinuity.gap(tail, next) != null && next.id !in allowedGaps)) return@LaunchedEffect
         snapshotFlow {
-                list.layoutInfo.visibleItemsInfo.any {
+                val visible = list.layoutInfo.visibleItemsInfo
+                val current = visible.firstOrNull { it.key.toString().split('|').size == 3 }
+                current?.key?.toString()?.substringBefore('|') == tail.id && visible.any {
                     val parts = it.key.toString().split('|')
-                    parts.size == 3 &&
-                        parts[0] == tail.id &&
+                    parts.size == 3 && parts[0] == tail.id &&
                         (parts[1].toIntOrNull() ?: -1) >= tail.pages - 2
                 }
             }

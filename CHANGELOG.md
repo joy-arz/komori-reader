@@ -9,6 +9,8 @@
 - Reconcile abandoned local import staging and unpublished local chapter folders after restart. Skip chapter files owned by active download or repair work.
 - Keep speculative preload failures out of the visible-page retry budget. Retain source cooldowns, verification requirements and the ten-image lookahead limit.
 - Share concurrent requests for the same chapter manifest and image quality. Canceling one reader subscriber does not cancel the request needed by another subscriber.
+- Fix continuous-reader append/trim oscillation at short chapter boundaries by loading beyond the tail only when that tail is the current visible chapter. Keep one chapter ahead without repeatedly removing and reloading it.
+- Accept the final exit scroll checkpoint without reopening a closed reader or accepting callbacks from an older reader session.
 - Reduce repeated scroll-position writes, keep final scroll checkpoints exact, and avoid rewriting the Library shelf on every small scroll movement.
 - Limit Library title observation to titles referenced by Library, reading progress or downloads instead of retaining every cached Discover result in the active Library list.
 

@@ -1037,7 +1037,11 @@ class ReaderViewModel(
 
     fun scrollChapterPosition(chapter: Release, page: Int, fraction: Float, session: Int, flush: Boolean = false) {
         if (session != readerSession.value) return
-        val previous = reader.value ?: return
+        val previous = reader.value
+        if (previous == null) {
+            if (flush) task { savePage(chapter, page, scroll = fraction.coerceIn(0f, 1f), preserveCompleted = true, flush = true) }
+            return
+        }
         val oldPage = readerPage.value
         val completed = ChapterPolicy.completedBetween(selectedChapters(), previous.id, chapter.id)
         if (previous.id != chapter.id) {

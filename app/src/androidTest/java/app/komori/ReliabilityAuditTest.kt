@@ -267,4 +267,27 @@ class ReliabilityAuditTest {
         }
     }
 
+    @Test fun closingReaderFlushesFinalScrollWithoutReopeningIt() = runBlocking<Unit> {
+        val id = "exit-audit-${UUID.randomUUID()}"
+        val chapter = release(id).copy(local = true)
+        val vm = withContext(Dispatchers.Main) { ReaderViewModel(app) }
+        try {
+            withContext(Dispatchers.Main) { vm.read(chapter) }
+            withTimeout(5000) { vm.readerReady.first { it } }
+            val session = vm.readerSession.value
+            withContext(Dispatchers.Main) {
+                vm.closeReader()
+                vm.scrollChapterPosition(chapter, 0, 0.345f, session, flush = true)
+            }
+            withTimeout(5000) { while (app.dao.progress(id)?.scroll != 0.345f) delay(25) }
+            assertNull(vm.reader.value)
+            assertEquals(0.345f, app.dao.progress(id)!!.scroll, 0.0001f)
+        } finally {
+            val job = vm.viewModelScope.coroutineContext[Job]
+            withContext(Dispatchers.Main) { vm.viewModelScope.cancel() }; job?.join()
+            app.dao.resetProgress(id)
+            app.database.openHelper.writableDatabase.execSQL("DELETE FROM shelf WHERE mangaId = ?", arrayOf(id))
+        }
+    }
+
 }
