@@ -36,6 +36,21 @@ class MainActivity : ComponentActivity() {
             reader.updatesVisible.value = true
             intent.removeExtra("showUpdates")
         }
+        if (intent.getBooleanExtra("showDownloads", false)) {
+            val reader = androidx.lifecycle.ViewModelProvider(this)[app.komori.ui.ReaderViewModel::class.java]
+            reader.closeReader(); reader.selected.value = null; reader.currentTab.value = 3
+            intent.removeExtra("showDownloads")
+        }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.getBooleanExtra("showDownloads", false)) {
+            val reader = androidx.lifecycle.ViewModelProvider(this)[app.komori.ui.ReaderViewModel::class.java]
+            reader.closeReader(); reader.selected.value = null; reader.currentTab.value = 3
+            intent.removeExtra("showDownloads")
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

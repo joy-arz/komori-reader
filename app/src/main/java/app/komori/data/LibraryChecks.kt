@@ -64,7 +64,7 @@ class LibraryCheckWorker(context: Context, params: WorkerParameters) : Coroutine
             if (checked > 0 && System.nanoTime() - start > TimeUnit.MINUTES.toNanos(6)) break
             try {
                 val pref = app.dao.titlePreferences(bookId)
-                val language = if (sourceKey(bookId) == "mangadex") pref?.language?.takeIf { it.isNotEmpty() } ?: settings.language else "en"
+                val language = sourceReadingLanguage(bookId, settings.language, pref?.language.orEmpty())
                 val oldFeed = app.dao.feed(bookId, language)
                 val oldIds = oldFeed?.let { JSONArray(it.releaseIds).let { rows -> (0 until rows.length()).map { rows.getString(it) }.toSet() } }
                 val old = oldIds?.let { ids -> app.dao.chapters(bookId).filter { it.id in ids }.map { it.release() } }

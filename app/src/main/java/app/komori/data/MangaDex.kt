@@ -109,8 +109,6 @@ class MangaDex(val client: OkHttpClient, private val baseUrl: String = "https://
                 "includes[]" to "cover_art",
                 "includes[]" to "author",
                 "includes[]" to "artist",
-                "contentRating[]" to "safe",
-                "contentRating[]" to "suggestive",
                 "order[${when(filter.sort) { "Rating" -> "rating"
  "Latest updates" -> "latestUploadedChapter"
  "Title" -> "title"
@@ -118,6 +116,11 @@ class MangaDex(val client: OkHttpClient, private val baseUrl: String = "https://
                     if (filter.sort == "Title") "asc" else "desc",
             )
         filter.tags.forEach { params += "includedTags[]" to it }
+        require(filter.ratings.isNotEmpty() && filter.ratings.all { it in setOf("safe", "suggestive", "erotica", "pornographic") }) { "Choose at least one valid content rating." }
+        filter.ratings.sorted().forEach { params += "contentRating[]" to it }
+        if (filter.language.isNotEmpty()) params += "availableTranslatedLanguage[]" to filter.language
+        if (filter.category.isNotEmpty()) params += "originalLanguage[]" to filter.category
+        if (filter.status.isNotEmpty()) params += "status[]" to filter.status
         if (query.isNotBlank()) params += "title" to query
         creator?.let { params += (if (it.role == "artist") "artists[]" else "authors[]") to it.id }
         return json("manga", params).getJSONArray("data").objects().map { o ->
@@ -215,9 +218,12 @@ class MangaDex(val client: OkHttpClient, private val baseUrl: String = "https://
     override suspend fun pages(chapterId: String, saver: Boolean): List<String> {
         val result = json("at-home/server/$chapterId", listOf("forcePort443" to "true"))
         val chapter = result.getJSONObject("chapter")
-        val field = if (saver) "dataSaver" else "data"
+        val preferred = if (saver) "dataSaver" else "data"
+        val field = if ((chapter.optJSONArray(preferred)?.length() ?: 0) == 0) {
+            if (saver) "data" else "dataSaver"
+        } else preferred
         val files = chapter.getJSONArray(field)
-        val path = if (saver) "data-saver" else "data"
+        val path = if (field == "dataSaver") "data-saver" else "data"
         return (0 until files.length()).map {
             "${result.getString("baseUrl")}/$path/${chapter.getString("hash")}/${files.getString(it)}"
         }
@@ -226,6 +232,7 @@ class MangaDex(val client: OkHttpClient, private val baseUrl: String = "https://
     companion object {
         fun client() =
             OkHttpClient.Builder()
+                .dns(SourceDns)
                 .connectTimeout(20, TimeUnit.SECONDS)
                 .readTimeout(40, TimeUnit.SECONDS)
                 .callTimeout(60, TimeUnit.SECONDS)

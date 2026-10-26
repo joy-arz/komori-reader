@@ -118,8 +118,7 @@ class SourceFacetsTest {
         MockWebServer().use { server ->
             val source = WebSource("zap", server.url("/").toString().trimEnd('/'), MangaDex.client())
             for (filter in listOf(
-                BrowseFilter(facetPath = "/parody/space-saga/", language = "en"),
-                BrowseFilter(language = "not-a-language"),
+                                BrowseFilter(language = "not-a-language"),
                 BrowseFilter(category = "not-a-category"),
             )) {
                 try {

@@ -19,7 +19,7 @@ class SourcesTest {
         assertEquals(path, sourcePath(first))
         assertEquals("mangadex", sourceKey("a-legacy-uuid"))
         assertEquals(
-            listOf("weeb", "demonic", "mangadex", "zap", "imhentai", "nhentai"),
+            listOf("weeb", "demonic", "mangadex", "zap", "imhentai", "nhentai", "manhwa18", "manhwa18cc"),
             sourceOrder("weeb,weeb,unknown"),
         )
     }
@@ -260,8 +260,8 @@ class SourcesTest {
     fun galleryKeysPreserveLegacyOrderAndImageReferers() {
         val keys = listOf("zap", "imhentai", "nhentai")
         assertTrue(keys.all { Regex("[a-z0-9]+").matches(it) })
-        assertEquals(6, sourceNames.size)
-        assertEquals(listOf("demonic", "weeb", "mangadex") + keys,
+        assertEquals(8, sourceNames.size)
+        assertEquals(listOf("demonic", "weeb", "mangadex") + keys + listOf("manhwa18", "manhwa18cc"),
             sourceOrder("demonic,weeb,comix,mangadex"))
         val sources = Sources(MangaDex.client())
         for ((key, base) in listOf("zap" to "https://hentaizap.com", "imhentai" to "https://imhentai.xxx")) {

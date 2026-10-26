@@ -20,6 +20,7 @@ data class NavigationState(
         .put("sort", filter.sort.take(128)).put("searchType", filter.searchType.take(32))
         .put("facet", filter.facetPath.take(2048)).put("language", filter.language.take(64))
         .put("category", filter.category.take(128)).put("tags", JSONArray(filter.tags.take(20)))
+        .put("status", filter.status.take(32)).put("ratings", JSONArray(filter.ratings.sorted()))
         .apply { creator?.let { put("creator", JSONObject().put("id", it.id.take(2048)).put("name", it.name.take(512)).put("role", it.role.take(32))) } }
         .toString()
 
@@ -32,7 +33,8 @@ data class NavigationState(
                 val tags = o.optJSONArray("tags") ?: JSONArray()
                 NavigationState(o.optInt("tab").coerceIn(0, 4), o.optString("source"), o.optString("query"),
                     BrowseFilter(o.optString("sort"), (0 until minOf(tags.length(), 20)).map { tags.getString(it) }.toSet(),
-                        o.optString("searchType", "Title"), o.optString("facet"), o.optString("language"), o.optString("category")),
+                        o.optString("searchType", "Title"), o.optString("facet"), o.optString("language"), o.optString("category"), o.optString("status"),
+                        o.optJSONArray("ratings")?.let { r -> (0 until minOf(r.length(), 4)).map { r.getString(it) }.toSet() } ?: setOf("safe", "suggestive")),
                     o.optString("title"), o.optString("reader"), o.optInt("page").coerceAtLeast(0), creator)
             } catch (_: org.json.JSONException) { null }
         }

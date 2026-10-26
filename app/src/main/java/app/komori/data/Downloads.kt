@@ -100,11 +100,17 @@ internal fun downloadRequest(
                 .build()
         )
         .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+        .apply { if (delayMillis <= 0) setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST) }
         .build()
 
 class ChapterDownloadWorker(context: Context, params: WorkerParameters) :
     CoroutineWorker(context, params) {
+    override suspend fun getForegroundInfo(): ForegroundInfo {
+        val record = inputData.getString("chapter")?.let { (applicationContext as KomoriApp).dao.download(it) }
+        return downloadForegroundInfo(applicationContext, record?.label ?: "Komori download")
+    }
     override suspend fun doWork(): Result {
+        setForeground(getForegroundInfo())
         try { return download((applicationContext as KomoriApp).source, enforceQueue = true) }
         finally { if (!isStopped) withContext(kotlinx.coroutines.NonCancellable) { kickDownloadQueue(applicationContext) } }
     }
@@ -184,11 +190,7 @@ class ChapterDownloadWorker(context: Context, params: WorkerParameters) :
                                         ),
                                     )
                                     var lastProgress = 0L
-                                    transferImage(
-                                        source.client,
-                                        source.imageRequest(url, id),
-                                        temporary,
-                                    ) { bytes, total ->
+                                    source.transferPage(id, url, temporary) { bytes, total ->
                                         val now = System.nanoTime()
                                         if (now - lastProgress >= 250_000_000L || bytes == total) {
                                             lastProgress = now
@@ -215,6 +217,7 @@ class ChapterDownloadWorker(context: Context, params: WorkerParameters) :
                             }
                             kotlinx.coroutines.currentCoroutineContext().ensureActive()
                             app.dao.putDownload(record)
+                            if (enforceQueue) setForeground(downloadForegroundInfo(app, record.label, record.done, record.total))
                         }
                         kotlinx.coroutines.currentCoroutineContext().ensureActive()
                         app.dao.putDownload(record.copy(state = "Complete"))

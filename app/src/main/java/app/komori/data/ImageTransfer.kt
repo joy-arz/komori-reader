@@ -66,7 +66,8 @@ suspend fun transferImage(
                         response.use {
                             if (it.header("cf-mitigated") == "challenge")
                                 throw SourceVerificationRequired("source")
-                            if (!it.isSuccessful) throw httpFailure(it)
+                            if (!it.isSuccessful) throw httpFailure(it,
+                                if (request.header("Referer") == "https://mangadex.org/") "mangadex" else "source")
                             val body = it.body ?: throw IOException("Empty image response")
                             if (body.contentLength() > MAX_IMAGE_BYTES)
                                 throw ContentFailure("This image exceeds the 32 MB page limit.")

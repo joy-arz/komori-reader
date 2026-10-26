@@ -25,9 +25,17 @@ val sourceNames =
         "zap" to "HentaiZap",
         "imhentai" to "ImHentai",
         "nhentai" to "Nhentai",
+        "manhwa18" to "Manhwa18.com",
+        "manhwa18cc" to "Manhwa18.cc",
     )
 
 fun sourceKey(id: String) = id.substringBefore(':', "mangadex")
+
+fun sourceReadingLanguage(id: String, global: String, override: String = ""): String = when {
+    sourceKey(id) == "mangadex" -> override.ifBlank { global }
+    sourceKey(id) in manhwaSources -> override.ifBlank { if (sourcePath(id).trimEnd('/').endsWith("-raw")) "ko" else "en" }
+    else -> "en"
+}
 
 fun sourcePageUrl(id: String): String =
     when (sourceKey(id)) {
@@ -36,6 +44,8 @@ fun sourcePageUrl(id: String): String =
         "zap" -> "https://hentaizap.com" + sourcePath(id)
         "imhentai" -> "https://imhentai.xxx" + sourcePath(id)
         "nhentai" -> "https://nhentai.net" + sourcePath(id)
+        "manhwa18" -> "https://manhwa18.com" + sourcePath(id)
+        "manhwa18cc" -> "https://manhwa18.cc" + sourcePath(id)
         else -> "https://mangadex.org/title/$id"
     }
 
@@ -74,6 +84,8 @@ data class BrowseFilter(
     val facetPath: String = "",
     val language: String = "",
     val category: String = "",
+    val status: String = "",
+    val ratings: Set<String> = setOf("safe", "suggestive"),
 )
 
 data class SourceTag(val id: String, val name: String, val type: String = "tag")
@@ -85,6 +97,9 @@ fun sourceSearchTypes(key: String): List<String> =
     else listOf("Title")
 
 fun sourceBrowseLanguages(key: String): List<SourceTag> = when (key) {
+    "mangadex" -> listOf("en" to "English", "ja" to "Japanese", "ko" to "Korean", "zh" to "Chinese", "zh-hk" to "Traditional Chinese", "id" to "Indonesian", "es" to "Spanish", "es-la" to "Latin American Spanish", "fr" to "French", "de" to "German", "pt-br" to "Brazilian Portuguese", "ru" to "Russian", "vi" to "Vietnamese", "th" to "Thai")
+    "manhwa18", "manhwa18cc" -> listOf("en" to "English", "ko" to "Korean raw")
+    "demonic", "weeb" -> listOf("en" to "English")
     "zap", "imhentai" -> listOf("en" to "English", "jp" to "Japanese", "es" to "Spanish",
         "fr" to "French", "kr" to "Korean", "de" to "German", "ru" to "Russian")
     "nhentai" -> listOf("english" to "English", "japanese" to "Japanese", "chinese" to "Chinese")
@@ -92,6 +107,9 @@ fun sourceBrowseLanguages(key: String): List<SourceTag> = when (key) {
 }.map { SourceTag(it.first, it.second, "language") }
 
 fun sourceBrowseCategories(key: String): List<SourceTag> = when (key) {
+    "mangadex" -> listOf("ja" to "Japanese origin", "ko" to "Korean origin", "zh" to "Chinese origin")
+    "manhwa18" -> listOf("24" to "Manga", "26" to "Manhwa", "57" to "Webtoon", "65" to "Art")
+    "manhwa18cc" -> listOf("translated" to "Translated", "raw" to "Raw")
     "zap", "imhentai" -> listOf("m" to "Manga", "d" to "Doujinshi", "w" to "Western",
         "i" to "Image Set", "a" to "Artist CG", "g" to "Game CG")
     "nhentai" -> listOf("manga" to "Manga", "doujinshi" to "Doujinshi", "western" to "Western",
@@ -110,6 +128,22 @@ data class BrowsePage(val titles: List<Manga>, val hasMore: Boolean, val paginat
 class Sources(val client: OkHttpClient, apiClient: OkHttpClient = client) {
     val coverRecovery = CoverRecovery(::details)
     private val dex = MangaDex(apiClient)
+    private val manhwa = ManhwaSource("manhwa18", "https://manhwa18.com", client)
+    private val manhwaCc = ManhwaSource("manhwa18cc", "https://manhwa18.cc", client)
+    private fun manhwa(key: String) = if (key == "manhwa18") manhwa else manhwaCc
+    private val dexImages = apiClient
+    private val dexCompatibility by lazy { apiClient.newBuilder().protocols(listOf(Protocol.HTTP_1_1)).connectionPool(ConnectionPool()).build() }
+
+    suspend fun transferPage(id: String, url: String, file: java.io.File, progress: (Long, Long) -> Unit = { _, _ -> }) {
+        val request = imageRequest(url, id)
+        if (sourceKey(id) != "mangadex") return transferImage(client, request, file, progress)
+        try { transferImage(dexImages, request, file, progress) }
+        catch (e: IOException) {
+            if (!isConnectionReset(e)) throw e
+            kotlinx.coroutines.delay(500)
+            transferImage(dexCompatibility, request, file, progress)
+        }
+    }
     private val demonic = WebSource("demonic", "https://demonicscans.org", client)
     private val weeb = WebSource("weeb", "https://weebcentral.com", client)
     private val zap = WebSource("zap", "https://hentaizap.com", client)
@@ -133,6 +167,8 @@ class Sources(val client: OkHttpClient, apiClient: OkHttpClient = client) {
 
     fun sorts(key: String, facetBrowse: Boolean = false): List<String> =
         if (key == "zap" && facetBrowse) listOf("Latest", "Popular") else when (key) {
+            "manhwa18" -> listOf("Latest updates", "Recently added", "Views", "Likes", "Title")
+            "manhwa18cc" -> listOf("Latest updates", "Recently added", "Popularity", "Rating", "Title")
             "demonic" -> listOf("Views", "Recently added", "Title")
             "weeb" ->
                 listOf("Popularity", "Subscribers", "Latest Updates", "Recently Added", "Alphabet")
@@ -153,29 +189,43 @@ class Sources(val client: OkHttpClient, apiClient: OkHttpClient = client) {
             dex.browse(query, (page - 1) * 30, creator, filter).let {
                 BrowsePage(it, it.size == 30)
             }
+        else if (key in manhwaSources) {
+            require(creator == null) { "This source does not expose a verified author catalog. Use title search or genre filters." }
+            manhwa(key).browse(query, page, filter)
+        }
         else web(key).browse(query, page, filter, creator)
 
     suspend fun tags(key: String): List<SourceTag> =
-        if (key == "mangadex") dex.tags() else web(key).tags()
+        if (key == "mangadex") dex.tags() else if (key in manhwaSources) manhwa(key).tags() else web(key).tags()
 
     suspend fun details(manga: Manga): Manga =
-        if (sourceKey(manga.id) in setOf("mangadex", "local")) manga else web(sourceKey(manga.id)).details(manga)
+        if (sourceKey(manga.id) in setOf("mangadex", "local")) manga
+        else if (sourceKey(manga.id) in manhwaSources) manhwa(sourceKey(manga.id)).details(manga)
+        else web(sourceKey(manga.id)).details(manga)
 
     suspend fun chapters(id: String, language: String) =
         if (sourceKey(id) == "mangadex") dex.chapters(id, language)
+        else if (sourceKey(id) in manhwaSources) manhwa(sourceKey(id)).chapters(id)
         else web(sourceKey(id)).chapters(id)
 
     suspend fun languages(id: String) =
-        if (sourceKey(id) == "mangadex") dex.languages(id) else listOf("en")
+        if (sourceKey(id) == "mangadex") dex.languages(id) else if (sourceKey(id) in manhwaSources) listOf("en", "ko") else listOf("en")
 
     suspend fun pages(id: String, saver: Boolean) =
-        if (sourceKey(id) == "mangadex") dex.pages(id, saver) else web(sourceKey(id)).pages(id)
+        if (sourceKey(id) == "mangadex") dex.pages(id, saver)
+        else if (sourceKey(id) in manhwaSources) manhwa(sourceKey(id)).pages(id)
+        else web(sourceKey(id)).pages(id)
 
     fun imageRequest(url: String, id: String): Request =
         Request.Builder()
             .url(url)
             .apply {
                 when (sourceKey(id)) {
+                    "mangadex" -> {
+                        header("Referer", "https://mangadex.org/")
+                        header("User-Agent", "Komori/${app.komori.BuildConfig.VERSION_NAME} (Android reader)")
+                    }
+                    "manhwa18", "manhwa18cc" -> header("Referer", "${sourceOrigins[sourceKey(id)]}/")
                     "demonic" -> header("Referer", "https://demonicscans.org/")
                     "weeb" -> header("Referer", "https://weebcentral.com/")
                     "zap" -> header("Referer", "https://hentaizap.com/")
@@ -271,6 +321,27 @@ class WebSource(
     suspend fun browse(
         query: String, page: Int, filter: BrowseFilter, creator: Creator? = null,
     ): BrowsePage {
+        if (key == "demonic" && query.isBlank() && filter.tags.any { !it.matches(Regex("\\d+")) }) {
+            val available = tags()
+            val ids = filter.tags.map { value ->
+                available.firstOrNull { it.id == value || it.name.trim().equals(value, true) }?.id
+                    ?: throw IllegalArgumentException("A selected genre is no longer available. Reset the genre filters.")
+            }.toSet()
+            return browse(query, page, filter.copy(tags = ids), creator)
+        }
+        if (key == "demonic" && query.isNotBlank() && filter.tags.isNotEmpty()) {
+            val native = browse(query, page, filter.copy(tags = emptySet()), creator)
+            if (native.titles.isEmpty()) return native
+            val selected = tags().filter { it.id in filter.tags || filter.tags.any { value -> value.equals(it.name.trim(), true) } }
+            require(selected.size == filter.tags.size) { "A selected genre is no longer available. Reset the genre filters." }
+            val refined = mutableListOf<Manga>()
+            for (chunk in native.titles.chunked(2)) {
+                coroutineScope { chunk.map { async { details(it) } }.awaitAll() }.filterTo(refined) { manga ->
+                    selected.all { genre -> manga.metadata().any { it.name.equals(genre.name.trim(), true) } }
+                }
+            }
+            return BrowsePage(refined, native.hasMore, native.paginationIds)
+        }
         if (key in gallerySources) {
             require(filter.searchType in sourceSearchTypes(key)) { "Unsupported search type." }
             require(filter.language.isEmpty() || sourceBrowseLanguages(key).any { it.id == filter.language }) {
@@ -298,6 +369,20 @@ class WebSource(
             if (facet.isNotEmpty()) {
                 require(Regex("/(?:artist|author|tag|parody|language|category)/[^/?#]+/").matches(facet)) {
                     "Invalid metadata path."
+                }
+                if (key in setOf("zap", "imhentai") && (filter.language.isNotEmpty() || filter.category.isNotEmpty())) {
+                    val native = browse(query, page, filter.copy(language = "", category = ""), creator)
+                    val language = sourceBrowseLanguages(key).find { it.id == filter.language }?.name
+                    val category = sourceBrowseCategories(key).find { it.id == filter.category }?.name
+                    val refined = mutableListOf<Manga>()
+                    for (chunk in native.titles.chunked(2)) {
+                        coroutineScope { chunk.map { async { creatorDetails(it) } }.awaitAll() }.filterTo(refined) { title ->
+                            val metadata = title.metadata()
+                            (language == null || metadata.any { it.type == "language" && it.name.equals(language, true) }) &&
+                                (category == null || metadata.any { it.type == "category" && it.name.equals(category, true) })
+                        }
+                    }
+                    return BrowsePage(refined, native.hasMore, native.paginationIds)
                 }
                 if (key == "nhentai" &&
                     (filter.language.isNotEmpty() || filter.category.isNotEmpty() || filter.tags.isNotEmpty())) {
@@ -374,7 +459,10 @@ class WebSource(
                 filter.tags.forEach { url.addQueryParameter("included_tag", it) }
                 document(url.build().toString().removePrefix(base))
             }
-        val titles = parseBrowse(doc)
+        val titles = parseBrowse(doc).let { rows ->
+            if (key == "demonic" && query.isNotBlank() && filter.sort == "Title (this page)") rows.sortedBy { it.title.lowercase(Locale.ROOT) }
+            else rows
+        }
         return BrowsePage(
             titles,
             if (key == "demonic")
@@ -505,7 +593,10 @@ class WebSource(
         val description =
             if (key == "demonic") d.selectFirst(".genres-list ~ .white-font")?.text()
             else d.selectFirst("li:has(strong:contains(Description)) > p")?.text()
-        return manga.copy(description = description ?: manga.description)
+        val genres = if (key == "demonic") JSONArray().apply {
+            d.select(".genres-list li").forEach { put(JSONObject().put("id", it.text().trim()).put("name", it.text().trim()).put("type", "tag")) }
+        }.toString() else manga.tagsJson
+        return manga.copy(description = description ?: manga.description, tagsJson = genres)
     }
 
     private fun metadataLink(a: org.jsoup.nodes.Element, type: String): Pair<String, String>? {

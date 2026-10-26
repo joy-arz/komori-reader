@@ -438,6 +438,14 @@ fun WebtoonReader(
                 }
             }
             item(key = "end-${tail.id}") {
+                LaunchedEffect(tail.id, session) {
+                    snapshotFlow {
+                        list.layoutInfo.visibleItemsInfo.any { it.key == "end-${tail.id}" } &&
+                            images["${tail.id}|${tail.pages - 1}"] != null
+                    }.distinctUntilChanged().collect { visible ->
+                        if (visible) vm.completeVisibleChapter(tail, session)
+                    }
+                }
                 Column(
                     Modifier.fillMaxWidth().padding(32.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -472,8 +480,8 @@ fun WebtoonReader(
                             color = Color.White,
                             style = MaterialTheme.typography.titleLarge,
                         )
-                        Button(onClick = { vm.finishChapter() }) {
-                            Text(if (next == null) "Finish reading" else "Finish & continue")
+                        Button(onClick = { if (next == null) vm.startReading(true) else vm.finishChapter() }) {
+                            Text(if (next == null) "Read again" else "Continue to next chapter")
                         }
                     }
                 }

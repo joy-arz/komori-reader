@@ -20,6 +20,8 @@ val sourceOrigins =
         "zap" to "https://hentaizap.com",
         "imhentai" to "https://imhentai.xxx",
         "nhentai" to "https://nhentai.net",
+        "manhwa18" to "https://manhwa18.com",
+        "manhwa18cc" to "https://manhwa18.cc",
     )
 
 interface SourceCookieStore {
@@ -72,14 +74,15 @@ class SourceVerificationRequired(val source: String) :
 
 class SourceHttpException(
     val status: Int,
-    source: String,
+    val source: String,
     val retryAtMillis: Long? = null,
     val deferred: Boolean = false,
 ) :
     IOException(
         when (status) {
             403 ->
-                "${sourceNames[source] ?: "The source"} denied access (HTTP 403). Try Verify source. The site may still restrict native access."
+                if (source == "mangadex") "MangaDex could not serve this chapter or image (HTTP 403). Refresh the chapter, try another release or try another network."
+                else "${sourceNames[source] ?: "The source"} denied access (HTTP 403). Try Verify source. The site may still restrict native access."
             429 ->
                 "${sourceNames[source] ?: "The source"} is rate limiting requests (HTTP 429). Wait before retrying."
             404,
@@ -94,7 +97,7 @@ class SourceHttpException(
 
 fun requiresSourceAction(error: Exception?): Boolean =
     error is SourceVerificationRequired ||
-        (error is SourceHttpException && error.status in listOf(401, 403))
+        (error is SourceHttpException && error.source != "mangadex" && error.status in listOf(401, 403))
 
 class SourceSessions(context: Context) {
     val userAgent: String = WebSettings.getDefaultUserAgent(context)

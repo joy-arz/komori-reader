@@ -44,6 +44,7 @@ internal fun SavedSearchDialog(vm: ReaderViewModel, dismiss: () -> Unit) {
 internal fun SourceDiagnostics(vm: ReaderViewModel) {
     val statuses by vm.sourceStatus.collectAsStateWithLifecycle()
     Text("Source capabilities", style = MaterialTheme.typography.titleMedium)
+    Text("Native source and image requests use Cloudflare encrypted DNS, with device DNS as a connectivity fallback. Browser verification uses your device's network settings. HTTPS certificate checks remain enabled.", style = MaterialTheme.typography.bodySmall)
     Text("Toggles control Discover and automatic checks. Existing Library titles remain accessible.", style = MaterialTheme.typography.bodySmall)
     sourceNames.forEach { (key, name) ->
         Text(name, style = MaterialTheme.typography.titleSmall)

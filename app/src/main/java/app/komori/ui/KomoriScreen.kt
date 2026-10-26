@@ -289,7 +289,7 @@ internal fun MangaCover(
             else { Icon(KomoriIcons.MenuBook, "No cover available", Modifier.size(26.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
         if (showSource) Text(
-            when (sourceKey(manga.id)) { "mangadex" -> "MD"; "demonic" -> "DS"; "weeb" -> "WC"; "zap" -> "HZ"; "imhentai" -> "IM"; "nhentai" -> "NH"; "local" -> "Local"; else -> "?" },
+            when (sourceKey(manga.id)) { "mangadex" -> "MD"; "demonic" -> "DS"; "weeb" -> "WC"; "zap" -> "HZ"; "imhentai" -> "IM"; "nhentai" -> "NH"; "manhwa18" -> "M18"; "manhwa18cc" -> "18C"; "local" -> "Local"; else -> "?" },
             Modifier.align(Alignment.TopEnd).padding(6.dp).clip(RoundedCornerShape(5.dp))
                 .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)).padding(horizontal = 6.dp, vertical = 3.dp)
                 .semantics { contentDescription = "Source: ${sourceName(manga.id)}" },
@@ -2049,15 +2049,6 @@ private fun SettingsScreen(vm: ReaderViewModel, settings: Settings) {
                     }
                     item {
                         Toggle(
-                            "Read again when caught up",
-                            "Start from the first chapter when all are read",
-                            settings.reread,
-                        ) {
-                            vm.setting("reread", it)
-                        }
-                    }
-                    item {
-                        Toggle(
                             "Open library titles in reader",
                             "Tap a cover to read immediately",
                             settings.direct,
@@ -2261,13 +2252,16 @@ private fun SourceFilters(
     val creator by vm.activeCreator.collectAsStateWithLifecycle()
     val facetBrowse = source in gallerySources &&
         (creator != null || filter.facetPath.isNotEmpty() || filter.searchType != "Title")
-    val separateMetadata = source in setOf("zap", "imhentai") && facetBrowse
-    val sorts = vm.app.source.sorts(source, facetBrowse)
+    val localMetadata = source in setOf("zap", "imhentai") && facetBrowse
+    val pageSearch = source in setOf("demonic", "manhwa18cc") && vm.searchQuery.value.isNotBlank()
+    val sorts = if (pageSearch) listOf("Source order", "Title (this page)") else vm.app.source.sorts(source, facetBrowse)
     var sort by remember { mutableStateOf(filter.sort.takeIf { it in sorts } ?: sorts.firstOrNull().orEmpty()) }
     var language by remember { mutableStateOf(filter.language) }
     var category by remember { mutableStateOf(filter.category) }
     var chosen by remember { mutableStateOf(filter.tags) }
     var tagQuery by remember { mutableStateOf("") }
+    var status by remember { mutableStateOf(filter.status) }
+    var ratings by remember { mutableStateOf(filter.ratings) }
     val initialFocus = remember { FocusRequester() }
     AlertDialog(
         onDismissRequest = close,
@@ -2279,17 +2273,34 @@ private fun SourceFilters(
             Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Sort", style = MaterialTheme.typography.titleSmall)
+                if (pageSearch) Text("This site's text search has no catalog ranking. Alphabetical sorting applies to the current result page.", style = MaterialTheme.typography.bodySmall)
                 Row(Modifier.horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     sorts.forEach { value ->
                         FilterChip(sort == value, { sort = value }, label = { Text(value) })
                     }
                 }
+                if (source !in gallerySources) {
+                    BrowseChoice("Chapter language", "All available languages", sourceBrowseLanguages(source), language) { language = it }
+                    if (sourceBrowseCategories(source).isNotEmpty())
+                        BrowseChoice(if (source == "mangadex") "Original language / origin" else "Category", "All categories", sourceBrowseCategories(source), category) { category = it }
+                    if (source == "mangadex" || source in manhwaSources)
+                        BrowseChoice("Publication status", "All statuses", listOf("ongoing", "completed", "hiatus", "cancelled").filter { source == "mangadex" || it != "cancelled" }.map { SourceTag(it, it.replaceFirstChar(Char::uppercase)) }, status) { status = it }
+                    if (source == "mangadex") {
+                        Text("Content rating", style = MaterialTheme.typography.titleSmall)
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            listOf("safe", "suggestive", "erotica", "pornographic").forEach { value ->
+                                FilterChip(value in ratings, { if (value in ratings && ratings.size > 1) ratings = ratings - value else ratings = ratings + value }, { Text(value.replaceFirstChar(Char::uppercase)) })
+                            }
+                        }
+                    }
+                    if (source == "manhwa18cc") Text("Genre, category and status refine the current result page during text search. More pages continue loading; this is not a whole-catalog sort.", style = MaterialTheme.typography.bodySmall)
+                }
                 if (source in gallerySources) {
-                    if (separateMetadata) Text(
-                        "This source offers language and category filters in title browsing. Clear the metadata selection or choose Title search to use them.",
+                    if (localMetadata) Text(
+                        "Language and category refine the current metadata result page using gallery details. More pages continue loading.",
                         style = MaterialTheme.typography.bodySmall)
-                    else {
+                    run {
                         BrowseChoice("Language", "All languages", sourceBrowseLanguages(source), language) { language = it }
                         BrowseChoice("Category", "All categories", sourceBrowseCategories(source), category) { category = it }
                     }
@@ -2297,10 +2308,10 @@ private fun SourceFilters(
                         style = MaterialTheme.typography.bodySmall)
                 }
                 if (source == "demonic") Text(
-                    "Sort and tags apply to browsing. Title search is separate.",
+                    "Genres also refine the current title-search results using title metadata.",
                     style = MaterialTheme.typography.bodySmall)
                 if (source !in setOf("zap", "imhentai")) {
-                    OutlinedTextField(tagQuery, { tagQuery = it }, label = { Text("Find a tag") }, singleLine = true)
+                    OutlinedTextField(tagQuery, { tagQuery = it }, label = { Text("Find a genre or tag") }, singleLine = true)
                     LazyColumn(Modifier.heightIn(max = 220.dp)) {
                         items(tags.filter { it.name.contains(tagQuery, true) }, key = { it.id }) { tag ->
                             Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable {
@@ -2319,8 +2330,9 @@ private fun SourceFilters(
             TextButton(onClick = {
                 vm.applyFilter(filter.copy(sort = sort,
                     tags = if (source in setOf("zap", "imhentai")) emptySet() else chosen,
-                    language = if (separateMetadata) "" else language,
-                    category = if (separateMetadata) "" else category))
+                    language = language,
+                    category = category,
+                    status = status, ratings = ratings))
                 close()
             }) { Text("Apply") }
         },

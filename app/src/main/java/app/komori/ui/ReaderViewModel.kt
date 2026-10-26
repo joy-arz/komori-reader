@@ -407,7 +407,8 @@ class ReaderViewModel(
         activeSource.value = sourceKey(manga.id)
         tagsJob?.cancel()
         tags.value = emptyList()
-        browseFilter.value = BrowseFilter(facetPath = tag.id)
+        browseFilter.value = if (sourceKey(manga.id) in gallerySources) BrowseFilter(facetPath = tag.id)
+            else BrowseFilter(tags = setOf(tag.id))
         search("", null)
     }
 
@@ -521,9 +522,7 @@ class ReaderViewModel(
         detailJob = task {
             loading.value = true
             try {
-                val language =
-                    if (sourceKey(manga.id) == "mangadex") dao.titlePreferences(manga.id)?.language?.takeIf { it.isNotEmpty() } ?: app.settings.flow.first().language
-                    else "en"
+                val language = sourceReadingLanguage(manga.id, app.settings.flow.first().language, dao.titlePreferences(manga.id)?.language.orEmpty())
                 dao.markUpdatesSeen(manga.id)
                 val stored = dao.manga(manga.id)
                 val baseManga = stored ?: manga
@@ -641,9 +640,8 @@ class ReaderViewModel(
 
     fun chapterLanguage(): String =
         offlineLanguage
-            ?: if (sourceKey(selected.value?.id.orEmpty()) == "mangadex")
-                preferences.value.find { it.mangaId == selected.value?.id }?.language?.takeIf { it.isNotEmpty() } ?: settings.value.language
-            else "en"
+            ?: sourceReadingLanguage(selected.value?.id.orEmpty(), settings.value.language,
+                preferences.value.find { it.mangaId == selected.value?.id }?.language.orEmpty())
 
     fun selectedChapters(): List<Release> {
         val pref = preferences.value.find { it.mangaId == selected.value?.id }
@@ -669,8 +667,8 @@ class ReaderViewModel(
                 if (action == "Mark unread") dao.resetProgress(title.id)
                 if (action == "Mark all read") {
                     val cached = dao.chapters(title.id).ifEmpty {
-                        val language = dao.titlePreferences(title.id)?.language?.takeIf { it.isNotEmpty() } ?: settings.value.language
-                        app.source.chapters(title.id, if (sourceKey(title.id) == "mangadex") language else "en").also {
+                        val language = sourceReadingLanguage(title.id, settings.value.language, dao.titlePreferences(title.id)?.language.orEmpty())
+                        app.source.chapters(title.id, language).also {
                             dao.saveFeed(title.id, language, it)
                         }
                     }
@@ -746,8 +744,7 @@ class ReaderViewModel(
                     bulkStatus.value = "Preparing ${index + 1}/${titles.size}: ${title.title}"
                     try {
                         dao.putManga(title)
-                        val language =
-                            if (sourceKey(title.id) == "mangadex") options.language else "en"
+                        val language = sourceReadingLanguage(title.id, options.language, dao.titlePreferences(title.id)?.language.orEmpty())
                         val rows = app.source.chapters(title.id, language)
                         dao.saveFeed(title.id, language, rows)
                         val preference = dao.titlePreferences(title.id)
@@ -884,7 +881,7 @@ class ReaderViewModel(
             .filter { it.completed }.map { it.chapterKey }.toSet()
         val next =
             if (fromBeginning) available.firstOrNull { it.readable }
-            else ChapterPolicy.start(available, last, completed, settings.value.reread)
+            else ChapterPolicy.start(available, last, completed, reread = true)
         if (next == null) {
             notice.value =
                 if (available.isEmpty()) "No chapters match your language and group preferences."
@@ -1249,11 +1246,7 @@ class ReaderViewModel(
                     }
                     try {
                         imageConnections.withPermit {
-                            transferImage(
-                                app.source.client,
-                                app.source.imageRequest(url, chapter.id),
-                                temporary,
-                            )
+                            app.source.transferPage(chapter.id, url, temporary)
                         }
                         coroutineContext.ensureActive()
                         if (repairMarker(app, chapter.id, page).exists())
@@ -1320,6 +1313,7 @@ class ReaderViewModel(
         readerRetryAt.value = 0L
         readerSourceAction.value = false
         readerFile.value = pageFileFor(chapter, page)
+        if (page == pageCount.value - 1) savePage(chapter, page, completed = true)
         if (settings.value.detectWebtoon && preferences.value.none { it.mangaId == chapter.mangaId && it.readerMode.isNotEmpty() }) {
             val dimensions = withContext(Dispatchers.IO) {
                 android.graphics.BitmapFactory.Options().apply {
@@ -1360,7 +1354,7 @@ class ReaderViewModel(
         pageJob =
             viewModelScope.launch {
                 try {
-                    savePage(chapter, index)
+                    savePage(chapter, index, preserveCompleted = true)
                     loadPage(chapter, index)
                 } catch (e: CancellationException) {
                     throw e
@@ -1387,6 +1381,11 @@ class ReaderViewModel(
             closeReader()
             notice.value = "You're caught up with the available chapters."
         }
+    }
+
+    fun completeVisibleChapter(chapter: Release, session: Int) = task {
+        if (session == readerSession.value && chapter.pages > 0 && reader.value?.mangaId == chapter.mangaId)
+            savePage(chapter, chapter.pages - 1, completed = true)
     }
 
     fun navigateReader(delta: Int) {

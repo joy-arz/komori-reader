@@ -188,8 +188,9 @@ fun ReaderScreen(vm: ReaderViewModel, chapter: Release) {
                             }
                         }
                         val next: @Composable () -> Unit = {
-                            ActionButton(onClick = { navigate(1) }, enabled = file != null) {
-                                Text(if (page + 1 < count) "Next page" else "Finish chapter")
+                            val endOfTitle = page + 1 >= count && vm.nextChapter(chapter) == null
+                            ActionButton(onClick = { if (endOfTitle) vm.startReading(true) else navigate(1) }, enabled = file != null) {
+                                Text(if (endOfTitle) "Read again" else if (page + 1 < count) "Next page" else "Next chapter")
                             }
                         }
                         if (mode == ReadingMode.RTL) {
