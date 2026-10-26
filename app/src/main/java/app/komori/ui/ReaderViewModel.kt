@@ -193,6 +193,8 @@ class ReaderViewModel(
         clearingCache.value = true
         viewModelScope.launch {
             try {
+                prefetchJob?.join()
+                pageJob?.join()
                 val removed = withContext(Dispatchers.IO) {
                     ReaderCacheFiles.clean(File(app.cacheDir, "reader"), images = true)
                 }
@@ -1199,9 +1201,10 @@ class ReaderViewModel(
     }
 
     fun pinReaderPages(owner: Any, pages: List<Pair<Release, Int>>) {
+        if (reader.value == null) { ReaderCacheFiles.release(owner); return }
         ReaderCacheFiles.pin(owner, pages.flatMap { (chapter, page) ->
             listOf(true, false).map { saver -> File(app.cacheDir, "reader/${chapter.id}-$page-$saver.img") }
-        })
+        }, readerCacheOwner)
     }
 
     fun releaseReaderPages(owner: Any) { ReaderCacheFiles.release(owner) }
@@ -1435,7 +1438,7 @@ class ReaderViewModel(
     }
 
     override fun onCleared() {
-        ReaderCacheFiles.release(readerCacheOwner)
+        closeReader()
         super.onCleared()
     }
 
@@ -1446,7 +1449,7 @@ class ReaderViewModel(
         pageJob?.cancel()
         manifestRequests.cancel()
         reader.value = null
-        ReaderCacheFiles.release(readerCacheOwner)
+        ReaderCacheFiles.releaseGroup(readerCacheOwner)
         readerFile.value = null
     }
 

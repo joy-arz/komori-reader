@@ -47,6 +47,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -95,9 +96,11 @@ internal fun Library(vm: ReaderViewModel, discover: () -> Unit) {
     var searchExpanded by rememberSaveable { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
     fun closeSearch() {
         searchExpanded = false
         query = ""
+        focusManager.clearFocus(force = true)
         keyboard?.hide()
     }
     BackHandler(searchExpanded) { closeSearch() }

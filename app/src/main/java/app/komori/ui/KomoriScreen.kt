@@ -47,6 +47,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -378,6 +379,7 @@ internal fun Discover(vm: ReaderViewModel) {
     if (showSavedSearches) SavedSearchDialog(vm) { showSavedSearches = false }
     val focusRequester = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
     val sources = enabledSourceOrder(settings)
     LaunchedEffect(sources, activeSource, activeCreator) {
         if (activeSource.isNotEmpty() && activeSource !in sources && activeCreator == null) {
@@ -395,6 +397,7 @@ internal fun Discover(vm: ReaderViewModel) {
     val swipeThreshold = with(LocalDensity.current) { 72.dp.toPx() }
     fun closeSearch() {
         searchExpanded = false
+        focusManager.clearFocus(force = true)
         keyboard?.hide()
     }
     fun submitSearch() {

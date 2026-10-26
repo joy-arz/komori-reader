@@ -37,6 +37,8 @@
 - Bind updater network operations to coroutine cancellation and give each transfer its own temporary file.
 - Increase the bounded in-app release-note allowance so the full current release notes and the requested 0.8.3/0.8.4 history can be displayed.
 
+- Clear search focus when closing Library or Discover search so a late keyboard opening cannot cover navigation.
+
 ### Maintenance, accessibility and release quality
 
 - Split Library, Authors, Downloads, title Details and Settings screens into separate files. Separate download coordination and reader progress persistence from the main reader ViewModel.

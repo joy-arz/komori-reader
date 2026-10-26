@@ -5,12 +5,14 @@ import java.io.IOException
 
 /** Coordinates cache publication, visible/decoder leases and temporary-file ownership. */
 internal object ReaderCacheFiles {
-    private val pins = mutableMapOf<Any, Set<String>>()
+    private data class Pin(val files: Set<String>, val group: Any?)
+    private val pins = mutableMapOf<Any, Pin>()
     private val writers = mutableSetOf<String>()
 
-    @Synchronized fun pin(owner: Any, files: Collection<File>) { pins[owner] = files.map { it.absolutePath }.toSet() }
+    @Synchronized fun pin(owner: Any, files: Collection<File>, group: Any? = null) { pins[owner] = Pin(files.map { it.absolutePath }.toSet(), group) }
     @Synchronized fun release(owner: Any) { pins.remove(owner) }
-    @Synchronized private fun protected(path: String) = path in writers || pins.values.any { path in it }
+    @Synchronized fun releaseGroup(group: Any) { pins.entries.removeAll { it.value.group === group } }
+    @Synchronized private fun protected(path: String) = path in writers || pins.values.any { path in it.files }
 
     suspend fun <T> leased(file: File, block: suspend () -> T): T {
         val owner = Any()

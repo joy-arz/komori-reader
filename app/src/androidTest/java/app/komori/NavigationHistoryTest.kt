@@ -69,7 +69,7 @@ class NavigationHistoryTest {
             while (
                 !vm.readerReady.value && android.os.SystemClock.uptimeMillis() < deadline
             ) android.os.SystemClock.sleep(50)
-            assertTrue(vm.readerReady.value)
+            assertTrue("Reader start: tapped=$label reader=${vm.reader.value?.id} error=${vm.readerError.value}", vm.readerReady.value)
             instrumentation.runOnMainSync { vm.closeReader() }
             assertTrue(device.wait(Until.hasObject(By.text(label)), 5000))
             device.waitForIdle()
