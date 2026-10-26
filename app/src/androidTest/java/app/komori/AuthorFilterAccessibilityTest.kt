@@ -36,8 +36,7 @@ class AuthorFilterAccessibilityTest {
             }
             assertTrue(device.wait(Until.hasObject(By.text("Filter author works")), 10000))
             val field = device.wait(Until.findObject(By.clazz("android.widget.EditText")), 5000)
-            assertNotNull(field); field!!.click(); field.text = "forest"
-            device.pressBack()
+            assertNotNull(field); field!!.text = "forest"
             val apply = device.wait(Until.findObject(By.text("Apply")), 5000)
             assertNotNull(apply)
             assertTrue(apply!!.visibleBounds.width() > 0 && apply.visibleBounds.height() > 0)

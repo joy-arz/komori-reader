@@ -10,6 +10,9 @@ import android.view.MotionEvent
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.uiautomator.By
+import androidx.test.uiautomator.UiDevice
+import androidx.test.uiautomator.Until
 import app.komori.data.*
 import app.komori.ui.ReaderViewModel
 import java.util.UUID
@@ -78,7 +81,7 @@ class ContinuousReaderTest {
             activity =
                 instrumentation.startActivitySync(
                     Intent(instrumentation.targetContext, MainActivity::class.java)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
                 ) as MainActivity
             lateinit var vm: ReaderViewModel
             instrumentation.runOnMainSync {
@@ -88,6 +91,8 @@ class ContinuousReaderTest {
             instrumentation.runOnMainSync { vm.readOffline(download) }
             waitUntil { vm.readerReady.value && vm.reader.value?.id == "$id-1" }
             val session = vm.readerSession.value
+            val device = UiDevice.getInstance(instrumentation)
+            assertTrue("Reader must be in the foreground before injected gestures", device.wait(Until.hasObject(By.desc("Close reader")), 8000))
             SystemClock.sleep(1000)
             val metrics = instrumentation.targetContext.resources.displayMetrics
             repeat(18) {
@@ -114,7 +119,11 @@ class ContinuousReaderTest {
                     SystemClock.sleep(450)
                 }
             }
-            waitUntil { vm.reader.value?.id == "$id-4" }
+            try { waitUntil { vm.reader.value?.id == "$id-4" } }
+            catch (error: Throwable) {
+                device.executeShellCommand("screencap -p /data/local/tmp/komori-continuous-failure.png")
+                throw AssertionError("Forward continuity: reader=${vm.reader.value?.id} ready=${vm.readerReady.value} error=${vm.readerError.value}", error)
+            }
             assertEquals(
                 "Continuous transitions must keep the same reader session",
                 session,
