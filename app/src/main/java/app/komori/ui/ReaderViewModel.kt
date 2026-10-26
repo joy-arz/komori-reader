@@ -1434,6 +1434,11 @@ class ReaderViewModel(
         }
     }
 
+    override fun onCleared() {
+        ReaderCacheFiles.release(readerCacheOwner)
+        super.onCleared()
+    }
+
     fun closeReader() {
         readerGapTarget.value = null
         prefetchJob?.cancel()

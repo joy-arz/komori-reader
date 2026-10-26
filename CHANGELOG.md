@@ -5,7 +5,7 @@
 ### Reader reliability and performance
 
 - Recover abandoned reader transfer files after process death, and include reclaimable partial files in Clear cached pages. Active transfers and downloaded chapters are preserved.
-- Protect every composed/visible continuous-reader page and active strip decoder from cache eviction. Under cache pressure, discard unpinned lookahead before displayed images.
+- Protect every composed/visible continuous-reader page and active strip decoder from cache eviction; release the session pin when its ViewModel is cleared. Under cache pressure, discard unpinned lookahead before displayed images.
 - Reconcile abandoned local import staging and unpublished local chapter folders after restart. Skip chapter files owned by active download or repair work.
 - Keep speculative preload failures out of the visible-page retry budget. Retain source cooldowns, verification requirements and the ten-image lookahead limit.
 - Share concurrent requests for the same chapter manifest and image quality. Canceling one reader subscriber does not cancel the request needed by another subscriber.
