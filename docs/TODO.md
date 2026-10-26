@@ -16,7 +16,7 @@ See [the October 27 code review](CODEBASE_REVIEW_2026-10-27.md) for conditions, 
 
 Additional delivery: shared chapter-manifest requests, reduced/checkpointed progress writes, scoped Library observation, screen/controller extraction, cancelable channel-safe updater checks, Authors source/language/category/tag/Library filters, and written full release notes. The 0.8.3/0.8.4 GitHub bodies have been backfilled without changing their assets or tags.
 
-Local Android 11 checks cover the 15 new regressions, including 150% font/RTL filter interaction, cache ownership, import round trips and queue-mutation/recovery serialization. CI now covers API 26/30/36. Physical-phone acceptance was explicitly deferred by the user in favor of emulator validation. Full TalkBack/landscape/hardware checks and real slow-network worker termination remain separate acceptance work below.
+The clean cloud Android 8/11/16 suites cover all 16 new regressions, including 150% font/RTL filter interaction, cache ownership, import round trips and queue-mutation/recovery serialization. CI now covers API 26/30/36. Physical-phone acceptance was explicitly deferred by the user in favor of emulator validation. Full TalkBack/landscape/hardware checks and real slow-network worker termination remain separate acceptance work below.
 
 ## Published delivery ledger
 
@@ -33,8 +33,16 @@ Local Android 11 checks cover the 15 new regressions, including 150% font/RTL fi
 | 0.8.2 | `d644594` | Manhwa18.com/.cc, encrypted DNS and MangaDex image recovery, expanded filters, automatic final-page completion/Read again and foreground downloads. |
 | 0.8.3 | `d9c0b65` | Interrupted queue recovery on app/network return, bounded transfer wake lock and sequential reader lookahead up to ten images across continuous chapters. |
 | 0.8.4 | `18b194f` | Stable decoded reader images during cache hits/preloading; separate cache access tracking from image revision timestamps. |
+| 0.8.5 | `ad8988f` | Seven audit fixes, Authors metadata/Library filters, manifest sharing, reduced/checkpointed progress writes, continuity/cache recovery, cancelable updates and full changelogs. |
 
-All eleven releases are published. The latest signed release is 0.8.4 (version code 127). Its build, 100 API 26/36 device checks and original signing identity passed. The earlier 0.8.2 published-APK signed-upgrade run `40307898798` passed both APIs, including process-death reader restoration and offline navigation. The earlier 0.8.0 cloud upgrade passed both APIs. GitHub contributors list only `joy-arz`.
+All twelve releases are published. The latest signed release is 0.8.5 (version code 128). Its build/lint, 198 API 26/30/36 device checks, three restart probes and original signing identity passed. The earlier 0.8.2 published-APK signed-upgrade run `40307898798` passed both APIs, including process-death reader restoration and offline navigation. The earlier 0.8.0 cloud upgrade passed both APIs. GitHub contributors list only `joy-arz`.
+
+## Published 0.8.5: reliability and Authors filters
+
+- [x] Complete exact-commit build/lint, 168 JVM passes and 198 cloud device checks with three restart probes; verify the downloaded signed APK and updater metadata.
+- [x] Stabilize short-chapter append/trim behavior, release composed pins when closing the reader, and retain final exit scroll checkpoints without reopening it.
+- [x] Publish full written 0.8.5 notes with the complete 0.8.3/0.8.4 changes inline; backfill both older GitHub release bodies.
+- [ ] Reproduce and resolve local ARM AVD gesture timing under host load; this environment also showed System UI/service ANRs and the 0.8.4 control stalled at the same forward-chapter boundary. Clean cloud API 26/30/36 suites passed. Physical-phone acceptance remains deferred by the user's choice.
 
 ## Published 0.8.4: scrolling image stability
 

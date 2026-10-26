@@ -9,7 +9,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 
 <br>
 
-[![Release](https://img.shields.io/badge/release-0.8.4-A3E635?style=for-the-badge&labelColor=0A0A0A)](https://github.com/joy-arz/komori-reader/releases/latest)
+[![Release](https://img.shields.io/badge/release-0.8.5-A3E635?style=for-the-badge&labelColor=0A0A0A)](https://github.com/joy-arz/komori-reader/releases/latest)
 [![Android](https://img.shields.io/badge/Android-8.0%2B-A3E635?style=for-the-badge&logo=android&logoColor=A3E635&labelColor=0A0A0A)](#install)
 [![Kotlin](https://img.shields.io/badge/Kotlin-Compose-A3E635?style=for-the-badge&logo=kotlin&logoColor=A3E635&labelColor=0A0A0A)](#build)
 [![No ads](https://img.shields.io/badge/no%20ads-no%20analytics-A3E635?style=for-the-badge&labelColor=0A0A0A)](#features)
@@ -28,7 +28,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 
 <br>
 
-> **Komori 0.8.4 is available.** Android 8.0 and newer. Install the signed APK over your existing app to preserve your Library, progress, and downloads.
+> **Komori 0.8.5 is available.** Android 8.0 and newer. Install the signed APK over your existing app to preserve your Library, progress, and downloads.
 
 ---
 
@@ -88,7 +88,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 - Long-press a title, chapter, download or followed creator to select it. Batch controls appear only during selection; browsing has no idle Select bar.
 - Bulk actions: save, like, download, read-state changes, pause, resume, and confirmed deletion or unfollow. Select all applies to loaded or filtered items.
 - Possible-duplicate warnings for normalized matching titles already saved from another source. Titles are never merged automatically.
-- Dedicated **Authors** tab with compact creator chips, searchable follow management and paginated source catalogs. Source indexes can omit works. HentaiZap artist browsing supplements its index with exact-creator-verified search candidates, including the reported Kanamirubon case. Latest is the default, with Popularity / views, Alphabetical and Author ordering. Latest/popularity blend each creator’s source-ranked results; alphabetical and author ordering apply to loaded works. Local reordering retains loaded pages.
+- Dedicated **Authors** tab with compact creator chips, searchable follow management and paginated source catalogs. Source indexes can omit works. HentaiZap artist browsing supplements its index with exact-creator-verified search candidates, including the reported Kanamirubon case. Latest is the default, with Popularity / views, Alphabetical and Author ordering. Latest/popularity blend each creator’s source-ranked results; alphabetical and author ordering apply to loaded works. Local reordering retains loaded pages. Filters cover source, title/creator text, language, category, required tags/parodies, saved/not-saved/liked works and Library status; empty filtered pages retain Load more.
 - Saved titles keep their source order and receive no Library highlight.
 - Compact language badges overlay thumbnail corners when explicit language metadata is available: `en`, `jp`, `sp`, `fr`, `kr`, `ch` and other recognized languages. Browse flags are retained without fetching every gallery; unknown languages remain unlabelled.
 
@@ -177,7 +177,7 @@ MangaDex and scanlation groups are credited in the application. This is an indep
 
 <div align="center">
 
-### [Download komori-0.8.4.apk](https://github.com/joy-arz/komori-reader/releases/download/v0.8.4/komori-0.8.4.apk)
+### [Download komori-0.8.5.apk](https://github.com/joy-arz/komori-reader/releases/download/v0.8.5/komori-0.8.5.apk)
 
 </div>
 

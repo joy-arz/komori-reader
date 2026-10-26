@@ -50,7 +50,7 @@
 - Publish complete written changelogs from this file. Missing, link-only or unverified current entries block release-note generation.
 - Backfill the complete 0.8.3 and 0.8.4 release notes without changing their APKs or immutable tags.
 
-Validation: 168 JVM tests passed, with six optional live-network skips. All 15 new Android 11 device regressions and the emulator SIGKILL/restart cleanup probe passed. Publication requires successful build/lint and the complete device suite on the exact release commit for Android 8, 11 and 16. Physical-phone screen-off, manufacturer restrictions, manual TalkBack and low-memory hardware acceptance remain deferred; no tracker integration is enabled.
+Validation: 168 JVM tests passed, with six optional live-network skips. All 66 device checks passed on each of Android 8, 11 and 16 (198 total, zero skips), plus three emulator SIGKILL/restart recovery probes. Exact-commit build, lint and signed-release gates passed. Published version code 128; APK size 2,567,819 bytes; SHA-256 4362f62a7d9ec6e62c750487e3a240817b427178f26134258ac46e0ba39fe780. Physical-phone screen-off/manufacturer restrictions, manual TalkBack and low-memory hardware acceptance remain open. Local ARM emulator scrolling remains timing-sensitive and is tracked separately; clean cloud emulator runs passed. Tracking remains deferred.
 
 ## 0.8.4
 

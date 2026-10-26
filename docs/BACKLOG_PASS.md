@@ -92,3 +92,10 @@ User confirmed Nhentai connections are working. New implementation adds schedule
 - Immutable `v0.8.4` at `18b194f`, version code 127. Fixes cache-triggered scrolling image blinking: cached file reads no longer change decoded strip keys; bounded access tracking maintains cache eviction order separately. Real image replacements still invalidate decoded strips. Ten-image lookahead and download recovery remain enabled.
 - Local JVM/lint/app/test builds passed (164 JVM passes, six optional live-network skips). Android checks `40370932866`, device checks `40370932701` (50/50 each API 26/36, zero skips) and release `40372315984` passed. Both platforms verified repeated cache hits reuse the exact decoded bitmap and replacement files produce the new pixels.
 - Published APK: 2,551,435 bytes; SHA-256 `f62b8f21255845d1af5cf46b06e6bd6c394deee5cfaf85f669fadb00b09fbc73`. Updater metadata, package identity, original signing certificate and manifest verified.
+
+
+## Published 0.8.5 — October 27
+
+- Immutable `v0.8.5` / `ad8988f`, code 128. Completes the seven audit fixes, Authors filters, shared manifests, scoped/checkpointed persistence, component extraction, updater cancellation and full release-note enforcement. Adds conservative continuous-chapter window growth and safe final exit checkpoints.
+- Android checks `40391563371`, device checks `40391563386` (66/66 on each API 26/30/36; zero skips; three successful restart probes) and signed release `40393319293` passed. JVM: 168 passed, six optional live-network skips. Final local audit cases: 13 passed; local ARM scrolling remains a separately tracked timing/environment limitation.
+- Published APK: 2,567,819 bytes, SHA-256 `4362f62a7d9ec6e62c750487e3a240817b427178f26134258ac46e0ba39fe780`. Package/updater metadata/checksum/original signer/manifest verified. Full 0.8.3/0.8.4 release bodies are backfilled and embedded in the 0.8.5 notes. Physical hardware, full accessibility, protected-source/live network and slow-worker termination stress remain open; tracking is deferred.
