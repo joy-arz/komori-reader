@@ -14,10 +14,11 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-class UpdateViewModel(application: Application) : AndroidViewModel(application) {
-    val updater = AppUpdates(application)
+class UpdateViewModel @JvmOverloads constructor(application: Application, val updater: AppUpdates = AppUpdates(application)) : AndroidViewModel(application) {
     val state = MutableStateFlow(UpdateState(update = updater.cachedUpdate(), channel = updater.channel(), snoozedUntil = updater.snoozedUntil()))
     private var lastCheck = -60_000L
+    private var checkJob: kotlinx.coroutines.Job? = null
+    private var checkGeneration = 0L
 
     fun check(manual: Boolean = false) {
         if (state.value.snoozedUntil != 0L && state.value.snoozedUntil <= System.currentTimeMillis())
@@ -30,9 +31,11 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
         lastCheck = SystemClock.elapsedRealtime()
         updater.recordAttempt()
         state.value = old.copy(checking = true, message = "Checking GitHub…")
-        viewModelScope.launch {
+        val generation = ++checkGeneration
+        checkJob = viewModelScope.launch {
             try {
                 val update = updater.check()
+                if (generation != checkGeneration) return@launch
                 updater.recordSuccess()
                 state.value =
                     UpdateState(
@@ -55,6 +58,7 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                if (generation != checkGeneration) return@launch
                 state.value =
                     old.copy(checking = false, message = "Couldn't check for updates. ${e.message.orEmpty()}")
             }
@@ -105,6 +109,8 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
 
     fun channel(value: String) {
         if (state.value.downloading) return
+        checkGeneration++
+        checkJob?.cancel()
         updater.channel(value)
         state.value = UpdateState(channel = value, snoozedUntil = updater.snoozedUntil())
         check(true)

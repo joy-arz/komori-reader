@@ -13,6 +13,8 @@ data class CategoryMembership(val mangaId: String, val categoryId: String)
 @Entity(tableName = "chapter_index", indices = [Index("mangaId"), Index("chapterKey")])
 data class ChapterIndex(@PrimaryKey val releaseId: String, val mangaId: String, val chapterKey: String, val language: String, val active: Boolean = true)
 
+data class LibraryLanguageCount(val mangaId: String, val language: String, val total: Int, val unread: Int)
+
 data class LibraryCount(val mangaId: String, val total: Int, val unread: Int)
 
 @Entity(tableName = "library_updates", primaryKeys = ["mangaId", "releaseId"], indices = [Index("detectedAt")])

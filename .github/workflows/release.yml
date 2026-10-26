@@ -36,6 +36,8 @@ jobs:
           echo "VERSION_NAME=${TAG#v}" >> "$GITHUB_ENV"
           echo "VERSION_CODE=$((100 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
           echo "SIGNING_STORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+      - name: Require complete release notes
+        run: python3 scripts/release_notes.py --version "$VERSION_NAME" --output "$RUNNER_TEMP/release-notes.md"
       - name: Validate release identity with JVM keytool
         env:
           SIGNING_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
@@ -66,8 +68,7 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          printf '## Install on Android\n\nDownload **komori-%s.apk** from Assets below (not the source-code ZIP). Android 8.0 or newer. Install over your existing Komori app to preserve your library.\n\n' "$VERSION_NAME" > "$RUNNER_TEMP/release-notes.md"
-          args=(--verify-tag --title "Komori ${VERSION_NAME}" --notes-file "$RUNNER_TEMP/release-notes.md" --generate-notes)
+          args=(--verify-tag --title "Komori ${VERSION_NAME}" --notes-file "$RUNNER_TEMP/release-notes.md")
           if [[ "$VERSION_NAME" == *-* ]]; then
             args+=(--prerelease)
           else

@@ -40,6 +40,7 @@ internal object WebtoonStripCache {
         displayWidth: Int,
     ): Bitmap =
         withContext(Dispatchers.IO) {
+          ReaderCacheFiles.leased(file) {
             val key = key(file, top, bottom, displayWidth)
             cache.get(key)
                 ?: decode.withLock {
@@ -67,5 +68,6 @@ internal object WebtoonStripCache {
                             }
                         }
                 }
+          }
         }
 }

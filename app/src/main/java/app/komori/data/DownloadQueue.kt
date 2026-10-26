@@ -12,6 +12,8 @@ import kotlinx.coroutines.sync.withLock
 
 private val queueScheduling = Mutex()
 
+internal suspend fun <T> withDownloadQueueMutation(block: suspend () -> T): T = queueScheduling.withLock { block() }
+
 /** Queue order belongs to Room. Only the head needs a new WorkManager request. */
 suspend fun kickDownloadQueue(context: Context, recoverInterrupted: Boolean = false) = queueScheduling.withLock {
     val app = context.applicationContext as KomoriApp

@@ -98,6 +98,7 @@ fun WebtoonReader(
     var window by remember { mutableStateOf(listOf(chapter)) }
     val images = remember { mutableStateMapOf<String, ScrollImage>() }
     val list = remember { LazyListState(initialPage + 1) }
+    val cacheOwner = remember { Any() }
     var restored by remember { mutableStateOf(false) }
     var nextError by remember { mutableStateOf<Exception?>(null) }
     var nextLoading by remember { mutableStateOf(false) }
@@ -223,11 +224,20 @@ fun WebtoonReader(
                         }
                     }
         }
+        LaunchedEffect(list, window) {
+            snapshotFlow { list.layoutInfo.visibleItemsInfo.mapNotNull { item ->
+                val parts = item.key.toString().split('|')
+                if (parts.size != 3) null else window.find { it.id == parts[0] }?.let { release ->
+                    parts[1].toIntOrNull()?.let { release to it }
+                }
+            }.distinct() }.distinctUntilChanged().collect { vm.pinReaderPages(cacheOwner, it) }
+        }
         DisposableEffect(Unit) {
             onDispose {
+                vm.releaseReaderPages(cacheOwner)
                 if (restored)
                     position()?.let { (release, page, fraction) ->
-                        vm.scrollChapterPosition(release, page, fraction, session)
+                        vm.scrollChapterPosition(release, page, fraction, session, flush = true)
                     }
             }
         }
@@ -260,6 +270,11 @@ fun WebtoonReader(
                     val image = images[imageKey]
                     if (image == null)
                         item(key = "$imageKey|0") {
+                            val pageLease = remember { Any() }
+                            DisposableEffect(release.id, page) {
+                                vm.pinReaderPages(pageLease, listOf(release to page))
+                                onDispose { vm.releaseReaderPages(pageLease) }
+                            }
                             var failure by remember { mutableStateOf<Exception?>(null) }
                             var attempt by remember { mutableIntStateOf(0) }
                             val countdown =
@@ -326,6 +341,11 @@ fun WebtoonReader(
                     else
                         repeat(image.strips) { strip ->
                             item(key = "$imageKey|$strip") {
+                                val pageLease = remember { Any() }
+                                DisposableEffect(release.id, page) {
+                                    vm.pinReaderPages(pageLease, listOf(release to page))
+                                    onDispose { vm.releaseReaderPages(pageLease) }
+                                }
                                 val top = strip * STRIP_HEIGHT
                                 val bottom = minOf(top + STRIP_HEIGHT, image.height)
                                 var availableFile by
@@ -398,7 +418,7 @@ fun WebtoonReader(
                                         bitmap?.let {
                                             Image(
                                                 it.asImageBitmap(),
-                                                null,
+                                                "${release.label}, page ${page + 1}, part ${strip + 1} of ${image.strips}",
                                                 Modifier.fillMaxSize().clickable { onTap() },
                                                 contentScale = ContentScale.FillBounds,
                                             )

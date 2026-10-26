@@ -27,6 +27,12 @@ object ChapterFiles {
         entry(id).epoch.incrementAndGet()
     }
 
+    internal suspend fun <T> tryLocked(id: String, block: suspend () -> T): T? {
+        val mutex = entry(id).mutex
+        if (!mutex.tryLock()) return null
+        try { return block() } finally { mutex.unlock() }
+    }
+
     suspend fun <T> locked(id: String, block: suspend () -> T): T =
         entry(id).mutex.withLock { block() }
 }

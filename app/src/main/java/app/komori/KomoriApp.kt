@@ -11,9 +11,16 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 
 class KomoriApp : Application(), ImageLoaderFactory {
+    internal var startupRecovery: kotlinx.coroutines.Job? = null
+        private set
+
     override fun onCreate() {
         super.onCreate()
-        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default).launch {
+        startupRecovery = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default).launch {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                app.komori.ui.ReaderCacheFiles.clean(java.io.File(cacheDir, "reader"))
+                LocalFiles.recoverInterrupted(this@KomoriApp)
+            }
             val current = settings.flow.first()
             LibraryCheckScheduler.schedule(this@KomoriApp, current)
             BackupScheduler.schedule(this@KomoriApp, current)

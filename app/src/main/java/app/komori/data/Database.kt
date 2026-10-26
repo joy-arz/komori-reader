@@ -3,6 +3,7 @@ package app.komori.data
 import androidx.room.*
 import app.komori.domain.Release
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -115,7 +116,7 @@ interface LibraryDao {
     @Query("SELECT id, mangaId FROM chapters") suspend fun chapterOwners(): List<BackupChapterOwner>
     @Query("SELECT releaseId AS id, mangaId FROM downloads") suspend fun downloadOwners(): List<BackupChapterOwner>
 
-    @Query("SELECT * FROM manga ORDER BY title") fun observeManga(): Flow<List<Manga>>
+    @Query("SELECT * FROM manga WHERE id IN (SELECT mangaId FROM shelf UNION SELECT mangaId FROM downloads UNION SELECT mangaId FROM progress) ORDER BY title") fun observeManga(): Flow<List<Manga>>
 
     @Query("SELECT * FROM shelf ORDER BY touched DESC") fun observeShelf(): Flow<List<Shelf>>
 
@@ -171,14 +172,20 @@ interface LibraryDao {
     @Query("SELECT * FROM migration_links ORDER BY fromId, toId") suspend fun backupLinks(): List<MigrationLink>
     @Query("SELECT * FROM migration_links") fun observeMigrationLinks(): Flow<List<MigrationLink>>
     @Upsert suspend fun putLink(link: MigrationLink)
-    @Query("""SELECT c.mangaId, COUNT(DISTINCT c.chapterKey) AS total,
+    @Query("""SELECT c.mangaId, c.language, COUNT(DISTINCT c.chapterKey) AS total,
         COUNT(DISTINCT CASE WHEN p.chapterKey IS NULL THEN c.chapterKey ELSE NULL END) AS unread
         FROM chapter_index c LEFT JOIN (SELECT DISTINCT chapterKey FROM progress WHERE completed = 1) p ON p.chapterKey = c.chapterKey
-        LEFT JOIN chapter_preferences t ON t.mangaId = c.mangaId
-        WHERE c.active = 1 AND (COALESCE(NULLIF(t.language, ''), CASE WHEN instr(c.mangaId, ':') > 0 THEN 'en' ELSE :language END) = '*'
-            OR c.language = COALESCE(NULLIF(t.language, ''), CASE WHEN instr(c.mangaId, ':') > 0 THEN 'en' ELSE :language END))
-        GROUP BY c.mangaId""")
-    fun observeLibraryCounts(language: String): Flow<List<LibraryCount>>
+        WHERE c.active = 1 GROUP BY c.mangaId, c.language""")
+    fun observeLibraryLanguageCounts(): Flow<List<LibraryLanguageCount>>
+
+    fun observeLibraryCounts(language: String): Flow<List<LibraryCount>> =
+        combine(observeLibraryLanguageCounts(), observeTitlePreferences()) { rows, preferences ->
+            val overrides = preferences.associate { it.mangaId to it.language }
+            rows.filter {
+                val effective = sourceReadingLanguage(it.mangaId, language, overrides[it.mangaId].orEmpty())
+                effective == "*" || effective == it.language
+            }.groupBy { it.mangaId }.map { (id, counts) -> LibraryCount(id, counts.sumOf { it.total }, counts.sumOf { it.unread }) }
+        }
     @Query("SELECT * FROM library_updates ORDER BY detectedAt DESC, mangaId, releaseId") fun observeLibraryUpdates(): Flow<List<LibraryUpdate>>
     @Upsert suspend fun putLibraryUpdates(rows: List<LibraryUpdate>)
     @Query("UPDATE library_updates SET seen = 1 WHERE mangaId = :id") suspend fun markUpdatesSeen(id: String)

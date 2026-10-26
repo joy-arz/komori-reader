@@ -13,6 +13,10 @@ adb shell dumpsys window > device-diagnostics/windows-before.txt
 
 test_status=0
 ./gradlew connectedDebugAndroidTest --no-daemon || test_status=$?
+if [[ "$test_status" == 0 && "${KOMORI_DISPOSABLE_EMULATOR:-0}" == 1 ]]; then
+    python3 scripts/check_interrupted_cache.py || test_status=$?
+fi
+adb logcat -d -s KomoriBenchmark:I > device-diagnostics/progress-benchmark.txt || true
 for capture in download-maintenance scheduled-backup-settings reader-manual-refresh navigation-failure facet-failure; do
     adb pull "/data/local/tmp/komori-$capture.png" "device-diagnostics/$capture.png" || true
 done

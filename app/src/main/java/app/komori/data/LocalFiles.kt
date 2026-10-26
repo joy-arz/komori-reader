@@ -18,12 +18,15 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
 import org.json.JSONObject
 
 private const val LOCAL_LIMIT = 512L * 1024 * 1024
 private const val MAX_LOCAL_PAGES = 10000
-private val localExtensions = setOf("jpg", "jpeg", "png", "webp")
+private val localExtensions = setOf("jpg", "jpeg", "png", "webp", "gif", "avif")
+private const val ARCHIVE_LIMIT = LOCAL_LIMIT + 4L * 1024 * 1024
 
 fun naturalFileKey(name: String): String = Regex("\\d+").replace(name.lowercase(Locale.ROOT)) { match ->
     val digits = match.value.trimStart('0').ifEmpty { "0" }
@@ -44,15 +47,27 @@ private suspend fun copyLocalBytes(input: InputStream, output: OutputStream, lim
     return total
 }
 
-private class LimitedArchive(private val input: InputStream) : InputStream() {
+internal class LimitedArchive(private val input: InputStream) : InputStream() {
     private var total = 0L
     override fun read(): Int = input.read().also { if (it >= 0) count(1) }
     override fun read(bytes: ByteArray, offset: Int, length: Int): Int = input.read(bytes, offset, length).also { if (it > 0) count(it) }
-    private fun count(size: Int) { total += size; if (total > 256L * 1024 * 1024) throw ContentFailure("CBZ archives are limited to 256 MB compressed.") }
+    private fun count(size: Int) { total += size; if (total > ARCHIVE_LIMIT) throw ContentFailure("CBZ archives are limited to 516 MiB compressed.") }
     override fun close() = input.close()
 }
 
 object LocalFiles {
+    private val imports = Mutex()
+
+    suspend fun recoverInterrupted(app: KomoriApp) = imports.withLock {
+        File(app.filesDir, "local-staging").listFiles().orEmpty().forEach { it.deleteRecursively() }
+        File(app.filesDir, "chapters").listFiles().orEmpty().forEach { directory ->
+            ChapterFiles.tryLocked(directory.name) {
+                if (sourceKey(directory.name) == "local" && app.dao.download(directory.name) == null) directory.deleteRecursively()
+                else directory.listFiles().orEmpty().filter { it.extension == "part" }.forEach { it.delete() }
+            }
+        }
+    }
+
     suspend fun importArchive(app: KomoriApp, uri: Uri, progress: (String) -> Unit): Manga = withContext(Dispatchers.IO) {
         val title = displayName(app, uri).substringBeforeLast('.').ifBlank { "Imported comic" }.take(1000)
         stage(app, title, progress) { directory ->
@@ -80,7 +95,7 @@ object LocalFiles {
                         ensureSpace(directory)
                         val file = File(directory, "staged-${pages.size}")
                         total += file.outputStream().use { copyLocalBytes(zip, it, minOf(MAX_IMAGE_BYTES, LOCAL_LIMIT - total)) }
-                        if (!validImage(file)) throw ContentFailure("CBZ contains an unreadable JPEG, PNG or WebP page.")
+                        if (!validImage(file)) throw ContentFailure("CBZ contains an unreadable image page on this device.")
                         pages += name to file
                         progress("Importing ${pages.size} pages")
                     }
@@ -135,7 +150,7 @@ object LocalFiles {
         }
     }
 
-    private suspend fun stage(app: KomoriApp, title: String, progress: (String) -> Unit, read: suspend (File) -> List<Pair<String, File>>): Manga {
+    private suspend fun stage(app: KomoriApp, title: String, progress: (String) -> Unit, read: suspend (File) -> List<Pair<String, File>>): Manga = imports.withLock {
         val token = UUID.randomUUID().toString()
         val stage = File(app.filesDir, "local-staging/$token").apply { if (!mkdirs()) throw StorageFailure("Could not prepare local import storage.") }
         val chapterId = sourceId("local", "/chapter/$token/")
@@ -143,7 +158,7 @@ object LocalFiles {
         var committed = false
         try {
             val pages = read(stage).sortedWith(compareBy<Pair<String, File>> { naturalFileKey(it.first) }.thenBy { it.first })
-            if (pages.isEmpty()) throw ContentFailure("No supported JPEG, PNG or WebP pages were found.")
+            if (pages.isEmpty()) throw ContentFailure("No supported JPEG, PNG, WebP, GIF or AVIF pages were found.")
             pages.forEachIndexed { index, (_, file) ->
                 val target = File(stage, "$index.img")
                 if (!file.renameTo(target)) throw StorageFailure("Could not order imported pages.")
@@ -167,7 +182,7 @@ object LocalFiles {
                 }
                 committed = true
             }
-            return manga
+            manga
         } catch (_: java.util.zip.ZipException) {
             throw ContentFailure("CBZ contains invalid entries or corrupt ZIP data.")
         } finally {
@@ -204,7 +219,7 @@ object LocalFiles {
                         "application/vnd.comicbook+zip", exportName(download))
                 } ?: throw ContentFailure("Choose an export document or folder.")
                 val output = app.contentResolver.openOutputStream(destination, "wt") ?: throw StorageFailure("Could not open the export destination.")
-                output.use { target -> archive.inputStream().use { copyLocalBytes(it, target, LOCAL_LIMIT + 4L * 1024 * 1024) } }
+                output.use { target -> archive.inputStream().use { copyLocalBytes(it, target, ARCHIVE_LIMIT) } }
             } finally { archive.delete() }
         }
     }

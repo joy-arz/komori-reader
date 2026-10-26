@@ -22,13 +22,17 @@ class ReaderViewModel(
     application: Application,
     private val authorPage: (suspend (Creator, Int, BrowseFilter) -> BrowsePage)?,
     private val savedState: SavedStateHandle,
+    private val pageSource: Sources? = null,
 ) : AndroidViewModel(application) {
     constructor(application: Application) : this(application, null, SavedStateHandle())
     constructor(application: Application, savedState: SavedStateHandle) : this(application, null, savedState)
     constructor(application: Application, authorPage: (suspend (Creator, Int, BrowseFilter) -> BrowsePage)?) : this(application, authorPage, SavedStateHandle())
 
+    internal constructor(application: Application, source: Sources) : this(application, null, SavedStateHandle(), source)
+
     val app = application as KomoriApp
     private val dao = app.dao
+    private val downloadCoordinator = DownloadCoordinator(app)
     val shelf = dao.observeShelf().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val library = dao.observeManga().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val creators =
@@ -102,10 +106,13 @@ class ReaderViewModel(
     private var searchJob: Job? = null
     private var detailJob: Job? = null
     private var pageJob: Job? = null
+    private val readerCacheOwner = Any()
     private var prefetchJob: Job? = null
     private var prefetchAnchor: Pair<String, Int>? = null
     private val pageManifests = java.util.concurrent.ConcurrentHashMap<String, List<String>>()
+    private val manifestRequests = SharedRequests<List<String>>(viewModelScope)
     private val mutation = Mutex()
+    private val readerProgressStore = ReaderProgressStore(dao, mutation)
 
     val currentTab = MutableStateFlow(0)
     val navigationEntry = MutableStateFlow(0L)
@@ -165,6 +172,7 @@ class ReaderViewModel(
     val authorFeed = MutableStateFlow(AuthorFeed())
     private var authorContext: List<Creator>? = null
     private var authorCatalog: AuthorCatalog? = null
+    private var authorWorkFilter = AuthorWorkFilter()
     private var authorSort = AuthorSort.LATEST
     private var authorJob: Job? = null
 
@@ -173,7 +181,7 @@ class ReaderViewModel(
         val current = authorContext ?: return
         authorContext = null
         app.source.clearCreatorMetadata()
-        showAuthorWorks(current, authorSort)
+        showAuthorWorks(current, authorSort, authorWorkFilter)
     }
 
     fun refreshDiscover() { if (!loading.value) search() }
@@ -186,16 +194,7 @@ class ReaderViewModel(
         viewModelScope.launch {
             try {
                 val removed = withContext(Dispatchers.IO) {
-                    var bytes = 0L
-                    val files = File(app.cacheDir, "reader").listFiles().orEmpty().filter { it.extension == "img" }
-                    for (file in files) {
-                        currentCoroutineContext().ensureActive()
-                        val chapter = reader.value?.id
-                        if (chapter != null) break
-                        val size = file.length()
-                        if (file.delete()) bytes += size
-                    }
-                    bytes
+                    ReaderCacheFiles.clean(File(app.cacheDir, "reader"), images = true)
                 }
                 notice.value = "Cleared ${storageLabel(removed)} of cached pages. Downloaded chapters were kept."
             } catch (e: CancellationException) { throw e }
@@ -212,6 +211,7 @@ class ReaderViewModel(
         if (!readerReady.value && pageJob?.isActive == true) return
         refreshingReader.value = true
         // Offline pages remain authoritative. Only transient manifests and online cache are refreshed.
+        manifestRequests.invalidate("${current.id}-${settings.value.saver}")
         pageManifests.remove("${current.id}-${settings.value.saver}")
         pageRetries.clear()
         prefetchJob?.cancel()
@@ -235,11 +235,11 @@ class ReaderViewModel(
         }
     }
 
-    fun showAuthorWorks(creators: List<Creator>, sort: AuthorSort = AuthorSort.LATEST) {
-        if (authorContext == creators && authorSort == sort) return
+    fun showAuthorWorks(creators: List<Creator>, sort: AuthorSort = AuthorSort.LATEST, workFilter: AuthorWorkFilter = AuthorWorkFilter()) {
+        if (authorContext == creators && authorSort == sort && authorWorkFilter == workFilter) return
         val current = authorCatalog
         if (
-            authorContext == creators &&
+            authorContext == creators && authorWorkFilter == workFilter &&
                 current != null &&
                 (authorSort == AuthorSort.POPULAR) == (sort == AuthorSort.POPULAR)
         ) {
@@ -251,21 +251,30 @@ class ReaderViewModel(
         authorJob?.cancel()
         authorContext = creators.toList()
         authorSort = sort
+        authorWorkFilter = workFilter
         authorCatalog =
-            AuthorCatalog(creators, sort) { creator, page ->
+            AuthorCatalog(creators, sort, workFilter) { creator, page ->
                 val key = sourceKey(creator.id)
                 require(key in setOf("mangadex", "zap", "nhentai", "imhentai")) {
                     "This source does not provide a creator catalog."
                 }
-                val filter = BrowseFilter(sort = sort.sourceSort(key))
-                authorPage?.invoke(creator, page, filter)
+                val filter = BrowseFilter(sort = sort.sourceSort(key), language = workFilter.nativeLanguage)
+                val result = authorPage?.invoke(creator, page, filter)
                     ?: app.source.browse(key, "", page, filter, creator)
+                if (workFilter.needsMetadata && authorPage == null) {
+                    val enriched = mutableListOf<Manga>()
+                    for (chunk in result.titles.chunked(2)) enriched += coroutineScope {
+                        chunk.map { async { app.source.details(it) } }.awaitAll()
+                    }
+                    result.copy(titles = enriched)
+                } else result
             }
         authorFeed.value =
             AuthorFeed(
                 hasMore = creators.isNotEmpty(),
                 context = creators.map { it.id },
                 sort = sort,
+                filter = workFilter,
             )
         loadAuthorWorks()
     }
@@ -286,6 +295,7 @@ class ReaderViewModel(
                             errors,
                             authorContext.orEmpty().map { it.id },
                             catalog.sort,
+                            authorWorkFilter,
                         )
                 }
             }
@@ -931,6 +941,7 @@ class ReaderViewModel(
                         requestedPage ?: if (restart || !settings.value.resume || previous?.completed == true) 0
                         else previous?.page ?: 0
                     readerPage.value = page.coerceIn(0, (resolved.pages - 1).coerceAtLeast(0))
+                    pinReaderPages(readerCacheOwner, listOf(resolved to readerPage.value))
                     readerScroll.value =
                         if (
                             page == previous?.page &&
@@ -962,26 +973,24 @@ class ReaderViewModel(
             .forEach { pageManifests.remove(it) }
     }
 
-    suspend fun resolveChapter(chapter: Release): Release {
+    private suspend fun manifestFor(id: String, saver: Boolean): List<String> {
+        val key = "$id-$saver"
+        return pageManifests[key] ?: manifestRequests.get(key) {
+            pageManifests[key] ?: (pageSource ?: app.source).pages(id, saver).also {
+                if (it.isEmpty()) throw ContentFailure("This chapter has no available pages.")
+                rememberPages(key, it)
+            }
+        }
+    }
+
+    suspend fun resolveChapter(chapter: Release, speculative: Boolean = false): Release {
         if (chapter.pages >= 0) return chapter
-        val key = "${chapter.id}-${settings.value.saver}"
-        val urls =
-            pageManifests[key]
-                ?: run {
-                    pageRetries.check("manifest-$key")
-                    try {
-                        app.source.pages(chapter.id, settings.value.saver).also {
-                            if (it.isEmpty())
-                                throw ContentFailure("This chapter has no available pages.")
-                            rememberPages(key, it)
-                        }
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        throw pageRetries.failed("manifest-$key", e)
-                    }
-                }
-        return chapter.copy(pages = urls.size)
+        val saver = settings.value.saver
+        val key = "manifest-${chapter.id}-$saver"
+        if (!speculative) pageRetries.check(key)
+        try { return chapter.copy(pages = manifestFor(chapter.id, saver).size) }
+        catch (e: CancellationException) { throw e }
+        catch (e: Exception) { throw if (speculative) e else pageRetries.failed(key, e) }
     }
 
     fun resetPageRetries(chapter: Release, page: Int) {
@@ -1024,7 +1033,7 @@ class ReaderViewModel(
             .drop(1)
             .firstOrNull { it.key != chapter.key && it.readable }
 
-    fun scrollChapterPosition(chapter: Release, page: Int, fraction: Float, session: Int) {
+    fun scrollChapterPosition(chapter: Release, page: Int, fraction: Float, session: Int, flush: Boolean = false) {
         if (session != readerSession.value) return
         val previous = reader.value ?: return
         val oldPage = readerPage.value
@@ -1039,6 +1048,7 @@ class ReaderViewModel(
             readerSourceAction.value = false
         }
         readerPage.value = page
+        pinReaderPages(readerCacheOwner, listOf(chapter to page))
         readerScroll.value = fraction.coerceIn(0f, 1f)
         if (prefetchAnchor != (chapter.id to page)) prefetchAfter(chapter, page)
         task {
@@ -1047,7 +1057,7 @@ class ReaderViewModel(
                 if (passed.id == previous.id) oldPage else (passed.pages - 1).coerceAtLeast(0),
                 true,
             )
-            savePage(chapter, page, scroll = fraction.coerceIn(0f, 1f), preserveCompleted = true)
+            savePage(chapter, page, scroll = fraction.coerceIn(0f, 1f), preserveCompleted = true, flush = flush)
         }
     }
 
@@ -1183,19 +1193,21 @@ class ReaderViewModel(
         completed: Boolean = false,
         scroll: Float = 0f,
         preserveCompleted: Boolean = false,
+        flush: Boolean = false,
     ) {
-        mutation.withLock {
-            val isCompleted =
-                completed || (preserveCompleted && dao.progress(chapter.id)?.completed == true)
-            dao.putProgress(
-                Progress(chapter.id, chapter.mangaId, chapter.key, page, isCompleted, scroll)
-            )
-            val old = dao.shelf(chapter.mangaId) ?: Shelf(chapter.mangaId)
-            dao.putShelf(old.copy(lastRelease = chapter.id, touched = System.currentTimeMillis()))
-        }
+        readerProgressStore.save(chapter, page, completed, scroll, preserveCompleted, flush)
     }
 
-    suspend fun pageFileFor(chapter: Release, page: Int): File {
+    fun pinReaderPages(owner: Any, pages: List<Pair<Release, Int>>) {
+        ReaderCacheFiles.pin(owner, pages.flatMap { (chapter, page) ->
+            listOf(true, false).map { saver -> File(app.cacheDir, "reader/${chapter.id}-$page-$saver.img") }
+        })
+    }
+
+    fun releaseReaderPages(owner: Any) { ReaderCacheFiles.release(owner) }
+
+    suspend fun pageFileFor(chapter: Release, page: Int, speculative: Boolean = false): File {
+        val saver = settings.value.saver
         // Disk hits must never queue behind an unrelated slow network request.
         val cached =
             withContext(Dispatchers.IO) {
@@ -1203,7 +1215,7 @@ class ReaderViewModel(
                 else {
                     val offline = pageFile(app, chapter.id, page)
                     val online =
-                        File(app.cacheDir, "reader/${chapter.id}-$page-${settings.value.saver}.img")
+                        File(app.cacheDir, "reader/${chapter.id}-$page-${saver}.img")
                     when {
                         validImage(offline) -> offline
                         validImage(online) ->
@@ -1229,20 +1241,15 @@ class ReaderViewModel(
                 val repairVersion = ChapterFiles.version(chapter.id)
                 if (sourceKey(chapter.mangaId) == "local") throw ContentFailure("This local page is unavailable. Import the comic again to restore its files.")
                 val cacheDir = File(app.cacheDir, "reader").apply { mkdirs() }
-                val target = File(cacheDir, "${chapter.id}-$page-${settings.value.saver}.img")
+                val target = File(cacheDir, "${chapter.id}-$page-${saver}.img")
                 if (validImage(target) && !repairMarker(app, chapter.id, page).exists()) {
                     ReaderCacheAccess.touch(target)
                     return@withContext target
                 }
-                val retryKey = "$key-${settings.value.saver}"
-                pageRetries.check(retryKey)
+                val retryKey = "$key-${saver}"
+                if (!speculative) pageRetries.check(retryKey)
                 try {
-                    val manifestKey = "${chapter.id}-${settings.value.saver}"
-                    val pageUrls =
-                        pageManifests[manifestKey]
-                            ?: app.source.pages(chapter.id, settings.value.saver).also {
-                                rememberPages(manifestKey, it)
-                            }
+                    val pageUrls = manifestFor(chapter.id, saver)
                     if (reader.value?.id == chapter.id) pageCount.value = pageUrls.size
                     val url =
                         pageUrls.getOrNull(page)
@@ -1250,11 +1257,11 @@ class ReaderViewModel(
                                 "Page is no longer available. Reopen the chapter."
                             )
                     val temporary = storageOperation {
-                        File.createTempFile("page-", ".part", cacheDir)
+                        ReaderCacheFiles.temporary(cacheDir)
                     }
                     try {
                         imageConnections.withPermit {
-                            app.source.transferPage(chapter.id, url, temporary)
+                            (pageSource ?: app.source).transferPage(chapter.id, url, temporary)
                         }
                         coroutineContext.ensureActive()
                         if (repairMarker(app, chapter.id, page).exists())
@@ -1287,31 +1294,15 @@ class ReaderViewModel(
                                     }
                                 }
                             }
-                        if (!temporary.renameTo(target))
-                            throw StorageFailure("Could not cache page")
-                        val visible = reader.value?.let {
-                            File(cacheDir, "${it.id}-${readerPage.value}-${settings.value.saver}.img")
-                        }
-                        // Speculative lookahead must not evict the page currently being displayed.
-                        var total = cacheDir.listFiles()?.sumOf { it.length() } ?: 0L
-                        cacheDir
-                            .listFiles()
-                            ?.filter { it != target && it != visible && it.extension == "img" }
-                            ?.sortedBy { ReaderCacheAccess.lastAccess(it) }
-                            ?.forEach {
-                                if (total > settings.value.readerCacheMb.toLong() * 1024 * 1024) {
-                                    total -= it.length()
-                                    it.delete()
-                                }
-                            }
+                        ReaderCacheFiles.publish(temporary, target, settings.value.readerCacheMb.toLong() * 1024 * 1024)
                         target
                     } finally {
-                        temporary.delete()
+                        ReaderCacheFiles.discard(temporary)
                     }
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    throw pageRetries.failed(retryKey, e)
+                    throw if (speculative) e else pageRetries.failed(retryKey, e)
                 }
             }
         }
@@ -1349,7 +1340,7 @@ class ReaderViewModel(
         prefetchJob = viewModelScope.launch {
             try {
                 if (count == 0) return@launch
-                pageFileFor(chapter, page)
+                pageFileFor(chapter, page, speculative = true)
                 prefetchReaderPages(chapter, page, count,
                     nextChapter = { current ->
                         if (!settings.value.continuousChapters || readerSession.value != session) null
@@ -1357,8 +1348,8 @@ class ReaderViewModel(
                             settings.value.gapWarnings && ReaderContinuity.gap(current, it) != null
                         }
                     },
-                    resolve = { resolveChapter(it) },
-                    fetch = { target, nextPage -> pageFileFor(target, nextPage); Unit },
+                    resolve = { resolveChapter(it, speculative = true) },
+                    fetch = { target, nextPage -> pageFileFor(target, nextPage, speculative = true); Unit },
                 )
             } catch (e: CancellationException) {
                 throw e
@@ -1371,6 +1362,7 @@ class ReaderViewModel(
     fun scrollPosition(chapter: Release, page: Int, fraction: Float) {
         if (reader.value?.id != chapter.id) return
         readerPage.value = page
+        pinReaderPages(readerCacheOwner, listOf(chapter to page))
         readerScroll.value = fraction.coerceIn(0f, 1f)
         if (prefetchAnchor != (chapter.id to page)) prefetchAfter(chapter, page)
         task {
@@ -1385,6 +1377,7 @@ class ReaderViewModel(
         prefetchAnchor = null
         pageJob?.cancel()
         readerPage.value = index
+        pinReaderPages(readerCacheOwner, listOf(chapter to index))
         readerScroll.value = 0f
         pageJob =
             viewModelScope.launch {
@@ -1446,7 +1439,9 @@ class ReaderViewModel(
         prefetchJob?.cancel()
         prefetchAnchor = null
         pageJob?.cancel()
+        manifestRequests.cancel()
         reader.value = null
+        ReaderCacheFiles.release(readerCacheOwner)
         readerFile.value = null
     }
 
@@ -1463,21 +1458,7 @@ class ReaderViewModel(
 
     fun pause(download: Download) = task { stopDownload(download, "Paused") }
 
-    private suspend fun stopDownload(download: Download, state: String) {
-        withContext(Dispatchers.IO) {
-            WorkManager.getInstance(app)
-                .cancelUniqueWork("download-${download.releaseId}")
-                .result
-                .get()
-        }
-        ChapterFiles.locked(download.releaseId) {
-            ChapterFiles.invalidate(download.releaseId)
-            dao.download(download.releaseId)?.let { latest ->
-                if (latest.state != "Complete") dao.putDownload(latest.copy(state = state))
-            }
-        }
-        kickDownloadQueue(app)
-    }
+    private suspend fun stopDownload(download: Download, state: String) = downloadCoordinator.stop(download, state)
 
     fun cancelDownload(download: Download) = task {
         if (download.state == "Complete") return@task
@@ -1485,16 +1466,7 @@ class ReaderViewModel(
     }
 
     fun moveDownload(download: Download, step: Int? = null) = task {
-        app.database.withTransaction {
-            val rows = dao.orderedQueue().toMutableList()
-            val index = rows.indexOfFirst { it.releaseId == download.releaseId }
-            if (index >= 0) {
-                val target = if (step == null) 0 else (index + step).coerceIn(0, rows.lastIndex)
-                rows.add(target, rows.removeAt(index))
-                rows.forEachIndexed { rank, row -> dao.queuePosition(row.releaseId, rank.toLong()) }
-            }
-        }
-        kickDownloadQueue(app)
+        downloadCoordinator.move(download, step)
         notice.value = "Queue order updated. The current chapter finishes first."
     }
 
@@ -1502,25 +1474,7 @@ class ReaderViewModel(
         dao.chapter(download.releaseId)?.release()?.let { enqueueDownload(app, it, settings.value) }
     }
 
-    fun deleteDownload(download: Download) = task {
-        withContext(Dispatchers.IO) {
-            WorkManager.getInstance(app)
-                .cancelUniqueWork("download-${download.releaseId}")
-                .result
-                .get()
-            ChapterFiles.locked(download.releaseId) {
-                ChapterFiles.invalidate(download.releaseId)
-                if (
-                    !chapterDirectory(app, download.releaseId).let {
-                        !it.exists() || it.deleteRecursively()
-                    }
-                )
-                    throw IOException("Could not delete the downloaded chapter. Please retry.")
-                dao.removeDownload(download.releaseId)
-            }
-        }
-        kickDownloadQueue(app)
-    }
+    fun deleteDownload(download: Download) = task { downloadCoordinator.delete(download) }
     @OptIn(kotlinx.coroutines.FlowPreview::class)
     private fun observeNavigation() {
         viewModelScope.launch {

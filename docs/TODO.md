@@ -1,6 +1,22 @@
 # Komori development backlog
 
-Updated October 27, 2026 for scrolling reader image stability. Published delivery is listed separately below. Checkboxes record implemented features with local checks; device/network acceptance that remains unverified stays open. See [the pass log](BACKLOG_PASS.md) for exact results and release gates. Tracking is deferred by the user until core acceptance.
+Updated October 27, 2026 for the 0.8.5 reliability and Authors-filter pass. Published delivery is listed separately below. Checkboxes record implemented features with local checks; device/network acceptance that remains unverified stays open. See [the pass log](BACKLOG_PASS.md) for exact results and release gates. Tracking is deferred by the user until core acceptance.
+
+## October 27 code review: implemented reliability fixes
+
+See [the October 27 code review](CODEBASE_REVIEW_2026-10-27.md) for conditions, evidence and acceptance checks. The seven fixes are implemented for 0.8.5; exact release acceptance is recorded in VALIDATION.md.
+
+- [x] Reclaim abandoned reader partials safely; include them in cache maintenance and reconcile interrupted local imports.
+- [x] Pin every visible/actively decoding reader file during eviction, with bounded cache-pressure behavior.
+- [x] Separate planned download execution slices from actual transfer-failure retry counts.
+- [x] Unify effective title language across unread counts, reading and migration, including Manhwa raw editions.
+- [x] Ensure failing author checks cannot starve other followed creators.
+- [x] Keep speculative preload errors out of the visible-page retry budget while honoring source cooldowns.
+- [x] Align CBZ import/export size and image-format contracts and add round-trip coverage.
+
+Additional delivery: shared chapter-manifest requests, reduced/checkpointed progress writes, scoped Library observation, screen/controller extraction, cancelable channel-safe updater checks, Authors source/language/category/tag/Library filters, and written full release notes. The 0.8.3/0.8.4 GitHub bodies have been backfilled without changing their assets or tags.
+
+Local Android 11 checks cover the 15 new regressions, including 150% font/RTL filter interaction, cache ownership, import round trips and queue-mutation/recovery serialization. CI now covers API 26/30/36. Physical-phone acceptance was explicitly deferred by the user in favor of emulator validation. Full TalkBack/landscape/hardware checks and real slow-network worker termination remain separate acceptance work below.
 
 ## Published delivery ledger
 

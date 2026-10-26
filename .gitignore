@@ -10,3 +10,5 @@ local.properties
 .idea/
 
 __pycache__/
+
+device-diagnostics/

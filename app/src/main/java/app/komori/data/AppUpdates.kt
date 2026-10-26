@@ -13,6 +13,7 @@ import java.io.File
 import java.io.IOException
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
@@ -133,10 +134,15 @@ OkHttpClient.Builder()
     ).also { shared = it }
 }
 
-class AppUpdates(private val context: Context) {
+private object UpdateSelection { val lock = Any() }
+
+open class AppUpdates(private val context: Context, private val transport: OkHttpClient? = null) {
     private val preferences = context.getSharedPreferences("app-updates", Context.MODE_PRIVATE)
     fun channel() = preferences.getString("channel", "stable").orEmpty().takeIf { it in listOf("stable", "preview") } ?: "stable"
-    fun channel(value: String) { require(value in listOf("stable", "preview")); preferences.edit().putString("channel", value).remove("available").apply() }
+    fun channel(value: String) = synchronized(UpdateSelection.lock) {
+        require(value in listOf("stable", "preview"))
+        preferences.edit().putString("channel", value).putLong("selectionRevision", preferences.getLong("selectionRevision", 0) + 1).remove("available").apply()
+    }
     fun snoozedUntil() = preferences.getLong("snoozedUntil", 0)
     fun snooze() = preferences.edit().putLong("snoozedUntil", System.currentTimeMillis() + TimeUnit.HOURS.toMillis(24)).apply()
     fun automaticCheckAllowed() = UpdatePolicy.automaticCheckAllowed(System.currentTimeMillis(), preferences.getLong("attempt", 0), preferences.getLong("success", 0))
@@ -145,25 +151,30 @@ class AppUpdates(private val context: Context) {
     fun cachedUpdate(): AppUpdate? = runCatching {
         val json = JSONObject(preferences.getString("available", null) ?: return@runCatching null)
         val tag = "v${json.getString("versionName")}"
-        UpdatePolicy.manifest(json, tag).copy(releaseNotes = json.optString("notes").take(8000)).takeIf {
+        UpdatePolicy.manifest(json, tag).copy(releaseNotes = json.optString("notes").take(32768)).takeIf {
             it.code > BuildConfig.VERSION_CODE && UpdatePolicy.compareVersions(it.version, BuildConfig.VERSION_NAME) > 0 && UpdatePolicy.acceptsChannel(tag, '-' in tag, channel())
         }
     }.getOrNull()
 
-    private fun remember(update: AppUpdate?) {
+    private suspend fun remember(update: AppUpdate?, revision: Long) {
+        val context = currentCoroutineContext()
+        synchronized(UpdateSelection.lock) {
+        context.ensureActive()
+        if (preferences.getLong("selectionRevision", 0) != revision) return
         val edit = preferences.edit()
         if (update == null) edit.remove("available") else edit.putString("available", JSONObject()
             .put("versionName", update.version).put("versionCode", update.code).put("packageName", "app.komori.reader")
-            .put("apkUrl", update.url).put("sha256", update.sha256).put("size", update.size).put("notes", update.releaseNotes.take(8000)).toString())
+            .put("apkUrl", update.url).put("sha256", update.sha256).put("size", update.size).put("notes", update.releaseNotes.take(32768)).toString())
         edit.apply()
+        }
     }
 
-    private val client = UpdateNetwork.client(context.applicationContext)
+    private val client = transport ?: UpdateNetwork.client(context.applicationContext)
     private val directory
         get() = File(context.cacheDir, "updates").apply { mkdirs() }
 
-    private fun text(url: String, maxBytes: Long): String {
-        client
+    private suspend fun text(url: String, maxBytes: Long): String {
+        return client
             .newCall(
                 Request.Builder()
                     .url(url)
@@ -172,8 +183,7 @@ class AppUpdates(private val context: Context) {
                     .header("User-Agent", "Komori/${BuildConfig.VERSION_NAME}")
                     .build()
             )
-            .execute()
-            .use { response ->
+            .readResponse { response ->
                 if (!response.isSuccessful)
                     throw IOException(
                         "GitHub update check failed (${response.code}). Try again later."
@@ -181,12 +191,13 @@ class AppUpdates(private val context: Context) {
                 val body = response.body ?: throw IOException("Empty update response")
                 val source = body.source()
                 if (source.request(maxBytes + 1)) throw IOException("Update response is too large")
-                return source.readUtf8()
+                source.readUtf8()
             }
     }
 
-    suspend fun check(): AppUpdate? =
+    open suspend fun check(): AppUpdate? =
         withContext(Dispatchers.IO) {
+            val (selectedChannel, revision) = synchronized(UpdateSelection.lock) { channel() to preferences.getLong("selectionRevision", 0) }
             val releases =
                 JSONArray(
                     text(
@@ -197,7 +208,7 @@ class AppUpdates(private val context: Context) {
             val candidate =
                 releases
                     .objects()
-                    .filter { !it.optBoolean("draft") && UpdatePolicy.acceptsChannel(it.optString("tag_name"), it.optBoolean("prerelease"), channel()) }
+                    .filter { !it.optBoolean("draft") && UpdatePolicy.acceptsChannel(it.optString("tag_name"), it.optBoolean("prerelease"), selectedChannel) }
                     .filter { release ->
                         runCatching {
                                 UpdatePolicy.compareVersions(
@@ -217,15 +228,15 @@ class AppUpdates(private val context: Context) {
                             a.getString("tag_name"),
                             b.getString("tag_name"),
                         )
-                    } ?: return@withContext null.also { remember(null) }
+                    } ?: return@withContext null.also { remember(null, revision) }
             val tag = candidate.getString("tag_name")
             val update =
                 UpdatePolicy.manifest(
                     JSONObject(text("$UPDATE_REPO/releases/download/$tag/update.json", 16 * 1024)),
                     tag,
                 )
-            if (update.code <= BuildConfig.VERSION_CODE) return@withContext null.also { remember(null) }
-            update.copy(releaseNotes = candidate.optString("body").take(8000)).also { remember(it) }
+            if (update.code <= BuildConfig.VERSION_CODE) return@withContext null.also { remember(null, revision) }
+            update.copy(releaseNotes = candidate.optString("body").take(32768)).also { remember(it, revision) }
         }
 
     fun unmetered(): Boolean {
@@ -240,7 +251,7 @@ class AppUpdates(private val context: Context) {
     ): File =
         withContext(Dispatchers.IO) {
             val target = File(directory, "update-${update.code}.apk")
-            directory.listFiles()?.filter { it != target }?.forEach { it.delete() }
+            directory.listFiles()?.filter { it != target && it.extension == "apk" }?.forEach { it.delete() }
             if (target.exists()) {
                 try {
                     verify(target, update)
@@ -249,9 +260,9 @@ class AppUpdates(private val context: Context) {
                     target.delete()
                 }
             }
-            val partial = File(directory, "update.part")
+            val partial = File.createTempFile("update-${update.code}-", ".part", directory)
             try {
-                client.newCall(Request.Builder().url(update.url).build()).execute().use { response
+                client.newCall(Request.Builder().url(update.url).build()).readResponse { response
                     ->
                     if (!response.isSuccessful)
                         throw IOException("Update download failed (${response.code}).")

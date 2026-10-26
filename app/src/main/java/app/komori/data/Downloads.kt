@@ -52,26 +52,17 @@ suspend fun enqueueDownload(
 ) {
     val app = context.applicationContext as KomoriApp
     if (app.dao.download(chapter.id)?.state in DownloadPolicy.activeStates) return
-    ChapterFiles.locked(chapter.id) {
-        val existing = app.dao.download(chapter.id)
-        if (existing?.state in (DownloadPolicy.activeStates + "Complete")) return@locked
-        withContext(kotlinx.coroutines.NonCancellable) {
+    withContext(kotlinx.coroutines.NonCancellable) {
+        ChapterFiles.locked(chapter.id) {
+            val existing = app.dao.download(chapter.id)
+            if (existing?.state in (DownloadPolicy.activeStates + "Complete")) return@locked
             app.database.withTransaction {
-            val position = app.dao.lastQueuePosition().let { if (it == Long.MAX_VALUE) throw IllegalStateException("Download queue position limit reached.") else it + 1 }
-            app.dao.putDownload(
-                existing?.copy(state = "Queued", error = "", queuePosition = position)
-                    ?: Download(
-                        chapter.id,
-                        chapter.mangaId,
-                        chapter.label,
-                        chapter.pages.coerceAtLeast(0),
-                        dataSaver = settings.saver,
-                        queuePosition = position,
-                    )
-            )
+                val position = app.dao.lastQueuePosition().let { if (it == Long.MAX_VALUE) throw IllegalStateException("Download queue position limit reached.") else it + 1 }
+                app.dao.putDownload(existing?.copy(state = "Queued", error = "", queuePosition = position)
+                    ?: Download(chapter.id, chapter.mangaId, chapter.label, chapter.pages.coerceAtLeast(0), dataSaver = settings.saver, queuePosition = position))
             }
-            kickDownloadQueue(app)
         }
+        kickDownloadQueue(app)
     }
 }
 
@@ -105,6 +96,9 @@ internal fun downloadRequest(
 
 class ChapterDownloadWorker(context: Context, params: WorkerParameters) :
     CoroutineWorker(context, params) {
+    internal var elapsedMillis: () -> Long = { android.os.SystemClock.elapsedRealtime() }
+    internal var continuation: suspend (KomoriApp, String, Long, Long) -> Unit = { app, id, failures, delay -> scheduleContinuation(app, id, failures, delay) }
+
     override suspend fun getForegroundInfo(): ForegroundInfo {
         val record = inputData.getString("chapter")?.let { (applicationContext as KomoriApp).dao.download(it) }
         return downloadForegroundInfo(applicationContext, record?.label ?: "Komori download")
@@ -128,7 +122,7 @@ class ChapterDownloadWorker(context: Context, params: WorkerParameters) :
                 val app = applicationContext as KomoriApp
                 val id = inputData.getString("chapter") ?: return@withContext Result.failure()
                 val head = app.dao.queueHead()
-                if (enforceQueue && head != null && head.releaseId != id) return@withContext Result.retry()
+                if (enforceQueue && head != null && head.releaseId != id) return@withContext Result.success()
                 ChapterFiles.locked(id) chapter@{
                     kotlinx.coroutines.currentCoroutineContext().ensureActive()
                     var record = app.dao.download(id) ?: return@chapter Result.failure()
@@ -172,12 +166,13 @@ class ChapterDownloadWorker(context: Context, params: WorkerParameters) :
                                 error = "",
                             )
                         app.dao.putDownload(record)
-                        val started = System.currentTimeMillis()
+                        val started = elapsedMillis()
                         urls.forEachIndexed { index, url ->
                             if (isStopped) throw CancellationException()
-                            if (System.currentTimeMillis() - started > 8 * 60 * 1000) {
+                            if (elapsedMillis() - started > 8 * 60 * 1000) {
+                                continuation(app, id, attempt, 0)
                                 app.dao.putDownload(record.copy(state = "Queued"))
-                                return@chapter Result.retry()
+                                return@chapter Result.success()
                             }
                             val file = pageFile(app, id, index)
                             if (repairMarker(app, id, index).exists() || !validImage(file)) {
@@ -249,19 +244,7 @@ class ChapterDownloadWorker(context: Context, params: WorkerParameters) :
                             val delayMillis =
                                 (retryAtMillis(e) - System.currentTimeMillis()).coerceAtLeast(0)
                             if (delayMillis > 0) {
-                                WorkManager.getInstance(app)
-                                    .enqueueUniqueWork(
-                                        "download-$id",
-                                        ExistingWorkPolicy.APPEND_OR_REPLACE,
-                                        downloadRequest(
-                                            id,
-                                            app.settings.flow.first(),
-                                            (attempt + 1).toInt(),
-                                            delayMillis,
-                                        ),
-                                    )
-                                    .result
-                                    .get()
+                                continuation(app, id, attempt + 1, delayMillis)
                                 Result.success()
                             } else Result.retry()
                         } else Result.failure()
@@ -271,6 +254,13 @@ class ChapterDownloadWorker(context: Context, params: WorkerParameters) :
                 }
             }
         }
+
+    private suspend fun scheduleContinuation(app: KomoriApp, id: String, failures: Long, delayMillis: Long) {
+        WorkManager.getInstance(app).enqueueUniqueWork(
+            "download-$id", ExistingWorkPolicy.APPEND_OR_REPLACE,
+            downloadRequest(id, app.settings.flow.first(), failures.coerceIn(0, Int.MAX_VALUE.toLong()).toInt(), delayMillis),
+        ).result.get()
+    }
 
     companion object {
         private val gate = Mutex()

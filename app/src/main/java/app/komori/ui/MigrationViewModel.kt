@@ -48,7 +48,7 @@ class MigrationViewModel(application: Application) : AndroidViewModel(applicatio
             try {
                 val settings = app.settings.flow.first()
                 val preference = app.dao.titlePreferences(book.id)
-                language = if (sourceKey(candidate.id) == "mangadex") preference?.language?.takeIf { it.isNotEmpty() } ?: settings.language else "en"
+                language = sourceReadingLanguage(candidate.id, settings.language, preference?.language.orEmpty())
                 val detailed = app.source.details(candidate)
                 rows = app.source.chapters(candidate.id, language)
                 val target = rows.map { it.release() }.filter { it.readable }

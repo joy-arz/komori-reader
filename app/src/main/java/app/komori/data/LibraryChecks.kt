@@ -101,9 +101,12 @@ class LibraryCheckWorker(context: Context, params: WorkerParameters) : Coroutine
 
     private suspend fun checkAuthors(app: KomoriApp): Int {
         val enabled = enabledSourceOrder(app.settings.flow.first())
-        val creators = app.dao.observeCreators().first().filter { sourceKey(it.id) in enabled }.map { it to app.dao.creatorSnapshot(it.id) }.sortedBy { it.second?.checkedAt ?: 0 }.take(3)
+        val rotation = AuthorCheckRotation(app)
+        val creators = rotation.candidates(app.dao.observeCreators().first().filter { sourceKey(it.id) in enabled })
         var errors = 0
-        for ((creator, old) in creators) {
+        for (creator in creators) {
+            val old = app.dao.creatorSnapshot(creator.id)
+            var success = false
             try {
                 val page = app.source.browse(sourceKey(creator.id), "", 1, BrowseFilter(sort = if (sourceKey(creator.id) == "mangadex") "Latest updates" else "Latest"), creator)
                 val previous = old?.let { JSONArray(it.titleIds).let { rows -> (0 until rows.length()).map { rows.getString(it) }.toSet() } }
@@ -117,8 +120,10 @@ class LibraryCheckWorker(context: Context, params: WorkerParameters) : Coroutine
                     val ids = (page.titles.map { it.id } + previous.orEmpty()).distinct().take(512)
                     app.dao.putCreatorSnapshot(CreatorSnapshot(creator.id, JSONArray(ids).toString(), System.currentTimeMillis()))
                 }
+                success = true
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { errors++ }
+            finally { rotation.attempted(creator.id, success) }
         }
         return errors
     }

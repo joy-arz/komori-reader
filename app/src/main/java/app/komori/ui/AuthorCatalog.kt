@@ -26,6 +26,7 @@ enum class AuthorSort(val label: String) {
 class AuthorCatalog(
     creators: List<Creator>,
     sort: AuthorSort = AuthorSort.LATEST,
+    private val filter: AuthorWorkFilter = AuthorWorkFilter(),
     private val fetch: suspend (Creator, Int) -> BrowsePage,
 ) {
     private data class Cursor(
@@ -68,7 +69,7 @@ class AuthorCatalog(
                             .thenBy { owner(it.id) }
                             .then(alphabetical)
                 }
-            return titles.values.sortedWith(ordering)
+            return titles.values.filter { filter.matches(it, owners[it.id].orEmpty()) }.sortedWith(ordering)
         }
 
     val hasMore: Boolean
@@ -114,4 +115,5 @@ data class AuthorFeed(
     val errors: List<String> = emptyList(),
     val context: List<String> = emptyList(),
     val sort: AuthorSort = AuthorSort.LATEST,
+    val filter: AuthorWorkFilter = AuthorWorkFilter(),
 )

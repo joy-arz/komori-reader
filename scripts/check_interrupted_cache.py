@@ -1,0 +1,77 @@
+#!/usr/bin/env python3
+"""SIGKILL/restart smoke check, restricted to explicitly disposable debug emulators."""
+import json
+import os
+from pathlib import Path
+import shlex
+import subprocess
+import time
+
+PACKAGE = 'app.komori.reader.debug'
+
+
+def adb(*args):
+    return subprocess.check_output(['adb', *args], text=True, timeout=30).strip()
+
+
+def shell(*args):
+    return adb('shell', shlex.join(args))
+
+
+def wait_for(predicate, description):
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline:
+        value = predicate()
+        if value:
+            return value
+        time.sleep(0.25)
+    raise RuntimeError('Timed out: ' + description)
+
+
+def main():
+    if os.environ.get('KOMORI_DISPOSABLE_EMULATOR') != '1':
+        raise RuntimeError('Disposable emulator opt-in is required')
+    serial = adb('get-serialno')
+    if not serial.startswith('emulator-') or shell('getprop', 'ro.kernel.qemu') != '1':
+        raise RuntimeError('This probe only supports disposable Android emulators')
+    apk = Path('app/build/outputs/apk/debug/app-debug.apk')
+    adb('install', '-r', str(apk))
+    adb('root')
+    adb('wait-for-device')
+    def pid():
+        return shell('sh', '-c', 'pidof ' + PACKAGE + ' || true')
+    def launch():
+        shell('am', 'start', '-W', '-n', PACKAGE + '/app.komori.MainActivity')
+        return wait_for(lambda: pid(), 'application process')
+    old_pid = launch()
+    time.sleep(3)
+    root = '/data/user/0/' + PACKAGE
+    partial = root + '/cache/reader/page-process-death-probe.part'
+    image = root + '/cache/reader/process-probe.img'
+    survivor = root + '/files/process-probe-survivor'
+    staging = root + '/files/local-staging/process-probe'
+    shell('run-as', PACKAGE, 'mkdir', '-p', root + '/cache/reader', staging)
+    for path in (partial, image, survivor, staging + '/interrupted.part'):
+        shell('run-as', PACKAGE, 'touch', path)
+    shell('input', 'keyevent', 'KEYCODE_HOME')
+    shell('kill', '-9', old_pid)
+    wait_for(lambda: pid() != old_pid, 'old process death')
+    new_pid = launch()
+    def missing(path):
+        return shell('sh', '-c', 'if test -e ' + shlex.quote(path) + '; then echo present; else echo missing; fi') == 'missing'
+    wait_for(lambda: missing(partial) and missing(staging), 'startup recovery cleanup')
+    if missing(image) or missing(survivor):
+        raise AssertionError('Recovery deleted retained cached/persistent data')
+    if old_pid == new_pid:
+        raise AssertionError('Process did not change')
+    report = dict(status='PASS', serial=serial, old_pid=old_pid, new_pid=new_pid,
+                  partial_removed=True, staging_removed=True, cached_image_preserved=True,
+                  persistent_marker_preserved=True, scope='debug emulator SIGKILL and startup recovery')
+    Path('device-diagnostics').mkdir(exist_ok=True)
+    Path('device-diagnostics/process-recovery.json').write_text(json.dumps(report, indent=2) + '\n')
+    shell('run-as', PACKAGE, 'rm', '-f', image, survivor)
+    print(json.dumps(report))
+
+
+if __name__ == '__main__':
+    main()
