@@ -31,6 +31,13 @@ val sourceNames =
 
 fun sourceKey(id: String) = id.substringBefore(':', "mangadex")
 
+fun contextualSearchSort(source: String, query: String, sort: String): String {
+    if (source !in setOf("demonic", "manhwa18cc")) return sort
+    return if (query.isNotBlank()) {
+        if (sort in setOf("Title", "Title (this page)")) "Title (this page)" else "Source order"
+    } else when (sort) { "Title (this page)" -> "Title"; "Source order" -> ""; else -> sort }
+}
+
 fun sourceReadingLanguage(id: String, global: String, override: String = ""): String = when {
     sourceKey(id) == "mangadex" -> override.ifBlank { global }
     sourceKey(id) in manhwaSources -> override.ifBlank { if (sourcePath(id).trimEnd('/').endsWith("-raw")) "ko" else "en" }
@@ -133,15 +140,18 @@ class Sources(val client: OkHttpClient, apiClient: OkHttpClient = client) {
     private fun manhwa(key: String) = if (key == "manhwa18") manhwa else manhwaCc
     private val dexImages = apiClient
     private val dexCompatibility by lazy { apiClient.newBuilder().protocols(listOf(Protocol.HTTP_1_1)).connectionPool(ConnectionPool()).build() }
+    @Volatile private var dexImageCompatibilityUntil = 0L
 
     suspend fun transferPage(id: String, url: String, file: java.io.File, progress: (Long, Long) -> Unit = { _, _ -> }) {
         val request = imageRequest(url, id)
         if (sourceKey(id) != "mangadex") return transferImage(client, request, file, progress)
-        try { transferImage(dexImages, request, file, progress) }
+        val usingCompatibility = System.nanoTime() < dexImageCompatibilityUntil
+        try { transferImage(if (usingCompatibility) dexCompatibility else dexImages, request, file, progress) }
         catch (e: IOException) {
             if (!isConnectionReset(e)) throw e
             kotlinx.coroutines.delay(500)
-            transferImage(dexCompatibility, request, file, progress)
+            transferImage(if (usingCompatibility) dexImages else dexCompatibility, request, file, progress)
+            dexImageCompatibilityUntil = if (usingCompatibility) 0L else System.nanoTime() + java.util.concurrent.TimeUnit.MINUTES.toNanos(15)
         }
     }
     private val demonic = WebSource("demonic", "https://demonicscans.org", client)

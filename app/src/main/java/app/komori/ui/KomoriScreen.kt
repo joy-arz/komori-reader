@@ -2253,7 +2253,8 @@ private fun SourceFilters(
     val facetBrowse = source in gallerySources &&
         (creator != null || filter.facetPath.isNotEmpty() || filter.searchType != "Title")
     val localMetadata = source in setOf("zap", "imhentai") && facetBrowse
-    val pageSearch = source in setOf("demonic", "manhwa18cc") && vm.searchQuery.value.isNotBlank()
+    val currentQuery by vm.searchQuery.collectAsStateWithLifecycle()
+    val pageSearch = source in setOf("demonic", "manhwa18cc") && currentQuery.isNotBlank()
     val sorts = if (pageSearch) listOf("Source order", "Title (this page)") else vm.app.source.sorts(source, facetBrowse)
     var sort by remember { mutableStateOf(filter.sort.takeIf { it in sorts } ?: sorts.firstOrNull().orEmpty()) }
     var language by remember { mutableStateOf(filter.language) }

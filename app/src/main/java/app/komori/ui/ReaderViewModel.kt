@@ -340,6 +340,7 @@ class ReaderViewModel(
                 if (activeSource.value.isEmpty())
                     activeSource.value = enabledSourceOrder(app.settings.flow.first()).firstOrNull()
                         ?: throw IOException("Enable a source in Settings to browse titles.")
+                browseFilter.value = browseFilter.value.copy(sort = contextualSearchSort(activeSource.value, query, browseFilter.value.sort))
                 val foundPage =
                     app.source.browse(
                         activeSource.value,

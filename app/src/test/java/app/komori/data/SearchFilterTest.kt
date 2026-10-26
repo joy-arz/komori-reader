@@ -81,4 +81,14 @@ class SearchFilterTest {
         }
     }
 
+    @Test fun textSearchSortScopeRemainsExplicitWhenTheQueryChanges() {
+        for (source in listOf("demonic", "manhwa18cc")) {
+            assertEquals("Title (this page)", contextualSearchSort(source, "fixture", "Title"))
+            assertEquals("Title", contextualSearchSort(source, "", "Title (this page)"))
+            assertEquals("Source order", contextualSearchSort(source, "fixture", "Popularity"))
+            assertEquals("", contextualSearchSort(source, "", "Source order"))
+        }
+        assertEquals("Popularity", contextualSearchSort("mangadex", "fixture", "Popularity"))
+    }
+
 }
