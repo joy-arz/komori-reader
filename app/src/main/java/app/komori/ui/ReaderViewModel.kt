@@ -255,7 +255,7 @@ class ReaderViewModel(
         authorSort = sort
         authorWorkFilter = workFilter
         authorCatalog =
-            AuthorCatalog(creators, sort, workFilter) { creator, page ->
+            AuthorCatalog(creators, sort, workFilter, enrich = { if (authorPage == null) app.source.details(it) else it }) { creator, page ->
                 val key = sourceKey(creator.id)
                 require(key in setOf("mangadex", "zap", "nhentai", "imhentai")) {
                     "This source does not provide a creator catalog."
@@ -263,13 +263,7 @@ class ReaderViewModel(
                 val filter = BrowseFilter(sort = sort.sourceSort(key), language = workFilter.nativeLanguage)
                 val result = authorPage?.invoke(creator, page, filter)
                     ?: app.source.browse(key, "", page, filter, creator)
-                if (workFilter.needsMetadata && authorPage == null) {
-                    val enriched = mutableListOf<Manga>()
-                    for (chunk in result.titles.chunked(2)) enriched += coroutineScope {
-                        chunk.map { async { app.source.details(it) } }.awaitAll()
-                    }
-                    result.copy(titles = enriched)
-                } else result
+                result
             }
         authorFeed.value =
             AuthorFeed(
@@ -298,9 +292,21 @@ class ReaderViewModel(
                             authorContext.orEmpty().map { it.id },
                             catalog.sort,
                             authorWorkFilter,
+                            catalog.incompleteMetadataCount,
                         )
                 }
             }
+    }
+
+    fun retryAuthorMetadata() {
+        val catalog = authorCatalog ?: return
+        if (authorJob?.isActive == true) return
+        authorJob = viewModelScope.launch {
+            authorFeed.value = authorFeed.value.copy(loading = true)
+            catalog.retryMetadata()
+            if (authorCatalog === catalog) authorFeed.value = authorFeed.value.copy(
+                items = catalog.items, loading = false, incompleteMetadata = catalog.incompleteMetadataCount)
+        }
     }
 
     fun browseCreator(creator: Creator) {

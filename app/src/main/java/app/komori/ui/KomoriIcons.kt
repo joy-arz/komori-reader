@@ -53,6 +53,7 @@ object KomoriIcons {
             "Like",
             "M12,21L3,12C-3,5 6,-2 12,5C18,-2 27,5 21,12ZM12,18l7.5,-7.5C24,5 17,1 12,8C7,1 0,5 4.5,10.5Z",
         )
+    val Sort = icon("Sort", "M7,3l-4,4 1.4,1.4L6,6.8V21h2V6.8l1.6,1.6L11,7ZM16,3v14.2l-1.6,-1.6L13,17l4,4 4,-4 -1.4,-1.4 -1.6,1.6V3Z")
     val FilterList = icon("Filter", "M3,5h18v2H3ZM6,11h12v2H6ZM9,17h6v2H9Z")
     val CheckCircle =
         icon(

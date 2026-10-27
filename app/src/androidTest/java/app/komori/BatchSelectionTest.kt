@@ -112,7 +112,10 @@ class BatchSelectionTest {
             tapDescription("Authors")
             tapText("Manage")
             assertFalse(device.hasObject(By.text("Select")))
-            device.findObject(By.text(followed.first().name)).longClick()
+            val authorRow = device.wait(Until.findObject(By.desc("Manage author ${followed.first().name}").longClickable(true)), 5000)
+                ?: throw AssertionError("Author management row did not become interactive")
+            authorRow.longClick()
+            assertTrue("Long press did not activate selection", device.wait(Until.hasObject(By.text("1 selected")), 5000))
             device.dumpWindowHierarchy(java.io.File(app.getExternalFilesDir(null), "batch-after-long-press.xml"))
             android.util.Log.i("KomoriBatch", "afterLongPress selectedLabel=${device.hasObject(By.text("1 selected"))} firstVisible=${device.hasObject(By.text(followed.first().name))} secondVisible=${device.hasObject(By.text(followed.last().name))}")
             for (creator in followed.drop(1)) {
