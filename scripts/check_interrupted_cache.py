@@ -50,7 +50,10 @@ def main():
             raise
         return wait_for(lambda: pid(), 'application process')
     old_pid = launch()
-    time.sleep(3)
+    ready = shell("content", "call", "--uri", f"content://{PACKAGE}.download-fixtures",
+                  "--method", "ready", "--arg", "work-fixture-cache-recovery")
+    if "result=ok" not in ready:
+        raise AssertionError("Startup recovery barrier failed: " + ready)
     root = '/data/user/0/' + PACKAGE
     partial = root + '/cache/reader/page-process-death-probe.part'
     image = root + '/cache/reader/process-probe.img'

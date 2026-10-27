@@ -1,0 +1,50 @@
+{
+  "scope": "Local API 30 debug emulator; explicit startup barrier and ActivityManager process-death acknowledgment",
+  "iterations": [
+    {
+      "status": "PASS",
+      "serial": "emulator-5554",
+      "old_pid": "8254",
+      "new_pid": "8406",
+      "partial_removed": true,
+      "staging_removed": true,
+      "cached_image_preserved": true,
+      "persistent_marker_preserved": true,
+      "updater_part_removed": true,
+      "export_orphan_removed": true,
+      "ready_named_apk_preserved": true,
+      "unrelated_update_file_preserved": true,
+      "scope": "debug emulator SIGKILL and startup recovery"
+    },
+    {
+      "status": "PASS",
+      "serial": "emulator-5554",
+      "old_pid": "8526",
+      "new_pid": "8655",
+      "partial_removed": true,
+      "staging_removed": true,
+      "cached_image_preserved": true,
+      "persistent_marker_preserved": true,
+      "updater_part_removed": true,
+      "export_orphan_removed": true,
+      "ready_named_apk_preserved": true,
+      "unrelated_update_file_preserved": true,
+      "scope": "debug emulator SIGKILL and startup recovery"
+    },
+    {
+      "status": "PASS",
+      "serial": "emulator-5554",
+      "old_pid": "8760",
+      "new_pid": "8885",
+      "partial_removed": true,
+      "staging_removed": true,
+      "cached_image_preserved": true,
+      "persistent_marker_preserved": true,
+      "updater_part_removed": true,
+      "export_orphan_removed": true,
+      "ready_named_apk_preserved": true,
+      "unrelated_update_file_preserved": true,
+      "scope": "debug emulator SIGKILL and startup recovery"
+    }
+  ]
+}

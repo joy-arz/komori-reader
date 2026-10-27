@@ -43,6 +43,7 @@ class DownloadFixtureProvider : ContentProvider() {
         require(id.matches(Regex("work-fixture-[A-Za-z0-9-]{1,100}")))
         app.startupRecovery?.join()
         when (method.substringBefore(':')) {
+            "ready" -> Unit
             "configure" -> {
                 val port = method.substringAfter(':', "0").toIntOrNull() ?: 0
                 val configured = extras?.getString("endpoint") ?: "http://127.0.0.1:$port/"

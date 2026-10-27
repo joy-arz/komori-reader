@@ -1,27 +1,36 @@
 # Reliability and UI follow-up
 
-Updated October 28, 2026. PR: [#3](https://github.com/joy-arz/komori-reader/pull/3), branch `codex/reliability-ui-followup`.
+Updated October 28, 2026. [PR #3](https://github.com/joy-arz/komori-reader/pull/3), branch `codex/reliability-ui-followup`. No merge, tag or release is part of this task.
 
-## Audit boundary and delivery
+## Audited revision and delivery
 
-Fetched main again on October 28: `501ea97f3cd060395cf4ab8a495adfc7d5d3774a`, exactly the supplied audit revision. There were no intervening merged app changes. Initial working tree was clean; no applicable repository/ancestor AGENTS.md was found. The supplied 168 JVM passes, six live skips, lint 0/46 and prior device results were starting evidence only. Implementation through `bfbf34e69f36ec787af709acba3ca2cc4b5fe075` has been checked; final synchronization/fixture verification is in progress.
+Fetched main on October 27 and again October 28: **501ea97f3cd060395cf4ab8a495adfc7d5d3774a**, exactly the supplied audit revision. No intervening merged app changes existed. The initial working tree was clean; no applicable repository/ancestor AGENTS.md was found. Supplied historical test results were treated as starting evidence and rerun.
 
-Application ID, version, production signing configuration and secrets are unchanged. Commits use the repository owner's existing identity without coauthor attribution. This task does not authorize merging, tagging or publishing a release. Release compilation in PR CI is unsigned and includes shrinking.
+Application implementation validated by the final green cloud matrix: **ebceecbde46b6ef7afd2ca2087143a3a6457faea**. Subsequent changes add only a debug-only startup-recovery barrier and this report/evidence; main application sources and release configuration remain identical to that validated revision. The barrier passed three local SIGKILL/restart probes, and current-head checks are available on the PR.
 
-| Priority | Classification from current implementation | Implementation status | Acceptance boundary |
+Package identity, version, production signing configuration/secrets, TLS validation and APK verification remain unchanged. All commits use the existing repository-owner identity without coauthor attribution. No unrelated changes were discarded. PR release compilation is unsigned and includes shrinking.
+
+| Priority | Classification | Final implementation and evidence | Remaining acceptance |
 |---|---|---|---|
-| 1 Authors controls | Confirmed UX ambiguity: distinct filter and sort actions used identical glyphs | One primary Tune filter, distinct sorting, active/reset semantics; normal/search/manage/selection coverage | Emulator semantics and before/after screenshots; manual TalkBack pending |
-| 2 Updates | Confirmed check/download ownership race | Explicit operation owner, phases, jobs and artifact/generation guards; injectable backend | Delayed/out-of-order owner tests and real dialog test; production installer/verification retained |
-| 3 Migration | Confirmed obsolete search/detail publication and stale Apply context | Cancel/invalidate every context change; immutable reviewed destination; transactional Apply guards | Delayed requests and real Room Apply coverage |
-| 4 Author catalogs | Confirmed individual details failure could poison successful catalog page, including source-level supplemental lookup | Isolated enrichment, deferred creator ownership, incomplete metadata, explicit targeted retry, cursor advancement | JVM fixtures exercise actual HentaiZap adapter/catalog path; live-site acceptance pending |
-| 5 Temporary files | Confirmed updater/export orphans survived process death | Scoped ownership-aware startup recovery and late-callback rejection | Ownership tests and emulator SIGKILL probe; verified-ready APK production flow unchanged |
-| 6 API 36 selection | Confirmed stale exported author action semantics; later query-change test synchronization also exposed | Single explicit accessible row action with checked state; Compose synchronization under verification | Baseline 5/5 and one fixed 5/5 run; latest extended repeat has one failure and is being corrected |
-| 7 Downloads | Confirmed reader-file ownership and finishing-worker retry gaps; demonstrated upstream foreground shutdown race | Reader leases, serialized explicit retry, checksum reuse/repair, WorkManager 2.10.5 patch, real scheduler fixtures, Android-wait status | Six OS-backed cases and local network/screen-off/SIGKILL probes; latest full matrix failures under investigation |
-| 8 Page identity | Risk demonstrated with parsed Nhentai delivery-host rotation fixture | Strict source-specific identity; unknown/signed URLs remain exact; quality/content changes invalidate | Fixture evidence only; no claim of observed live CDN rotation |
-| 9 Diagnostics | Improvement required: generic errors lost request stage | Safe stage/source/kind/action messages; typed retry/verification preserved | JVM classification/redaction and existing HTTP regression coverage |
-| 10 Performance/accessibility | Measurement and acceptance work | 1,000-title/50,000-progress fixture, decode/cache/startup/session measurements; narrow/large-font/RTL/landscape UI checks | Debug emulator measurements only; physical 2 GB, release frames and manual TalkBack pending |
-| Prior fixes | Already present: reader cache pinning, interrupted import recovery, planned continuation, speculative retry accounting, exact-revision release gates | Preserved; no broad rewrite | Existing regressions retained |
-| External | Real-device or external-service acceptance | Explicitly pending | Manufacturer battery restrictions, live verification/source behavior and installation on a phone |
+| 1 Authors controls | Confirmed UX ambiguity: filter and sort shared the same glyph | One primary Tune filter, distinct sorting, active/reset semantics, preserved search/manage/batch actions; before/after images and UI tests | Manual TalkBack/focus/contrast |
+| 2 Updates | Confirmed check/download ownership race | Explicit phases/jobs/generation/artifact ownership; delayed owner and dialog tests | Signed-release installation on a phone |
+| 3 Migration | Confirmed obsolete search/detail publication and stale Apply context | Cancel/invalidate requests; immutable reviewed rows; transactional Apply guards and actual Room race test | No additional code deferral |
+| 4 Author catalogs | Confirmed individual details failure poisoned page/cursor, including supplemental source path | Bounded isolation, pending metadata/ownership, targeted retry and fair later paging; real HentaiZap adapter fixtures | Live-source acceptance |
+| 5 Temporary files | Confirmed updater/export process-death ownership gap | Scoped cleanup, active callback protection, ready APK/unrelated retention; ownership and SIGKILL tests | No additional code deferral |
+| 6 API 36 selection | Confirmed stale native action role/label despite correct rendering | Explicit accessible action plus mode-specific identities for rows and Manage/Done; complete 5/5 API 36 repeat pass | Manual TalkBack |
+| 7 Downloads | Confirmed reader-file and finishing-worker retry gaps; reproduced upstream service race | Reader leases, retry ownership, checksum repair/reuse, WorkManager 2.10.5 patch; real scheduler/lifecycle probes | Physical manufacturer battery/Doze behavior |
+| 8 Page identity | Risk demonstrated by parsed Nhentai delivery-host rotation fixture | Strict source-specific identity; signed/unknown URLs retained exactly; quality/content invalidation tests | Live CDN rotation unobserved |
+| 9 Diagnostics | Improvement requiring implementation | Safe source/stage/kind/action messages, redaction and typed retry/verification preservation | Live failure/verification acceptance |
+| 10 Performance/accessibility | Measurement and acceptance work | 1,000-title/50,000-progress, startup/session/cache measurements; narrow/150%/RTL/landscape tests | Physical 2 GB, release-frame benchmarks and manual accessibility |
+| Prior repairs | Already present | Reader cache pinning, interrupted import recovery, planned continuation, speculative retry accounting and exact-revision release gates retained | Existing regressions pass |
+
+- [x] Reproduce or demonstrate each defect; distinguish risks and external acceptance.
+- [x] Implement focused fixes and meaningful regressions; preserve existing features/security.
+- [x] JVM, Python, lint, debug and release compilation.
+- [x] Five complete targeted API 36 repetitions, then full API 26/30/36 coverage.
+- [x] Capture Authors before/after, native stale-state evidence, recovery logs and measurements.
+- [x] Commit/push the focused PR and investigate introduced failures.
+- [ ] Physical-device and live-service acceptance listed below; unavailable in this environment.
 
 ## Defects, intended behavior and regression evidence
 
@@ -75,13 +84,13 @@ Authors opts into deferred HentaiZap supplemental creator details. Native creato
 
 **Coverage:** four ownership tests cover existing orphans, active protection, repeated cleanup, unrelated files, late callbacks and interrupted writing. Emulator SIGKILL startup probe removes reader/import/updater/export orphans and preserves cached images, persistent markers, ready-named APK and unrelated part. The retained APK is a filename/retention fixture, not a fake verifier pass.
 
-### 6. API 36 author selection
+### 6. API 36 author selection and navigation
 
-**Reproduction:** unchanged main passed five targeted repeats in [40489579309](https://github.com/joy-arz/komori-reader/actions/runs/40489579309). Later [40494412608](https://github.com/joy-arz/komori-reader/actions/runs/40494412608), iteration 4, captured visually rendered checkboxes but stale native semantics on the second row (`Manage author` instead of `Select`). Both rows were visible; selection state and initial long press had activated. Immutable capture alone and an intermediate custom row did not eliminate the issue. [Failure screenshot](screenshots/authors-stale-semantics-api36.png), [native hierarchy excerpt](screenshots/authors-stale-semantics-api36.json).
+**Reproduction:** unchanged main initially passed five targeted repeats in [40489579309](https://github.com/joy-arz/komori-reader/actions/runs/40489579309). Later repeated runs captured two visually rendered checkboxes while native accessibility still exported the second row as a `Manage author` Button with old bounds. Selection had activated and both rows were on screen. [Failure screenshot](screenshots/authors-stale-semantics-api36.png), [hierarchy excerpt](screenshots/authors-stale-semantics-api36.json). Immutable captures, a custom row and clearAndSetSemantics alone each proved insufficient in subsequent repeats; short successful runs were not treated as closure.
 
-**Change:** AuthorManagementRow explicitly owns name, click/long-click, role and checked/selected semantics together using clearAndSetSemantics; its checkbox is decorative and the normal Unfollow action remains a separate sibling. It retains typography, spacing and real pointer actions. The test targets the real long-clickable row, asserts selection activation and native checked controls, then dismisses, taps/navigates normally and verifies query changes clear selection. Unique visible fixture names avoid collisions.
+**Change/root cause:** the browse-to-selection transition changed an existing action's native role, name and geometry while the accessibility tree could retain its old identity. AuthorManagementRow now owns the name, click/long-click, role and checked semantics on one actual action, and keys the subtree by mode so a Button becomes a fresh CheckBox action. The checkbox visual is decorative; normal Unfollow remains a separate action. A later extended test exposed the same stale-label problem on the Manage/Done control, which now also has a mode-specific identity. Styling, list ownership and ordinary pointer actions remain.
 
-**Evidence:** final explicit-action implementation passed 5/5 in [40555273372](https://github.com/joy-arz/komori-reader/actions/runs/40555273372); [native selected-state excerpt](evidence/authors-selection-api36.json). The next run passed four repeats then failed at the added query-change re-selection assertion; its failure dump contained the expected correct native controls. Explicit Compose idle synchronization and clock-controlled touch long-presses now pass the complete extended BatchSelection sequence locally (22.318 seconds). Native click/long-click/checked-state assertions remain. The Downloads group uses exact semantic text plus its long-click action to distinguish it from the chapter row containing the same title. Assertions/timeouts are retained; no arbitrary sleep or disabled test was added.
+**Coverage:** native action/long-click and checked-state assertions, two-author selection, dismissal, ordinary author navigation, re-entry, query changes clearing selection, unfollow, and the original Library/Downloads cancel/confirm actions all remain. Compose waits/gestures synchronize actual state; original timeout bounds were retained. No sleeps, removed assertions or test-side accessibility cache clearing hide the defect. Author catalog transport is injected locally for this UI test; synthetic creator IDs no longer contact MangaDex. The latest five complete repetitions passed in [40568312683](https://github.com/joy-arz/komori-reader/actions/runs/40568312683). [Verified native state](evidence/authors-selection-api36.json), [local selected-state screenshot](screenshots/authors-selection-api30.png).
 
 ### 7. Downloads and concurrent file use
 
@@ -105,15 +114,32 @@ Host probes use root SIGKILL (never force-stop for download recovery), persisted
 
 SourceRequestFailure associates source and stage with catalog/search, details, chapter list, filter/language discovery, page manifest and image transfer. It distinguishes verification, HTTP/rate limiting, transport/offline and parsing/unsupported content, with concise actions. Numeric HTTP status remains visible for worker regressions. Optional diagnostic text excludes URL/query, credentials, cookies, authorization, tokens and server bodies. No history export was introduced. TLS validation, source verification, cancellation, rate cooldowns and bounded retry policy remain; parsing failures are not hidden behind endless transport retries.
 
-## Verification ledger
+## Verification results
 
-- Local JVM: **200 discovered, 194 passed, six optional live-network tests skipped, zero failures/errors** after source-level author isolation.
-- Python script suite: **10 passed**; host probe scripts compile.
-- Local integration: **16/16** in 223.747 seconds (migration Apply race, large-Library measurement, six WorkManager cases, batch selection, seven backlog cases). Later final-row/UI-worker subset: **11/11** in 137.684 seconds, including checksum corruption and narrow/landscape/RTL filters.
-- [Android checks 40559146464](https://github.com/joy-arz/komori-reader/actions/runs/40559146464) passed JVM, lint, debug and release shrinking on bfbf34e. Lint: **zero errors, 46 existing warnings**. Local heavy lint/shrinker run overlapping the emulator was stopped; that run is not counted as a pass.
-- [Full device run 40555273354](https://github.com/joy-arz/komori-reader/actions/runs/40555273354): all 80 instrumentation tests passed on API 26/30/36; API 30 host probes passed, API 26/36 host harness failures prevented overall green. API 26 content-call port syntax and combined API 36 network/sleep probe were subsequently corrected.
-- [Latest full run 40559146530](https://github.com/joy-arz/komori-reader/actions/runs/40559146530): API 26 80/80 instrumentation passed then cache-restart launch timed out; API 30 had a pre-existing NavigationHistory stale-node failure; API 36 had that stale-node failure plus a direct-worker fixture competing with app-started real work. These are being investigated/corrected; this run is not passing acceptance.
-- Latest API 36 targeted repeat [40559146436](https://github.com/joy-arz/komori-reader/actions/runs/40559146436): **4/5 passed**, new query-change assertion failed with correct native controls present in the captured dump. Synchronization follow-up pending.
+All three cloud checks passed on ebceecb:
+
+| Check | Exact result | Evidence |
+|---|---|---|
+| JVM | **200 discovered: 194 passed, six optional live-network tests skipped; zero failures** | [Android checks 40568312677](https://github.com/joy-arz/komori-reader/actions/runs/40568312677) |
+| Lint/build | **Zero lint errors, original 46 warnings; debug and release shrinking compiled** | Same Android checks run; no signing secrets or release publication |
+| API 36 targeted | **5/5 complete repeated BatchSelection tests passed** | [40568312683](https://github.com/joy-arz/komori-reader/actions/runs/40568312683) |
+| API 26 / 30 / 36 | **80/80 instrumented tests passed on each API** | [Device checks 40568312690](https://github.com/joy-arz/komori-reader/actions/runs/40568312690) |
+| Startup process recovery | **Three consecutive SIGKILL/restart cleanup probes passed on each API** | Same device run; fails on first unsuccessful attempt |
+| Real download recovery | **OS network loss/recovery, ongoing screen-off transfer, SIGKILL/restart, queue continuation, committed-page reuse and preserved pause intent passed on each API** | Same device run; synthetic HTTP and real WorkManager |
+| Python | **10 tests passed**; host scripts compile; shell syntax checks pass | Local unittest suite |
+
+Local API 30 evidence also includes: 16/16 integration tests in 223.747 seconds; a later 11/11 UI/worker subset in 137.684 seconds; final focused Authors/filter/landscape/RTL tests **5/5 in 63.611 seconds**; and all six WorkManager plus three reading/background cases **9/9 in 10.254 seconds with Wi-Fi disabled**, restoring the preference afterward. These are emulator/fixture checks, not physical-phone acceptance.
+
+The final debug-only `ready` barrier waits for startup recovery before orphan files are created, replacing a fixed three-second staging delay. With that barrier and ActivityManager acknowledgment, three additional local startup probes passed. [Barrier probe evidence](evidence/cache-recovery-barrier-api30.json). Earlier [download recovery](evidence/download-process-recovery-api30.json) and [cache recovery](evidence/cache-process-recovery-api30.json) raw records remain. A ready-named dummy APK in these retention tests was not passed off as verified installable content.
+
+### Failures investigated rather than masked
+
+- API 26's validated network was sometimes **metered cellular**. WorkManager correctly refused Wi-Fi-only fixture requests. Every real-work fixture now explicitly allows metered loopback traffic and restores the user preference; production constraints remain. This resolved five worker timeouts and the background-transfer timeout. [Native constraint and ActivityManager log excerpt](evidence/api26-fixture-coordination.txt).
+- The startup probe previously relaunched as soon as the kernel PID vanished, before ActivityManager processed binder death. API 26 logged `DeadObjectException`, forced activity removal and a spurious old-process death during relaunch. The probe now waits for Home focus and old-PID removal from ActivityManager before restarting. It still uses SIGKILL, never force-stop, and retains the 30-second launch bound. An attempted SIGQUIT trace had a platform file-permission error; no app Java deadlock was demonstrated and no speculative SourceSessions threading change was made.
+- NavigationHistory retained a UiObject2 across lazy-row recycling. It now captures immutable text/bounds together, discards stale nodes and retains the exact restored-pixel assertion.
+- A background test invoked a direct worker while Activity startup could schedule another worker for the same fixture. It now injects transport into one real WorkManager worker. Offline-detail readiness waits for its actual asynchronous producer before checking native UI, rather than waiting on an unadvanced Compose test frame.
+- Earlier host fixtures had API 26 content-call port syntax and HTTP path/query parsing errors; these were corrected without loosening production URL identity or network policy. A local incompatible emulator graphics snapshot produced a System UI ANR; cold boot corrected the environment. Such runs were not counted as passes.
+- A local heavy lint/shrinker run overlapping the emulator was stopped and is not counted as success. Linux CI lint/release checks passed. Existing GitHub action deprecation notices remain outside this focused pass.
 
 ## Measured performance, not phone claims
 
@@ -131,41 +157,13 @@ API 30 local arm64 emulator, debug APK, shared 8 GB Mac host. Gradle was stopped
 
 No heavy dependency, expensive effect or broad database rewrite was added based on these numbers. Physical 2 GB memory pressure, full long-session release-frame profiling, manual TalkBack/focus/contrast and source-session startup on phones remain acceptance work.
 
-### Verification harness follow-up
-
-NavigationHistoryTest previously retained a UiObject2 across lazy-row recycling. It now captures immutable label/bounds together, discards already-stale nodes, taps that location and still requires the exact restored pixel bounds. The background test previously inserted a queued row then invoked a direct worker while Activity startup could schedule another real worker; it now injects fixture transport into one actual WorkManager worker, retaining reset, headers, Activity-close and file assertions. The final synchronized local subset passed **6/6 in 41.528 seconds**, including BatchSelection, both navigation tests and all three reading/background tests after these corrections. [Selected Authors screenshot](screenshots/authors-selection-api30.png). Restart failures now capture full logs, process state and SIGQUIT/ANR traces; lifecycle probes run independently of instrumentation failures while preserving the failing exit status.
-
-### Latest cloud probe evidence
-
-[Run 40562830400](https://github.com/joy-arz/komori-reader/actions/runs/40562830400) passed startup cleanup and the real WorkManager HTTP/network/screen-off/SIGKILL probes on **all three API levels (26/30/36)**. Each level passed 79/80 instrumentation tests; only the evolving BatchSelection harness failed (ambiguous group-header text on 26/36, a native cover click during UI updates on 30). Exact semantic group matching and synchronized cover/author actions correct those selectors while retaining native accessibility assertions. Final matrix rerun is pending. The prior single API 26 restart-launch timeout did not reproduce with process/ANR capture enabled; its cause remains unconfirmed. The final workflow runs three consecutive startup-recovery probes and fails on the first unsuccessful attempt, rather than retrying a failure until green.
-
-[Android checks 40562830618](https://github.com/joy-arz/komori-reader/actions/runs/40562830618) passed again, including release shrinking. All new local selector changes compile; the previous complete six-test local subset passed, and the latest action-specific subset is being verified.
-
-### API 36 final recurrence and identity correction
-
-[40564567979](https://github.com/joy-arz/komori-reader/actions/runs/40564567979) again passed four repeats but the fifth reproduced the original native-role defect at the initial second-author assertion, even with synchronized Compose gestures. Its failure XML exposed `Select … 1` as a checked CheckBox while the visibly rendered second checkbox still exported `Manage author … 2` as a Button with old bounds. This disproves synchronization alone as a complete fix. AuthorManagementRow now keys its subtree by browse/selection mode: the role change creates a fresh semantic identity instead of updating a cached Button into a CheckBox. Normal taps, checkbox state updates, list item ownership and spacing remain. Failure artifacts also capture the internal Compose semantics tree alongside native XML for any further recurrence. Local JVM/debug/test compilation passed; the focused BatchSelection and AuthorsInteraction pair passed **2/2 in 40.940 seconds**. Cloud repeated verification of this correction is required.
-
-### API 26 fixture causes confirmed
-
-[40564568080](https://github.com/joy-arz/komori-reader/actions/runs/40564568080) passed the complete API 30 and API 36 jobs (80 tests each, three startup recoveries each, download/network/screen-off recovery). API 26 had 73/80 instrumentation passes and a repeated startup probe timeout. Its [log excerpt](evidence/api26-fixture-coordination.txt) shows two separate harness causes:
-
-- Actual WorkManager correctly refused the fixture's Wi-Fi-only requests on the emulator's **validated but metered cellular** network. Five WorkManager cases and the reading/background case waited for work whose real network constraint was not met. Every fixture now explicitly allows metered loopback traffic and restores the previous user preference; production constraints remain unchanged.
-- The script observed the kernel PID disappear and immediately called `am start -W`, before ActivityManager finished processing binder death. Android logged restarting the dead ActivityRecord, `DeadObjectException`, force removal and a spurious old-process death while launching the new PID. The probe now waits for Home window focus before SIGKILL and for the old PID to disappear from ActivityManager's process records before relaunch. It still kills the process, preserves the app's stored state and never force-stops downloads. The original 30-second launch bound is retained. The attempted SIGQUIT capture also reported a platform trace-file permission error; it did not provide an app Java deadlock trace. No speculative SourceSessions threading change was made.
-
-Both harness corrections require another full matrix; these failures are not relabeled as passes.
-
-### Authors navigation semantics and isolated fixtures
-
-The keyed-row trial [40566448090](https://github.com/joy-arz/komori-reader/actions/runs/40566448090) passed initial two-author selection in all five repeats; four completed the entire extended test. One failed after normal navigation because the screenshot showed **Manage** while native XML still exported **Done**. The mode-switch action now also has a mode-specific identity. The batch fixture now supplies an injected local empty author catalog rather than sending invalid synthetic creator IDs to MangaDex. Offline-detail readiness waits for the actual selected title and completed chapter-status producer within the original five-second bound, then advances Compose and checks the native caption; this avoids waiting on an unadvanced test frame after asynchronous disk work. Failure logs include selected title, chapter status and the internal Compose tree at debug priority.
-
-The metered-network fixture correction passed **9/9** local tests in **10.254 seconds** with emulator Wi-Fi disabled and restored afterward: all six real WorkManager cases plus the three reading/background cases. No production network constraint was relaxed.
-
 ## Remaining acceptance and known risks
 
-- Final synchronized API 36 five-repeat run and full API 26/30/36 matrix are still required; current failing CI is disclosed above.
-- API 26 fixture coordination corrections require verification; process/binder-death and metered-network causes are recorded above. Keep capturing evidence on recurrence and retain the existing timeout bounds.
-- No physical phone is connected. Battery restriction/Doze, thermal/low-memory, TalkBack and real Android installation acceptance are pending.
-- Six optional live-network tests were skipped. Live sources, rate-limit/challenge redirects and CDN behavior have not been newly validated.
-- Partial author metadata deliberately excludes uncertain matches until retry succeeds. Persistent failures require user action; they do not loop automatically.
-- Legacy hash-only MangaDex partial downloads may refresh once on resume/repair. Android may defer constrained background work; Waiting for Android explains scheduler waits without forcing or resetting backoff.
-- PR remains unmerged; no new version, release, signing identity or secret changes.
+- No physical phone is connected. Manufacturer battery restrictions/Doze, thermal and 2 GB memory pressure, manual TalkBack/focus/contrast, signed-release installation and full long-session release-frame profiling remain pending because emulator evidence cannot establish them.
+- Six optional live-network tests were skipped. Real sources, challenge redirects/browser verification and delivery-host rotation have not been newly accepted against live services. Fixtures distinguish these from code-path verification.
+- Incomplete author metadata deliberately excludes uncertain matches until a targeted retry succeeds. Persistent errors require user action, not automatic retry loops.
+- Legacy hash-only MangaDex **partial** manifests may refresh once on resume/repair because image quality compatibility cannot be proved. Completed downloads are not erased during startup. Unproven provider identities retain full URLs, favoring correctness over speculative reuse.
+- Android can defer constrained work after connectivity returns, particularly while asleep. An earlier combined API 36 network-return/sleep probe remained ENQUEUED after 45 seconds; separate network-recovery and ongoing screen-off transfers passed. No hard background resume deadline or manufacturer guarantee is claimed; Waiting for Android explains scheduler waits without resetting backoff.
+- Software-emulator frame measurements were poor, as recorded above. No claim of phone smoothness or low-memory performance is made.
+
+The PR is the review/delivery artifact. It must not merge automatically; no release, tag, signing identity or version change is included.
