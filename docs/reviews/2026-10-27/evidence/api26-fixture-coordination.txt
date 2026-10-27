@@ -1,0 +1,12 @@
+Source: device-check run 40564568080, API 26, cb4b9c8.
+
+10-27 19:05:46.720  5485  5509 D WM-ConstraintTracker: NetworkStateTracker24: initial state = NetworkState(isConnected=true, isValidated=true, isMetered=true, isNotRoaming=true)
+10-27 19:05:47.470  5485  5509 D WM-GreedyScheduler: Constraints not met: Cancelling work ID WorkGenerationalId(workSpecId=5db61b18-c439-481c-81ec-25dfac201fad, generation=0)
+10-27 19:05:47.481  5485  5509 D WM-GreedyScheduler: Constraints not met: Cancelling work ID WorkGenerationalId(workSpecId=bbbdddb9-19f2-4fb8-903c-798448897e8f, generation=0)
+10-27 19:08:06.192  1710  1782 I ActivityManager: START u0 {act=android.intent.action.MAIN cat=[android.intent.category.HOME] flg=0x10200000 cmp=com.google.android.apps.nexuslauncher/.NexusLauncherActivity (has extras)} from uid 1000
+10-27 19:08:06.363  1710  3267 I ActivityManager: START u0 {flg=0x10000000 cmp=app.komori.reader.debug/app.komori.MainActivity} from uid 0
+10-27 19:08:06.451  1710  2649 I ActivityManager: Restarting because process died: ActivityRecord{366e084 u0 app.komori.reader.debug/app.komori.MainActivity t31}
+10-27 19:08:06.452  1710  2649 W ActivityManager: android.os.DeadObjectException
+10-27 19:08:06.452  1710  2649 W ActivityManager: Force removing ActivityRecord{366e084 u0 app.komori.reader.debug/app.komori.MainActivity t31}: app died, no saved state
+10-27 19:08:06.467  1710  2649 I ActivityManager: Start proc 7130:app.komori.reader.debug/u0a79 for activity app.komori.reader.debug/app.komori.MainActivity
+10-27 19:08:06.470  1710  1721 W ActivityManager: Spurious death for ProcessRecord{97c7ccd 7130:app.komori.reader.debug/u0a79}, curProc for 7014: null

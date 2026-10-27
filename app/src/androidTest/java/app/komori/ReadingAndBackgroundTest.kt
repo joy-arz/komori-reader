@@ -16,6 +16,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.first
 import okhttp3.*
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.json.JSONArray
@@ -112,6 +113,8 @@ class ReadingAndBackgroundTest {
         }.build()
         val browser = OkHttpClient.Builder().addInterceptor { throw AssertionError("MangaDex pages must not use browser-session transport") }.build()
         val oldRuntime = app.downloadRuntime
+        val oldWifi = app.settings.flow.first().wifi
+        app.settings.set("wifi", false)
         val source = Sources(browser, api)
         app.downloadRuntime = object : DownloadRuntime {
             override fun source(chapter: String) = if (chapter == id) source else oldRuntime?.source(chapter)
@@ -136,6 +139,7 @@ class ReadingAndBackgroundTest {
             androidx.work.WorkManager.getInstance(app).cancelUniqueWork("download-$id").result.get()
             ChapterFiles.locked(id) { app.dao.removeDownload(id); chapterDirectory(app, id).deleteRecursively() }
             app.downloadRuntime = oldRuntime
+            app.settings.set("wifi", oldWifi)
             kickDownloadQueue(app)
             api.dispatcher.executorService.shutdown(); browser.dispatcher.executorService.shutdown()
             instrumentation.runOnMainSync { activity.finish() }

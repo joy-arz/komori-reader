@@ -66,8 +66,12 @@ def main():
     for path in (partial, image, survivor, staging + '/interrupted.part', update_partial, ready_apk, unrelated, export_partial):
         shell('run-as', PACKAGE, 'touch', path)
     shell('input', 'keyevent', 'KEYCODE_HOME')
+    wait_for(lambda: any("mCurrentFocus=" in line and "launcher" in line.lower()
+                         for line in shell("dumpsys", "window").splitlines()), "Home focused before SIGKILL")
     shell('kill', '-9', old_pid)
     wait_for(lambda: pid() != old_pid, 'old process death')
+    wait_for(lambda: f"{old_pid}:{PACKAGE}/" not in shell("dumpsys", "activity", "processes"),
+             "ActivityManager acknowledged process death")
     new_pid = launch()
     def missing(path):
         return shell('sh', '-c', 'if test -e ' + shlex.quote(path) + '; then echo present; else echo missing; fi') == 'missing'

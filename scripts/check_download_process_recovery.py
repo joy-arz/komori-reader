@@ -138,8 +138,12 @@ def main():
         old_pid = pid()
         assert old_pid and " " not in old_pid, old_pid
         shell("input", "keyevent", "KEYCODE_HOME")
+        wait_for(lambda: any("mCurrentFocus=" in line and "launcher" in line.lower()
+                             for line in shell("dumpsys", "window").splitlines()), "Home focused before SIGKILL")
         shell("kill", "-9", old_pid)
         wait_for(lambda: pid() != old_pid, "old process death")
+        wait_for(lambda: f"{old_pid}:{PACKAGE}/" not in shell("dumpsys", "activity", "processes"),
+                 "ActivityManager acknowledged process death")
         release.set()
         shell("am", "start", "-W", "-n", PACKAGE + "/app.komori.MainActivity")
         wait_for(lambda: "state=Complete" in state(active), "resumed chapter completion")

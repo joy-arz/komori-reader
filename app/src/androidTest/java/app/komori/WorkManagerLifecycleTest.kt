@@ -21,6 +21,14 @@ import org.junit.Test
 /** Actual OS-backed WorkManager, foreground execution and sockets; no TestWorkerBuilder. */
 class WorkManagerLifecycleTest {
     private val app get() = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as KomoriApp
+    private var originalWifi = true
+    @org.junit.Before fun allowMeteredLoopbackFixtures() = runBlocking<Unit> {
+        originalWifi = app.settings.flow.first().wifi
+        app.settings.set("wifi", false)
+    }
+    @org.junit.After fun restoreNetworkPreference() = runBlocking<Unit> {
+        app.settings.set("wifi", originalWifi)
+    }
     private class Fixture : AutoCloseable {
         val server = MockWebServer()
         val blocked = CountDownLatch(1); val release = CountDownLatch(1)

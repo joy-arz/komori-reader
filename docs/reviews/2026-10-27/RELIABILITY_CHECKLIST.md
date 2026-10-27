@@ -145,10 +145,19 @@ NavigationHistoryTest previously retained a UiObject2 across lazy-row recycling.
 
 [40564567979](https://github.com/joy-arz/komori-reader/actions/runs/40564567979) again passed four repeats but the fifth reproduced the original native-role defect at the initial second-author assertion, even with synchronized Compose gestures. Its failure XML exposed `Select … 1` as a checked CheckBox while the visibly rendered second checkbox still exported `Manage author … 2` as a Button with old bounds. This disproves synchronization alone as a complete fix. AuthorManagementRow now keys its subtree by browse/selection mode: the role change creates a fresh semantic identity instead of updating a cached Button into a CheckBox. Normal taps, checkbox state updates, list item ownership and spacing remain. Failure artifacts also capture the internal Compose semantics tree alongside native XML for any further recurrence. Local JVM/debug/test compilation passed; the focused BatchSelection and AuthorsInteraction pair passed **2/2 in 40.940 seconds**. Cloud repeated verification of this correction is required.
 
+### API 26 fixture causes confirmed
+
+[40564568080](https://github.com/joy-arz/komori-reader/actions/runs/40564568080) passed the complete API 30 and API 36 jobs (80 tests each, three startup recoveries each, download/network/screen-off recovery). API 26 had 73/80 instrumentation passes and a repeated startup probe timeout. Its [log excerpt](evidence/api26-fixture-coordination.txt) shows two separate harness causes:
+
+- Actual WorkManager correctly refused the fixture's Wi-Fi-only requests on the emulator's **validated but metered cellular** network. Five WorkManager cases and the reading/background case waited for work whose real network constraint was not met. Every fixture now explicitly allows metered loopback traffic and restores the previous user preference; production constraints remain unchanged.
+- The script observed the kernel PID disappear and immediately called `am start -W`, before ActivityManager finished processing binder death. Android logged restarting the dead ActivityRecord, `DeadObjectException`, force removal and a spurious old-process death while launching the new PID. The probe now waits for Home window focus before SIGKILL and for the old PID to disappear from ActivityManager's process records before relaunch. It still kills the process, preserves the app's stored state and never force-stops downloads. The original 30-second launch bound is retained. The attempted SIGQUIT capture also reported a platform trace-file permission error; it did not provide an app Java deadlock trace. No speculative SourceSessions threading change was made.
+
+Both harness corrections require another full matrix; these failures are not relabeled as passes.
+
 ## Remaining acceptance and known risks
 
 - Final synchronized API 36 five-repeat run and full API 26/30/36 matrix are still required; current failing CI is disclosed above.
-- One earlier API 26 restart-launch timeout has an unconfirmed cause; the same app passed subsequent startup and download SIGKILL probes. Capture process/log/ANR evidence on recurrence; do not mask it with a longer timeout.
+- API 26 fixture coordination corrections require verification; process/binder-death and metered-network causes are recorded above. Keep capturing evidence on recurrence and retain the existing timeout bounds.
 - No physical phone is connected. Battery restriction/Doze, thermal/low-memory, TalkBack and real Android installation acceptance are pending.
 - Six optional live-network tests were skipped. Live sources, rate-limit/challenge redirects and CDN behavior have not been newly validated.
 - Partial author metadata deliberately excludes uncertain matches until retry succeeds. Persistent failures require user action; they do not loop automatically.
