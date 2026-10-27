@@ -115,7 +115,8 @@ class BatchSelectionTest {
                 while (titles.any { app.dao.shelf(it.id)?.liked != true }) delay(30)
             }
             assertTrue(titles.all { app.dao.shelf(it.id)?.saved == false })
-            device.findObject(By.desc(titles[0].title)).click()
+            compose.onNodeWithContentDescription("End selection").assertDoesNotExist()
+            compose.onNodeWithContentDescription(titles[0].title).performClick()
             compose.waitForIdle()
             assertTrue(device.wait(Until.hasObject(By.text("Saved chapter list · Offline")), 5000))
             tapDescription("Back")
@@ -135,7 +136,7 @@ class BatchSelectionTest {
             android.util.Log.i("KomoriBatch", "afterLongPress selectedLabel=${device.hasObject(By.text("1 selected"))} firstVisible=${device.hasObject(By.desc("Select ${followed.first().name}"))} secondVisible=${device.hasObject(By.desc("Select ${followed.last().name}"))}")
             for (creator in followed.drop(1)) {
                 assertTrue(device.wait(Until.hasObject(By.desc("Select ${creator.name}")), 5000))
-                device.findObject(By.desc("Select ${creator.name}")).click()
+                compose.onNodeWithContentDescription("Select ${creator.name}").performClick()
                 compose.waitForIdle()
             }
             assertTrue(device.wait(Until.hasObject(By.text("2 selected")), 5000))
@@ -144,7 +145,7 @@ class BatchSelectionTest {
             device.dumpWindowHierarchy(java.io.File(app.getExternalFilesDir(null), "batch-selection-ready.xml"))
             tapDescription("End selection")
             assertTrue(device.wait(Until.gone(By.text("2 selected")), 5000))
-            device.findObject(By.desc("Manage author ${followed.first().name}")).click()
+            compose.onNodeWithContentDescription("Manage author ${followed.first().name}").performClick()
             compose.waitForIdle()
             tapText("Manage")
             assertTrue(device.wait(Until.hasObject(By.desc("Manage author ${followed.first().name}").longClickable(true)), 5000))
@@ -157,7 +158,7 @@ class BatchSelectionTest {
             compose.onNodeWithContentDescription("Manage author ${followed.first().name}").performTouchInput { longClick() }
             compose.waitForIdle()
             assertTrue(device.wait(Until.hasObject(By.desc("Select ${followed.last().name}")), 5000))
-            device.findObject(By.desc("Select ${followed.last().name}")).click()
+            compose.onNodeWithContentDescription("Select ${followed.last().name}").performClick()
             compose.waitForIdle()
             tapText("Actions")
             tapText("Unfollow selected")

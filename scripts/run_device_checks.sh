@@ -15,7 +15,13 @@ test_status=0
 ./gradlew connectedDebugAndroidTest --no-daemon || test_status=$?
 if [[ "${KOMORI_DISPOSABLE_EMULATOR:-0}" == 1 ]]; then
     probe_status=0
-    python3 scripts/check_interrupted_cache.py || probe_status=$?
+    for attempt in 1 2 3; do
+        python3 scripts/check_interrupted_cache.py || probe_status=$?
+        if [[ -f device-diagnostics/process-recovery.json ]]; then
+            cp device-diagnostics/process-recovery.json "device-diagnostics/process-recovery-$attempt.json"
+        fi
+        if [[ "$probe_status" != 0 ]]; then break; fi
+    done
     if [[ "$probe_status" == 0 ]]; then
         python3 scripts/check_download_process_recovery.py || probe_status=$?
     fi

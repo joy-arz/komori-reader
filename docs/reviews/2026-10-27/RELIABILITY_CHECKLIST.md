@@ -135,10 +135,16 @@ No heavy dependency, expensive effect or broad database rewrite was added based 
 
 NavigationHistoryTest previously retained a UiObject2 across lazy-row recycling. It now captures immutable label/bounds together, discards already-stale nodes, taps that location and still requires the exact restored pixel bounds. The background test previously inserted a queued row then invoked a direct worker while Activity startup could schedule another real worker; it now injects fixture transport into one actual WorkManager worker, retaining reset, headers, Activity-close and file assertions. The final synchronized local subset passed **6/6 in 41.528 seconds**, including BatchSelection, both navigation tests and all three reading/background tests after these corrections. [Selected Authors screenshot](screenshots/authors-selection-api30.png). Restart failures now capture full logs, process state and SIGQUIT/ANR traces; lifecycle probes run independently of instrumentation failures while preserving the failing exit status.
 
+### Latest cloud probe evidence
+
+[Run 40562830400](https://github.com/joy-arz/komori-reader/actions/runs/40562830400) passed startup cleanup and the real WorkManager HTTP/network/screen-off/SIGKILL probes on **all three API levels (26/30/36)**. Each level passed 79/80 instrumentation tests; only the evolving BatchSelection harness failed (ambiguous group-header text on 26/36, a native cover click during UI updates on 30). Exact semantic group matching and synchronized cover/author actions correct those selectors while retaining native accessibility assertions. Final matrix rerun is pending. The prior single API 26 restart-launch timeout did not reproduce with process/ANR capture enabled; its cause remains unconfirmed. The final workflow runs three consecutive startup-recovery probes and fails on the first unsuccessful attempt, rather than retrying a failure until green.
+
+[Android checks 40562830618](https://github.com/joy-arz/komori-reader/actions/runs/40562830618) passed again, including release shrinking. All new local selector changes compile; the previous complete six-test local subset passed, and the latest action-specific subset is being verified.
+
 ## Remaining acceptance and known risks
 
 - Final synchronized API 36 five-repeat run and full API 26/30/36 matrix are still required; current failing CI is disclosed above.
-- Investigate API 26 restart-launch timeout with captured process/log/ANR evidence; do not mask it with a longer timeout.
+- One earlier API 26 restart-launch timeout has an unconfirmed cause; the same app passed subsequent startup and download SIGKILL probes. Capture process/log/ANR evidence on recurrence; do not mask it with a longer timeout.
 - No physical phone is connected. Battery restriction/Doze, thermal/low-memory, TalkBack and real Android installation acceptance are pending.
 - Six optional live-network tests were skipped. Live sources, rate-limit/challenge redirects and CDN behavior have not been newly validated.
 - Partial author metadata deliberately excludes uncertain matches until retry succeeds. Persistent failures require user action; they do not loop automatically.
