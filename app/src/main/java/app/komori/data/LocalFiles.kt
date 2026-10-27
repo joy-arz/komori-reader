@@ -195,7 +195,7 @@ object LocalFiles {
         ChapterFiles.locked(download.releaseId) {
             val current = app.dao.download(download.releaseId) ?: throw ContentFailure("This download no longer exists.")
             if (current.state != "Complete" || current.total <= 0) throw ContentFailure("Complete this chapter before exporting it.")
-            val archive = File.createTempFile("comic-", ".cbz", app.cacheDir)
+            val archive = OwnedTemporaryFiles.create(File(app.cacheDir, "exports"), "comic-", ".cbz")
             try {
                 var total = 0L
                 ZipOutputStream(archive.outputStream()).use { zip ->
@@ -220,7 +220,7 @@ object LocalFiles {
                 } ?: throw ContentFailure("Choose an export document or folder.")
                 val output = app.contentResolver.openOutputStream(destination, "wt") ?: throw StorageFailure("Could not open the export destination.")
                 output.use { target -> archive.inputStream().use { copyLocalBytes(it, target, ARCHIVE_LIMIT) } }
-            } finally { archive.delete() }
+            } finally { OwnedTemporaryFiles.discard(archive) }
         }
     }
 

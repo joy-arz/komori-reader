@@ -74,7 +74,7 @@ fun UpdateDialog(vm: UpdateViewModel = viewModel()) {
                                     )
                                 }
                         },
-                        enabled = !BuildConfig.DEBUG,
+                        enabled = !state.busy && vm.updater.canDownload,
                     ) {
                         Text(if (state.file == null) "Download update" else "Install update")
                     }
