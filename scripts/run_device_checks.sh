@@ -13,11 +13,13 @@ adb shell dumpsys window > device-diagnostics/windows-before.txt
 
 test_status=0
 ./gradlew connectedDebugAndroidTest --no-daemon || test_status=$?
-if [[ "$test_status" == 0 && "${KOMORI_DISPOSABLE_EMULATOR:-0}" == 1 ]]; then
-    python3 scripts/check_interrupted_cache.py || test_status=$?
-    if [[ "$test_status" == 0 ]]; then
-        python3 scripts/check_download_process_recovery.py || test_status=$?
+if [[ "${KOMORI_DISPOSABLE_EMULATOR:-0}" == 1 ]]; then
+    probe_status=0
+    python3 scripts/check_interrupted_cache.py || probe_status=$?
+    if [[ "$probe_status" == 0 ]]; then
+        python3 scripts/check_download_process_recovery.py || probe_status=$?
     fi
+    if [[ "$test_status" == 0 ]]; then test_status=$probe_status; fi
 fi
 adb logcat -d > device-diagnostics/logcat.txt || true
 adb shell dumpsys activity processes > device-diagnostics/processes-after.txt || true

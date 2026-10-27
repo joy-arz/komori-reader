@@ -1,6 +1,7 @@
 package app.komori
 
 import android.content.Intent
+import androidx.compose.ui.test.*
 import android.graphics.Bitmap
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.platform.app.InstrumentationRegistry
@@ -105,7 +106,7 @@ class BatchSelectionTest {
                 java.io.File(app.getExternalFilesDir(null), "downloaded-library.png")
             )
             assertFalse(device.hasObject(By.text("Select")))
-            device.findObject(By.desc(titles[0].title)).longClick()
+            compose.onNodeWithContentDescription(titles[0].title).performTouchInput { longClick() }
             compose.waitForIdle()
             tapText("Select all")
             tapText("Actions")
@@ -125,9 +126,9 @@ class BatchSelectionTest {
             findCreator.text = "Batch creator $marker"
             compose.waitForIdle()
             assertFalse(device.hasObject(By.text("Select")))
-            val authorRow = device.wait(Until.findObject(By.desc("Manage author ${followed.first().name}").longClickable(true)), 5000)
-                ?: throw AssertionError("Author management row did not become interactive")
-            authorRow.longClick()
+            assertTrue("Author management row did not become interactive",
+                device.wait(Until.hasObject(By.desc("Manage author ${followed.first().name}").longClickable(true)), 5000))
+            compose.onNodeWithContentDescription("Manage author ${followed.first().name}").performTouchInput { longClick() }
             compose.waitForIdle()
             assertTrue("Long press did not activate selection", device.wait(Until.hasObject(By.text("1 selected")), 5000))
             device.dumpWindowHierarchy(java.io.File(app.getExternalFilesDir(null), "batch-after-long-press.xml"))
@@ -146,14 +147,14 @@ class BatchSelectionTest {
             device.findObject(By.desc("Manage author ${followed.first().name}")).click()
             compose.waitForIdle()
             tapText("Manage")
-            val rowAgain = device.wait(Until.findObject(By.desc("Manage author ${followed.first().name}").longClickable(true)), 5000)!!
-            rowAgain.longClick()
+            assertTrue(device.wait(Until.hasObject(By.desc("Manage author ${followed.first().name}").longClickable(true)), 5000))
+            compose.onNodeWithContentDescription("Manage author ${followed.first().name}").performTouchInput { longClick() }
             compose.waitForIdle()
             assertTrue(device.wait(Until.hasObject(By.text("1 selected")), 5000))
             device.findObject(By.clazz("android.widget.EditText")).text = "Batch creator $marker"
             compose.waitForIdle()
             assertTrue(device.wait(Until.gone(By.text("1 selected")), 5000))
-            device.wait(Until.findObject(By.desc("Manage author ${followed.first().name}").longClickable(true)), 5000)!!.longClick()
+            compose.onNodeWithContentDescription("Manage author ${followed.first().name}").performTouchInput { longClick() }
             compose.waitForIdle()
             assertTrue(device.wait(Until.hasObject(By.desc("Select ${followed.last().name}")), 5000))
             device.findObject(By.desc("Select ${followed.last().name}")).click()
@@ -171,8 +172,9 @@ class BatchSelectionTest {
             device.takeScreenshot(
                 java.io.File(app.getExternalFilesDir(null), "downloads-compact.png")
             )
-            (device.wait(Until.findObject(By.text(titles[0].title)), 8000)
-                ?: throw AssertionError("Downloaded title group did not appear")).longClick()
+            assertTrue(device.wait(Until.hasObject(By.text(titles[0].title)), 8000))
+            compose.onNodeWithText(titles[0].title).performTouchInput { longClick() }
+            compose.waitForIdle()
             tapText(titles[1].title)
             tapText("Actions")
             tapText("Delete downloads")
