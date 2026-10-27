@@ -19,7 +19,7 @@ class SourceRequestFailure(val source: String, val stage: SourceStage, val failu
         FailureKind.RATE_LIMIT -> "Requests are rate limited. Wait before retrying." + retryAtMillis(failure).takeIf { it > System.currentTimeMillis() }?.let {
             " Retry in ${((it - System.currentTimeMillis()) / 1000 + 1).coerceAtLeast(1)} seconds."
         }.orEmpty()
-        FailureKind.MISSING_PAGE -> "This content is unavailable. Refresh or choose another release."
+        FailureKind.MISSING_PAGE -> "HTTP ${(failure as SourceHttpException).status}. This content is unavailable. Refresh or choose another release."
         FailureKind.STORAGE -> "Storage is unavailable. Free space and retry."
         FailureKind.CONTENT -> "Unsupported or invalid content. Refresh or try another release."
         FailureKind.SECURE_CONNECTION -> "A secure connection failed. Check the device clock or try another network."

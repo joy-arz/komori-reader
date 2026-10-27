@@ -179,7 +179,7 @@ class BacklogIntegrationTest {
             assertEquals("https://ko-fi.com/joyarz", opened.get())
         } finally { instrumentation.runOnMainSync { activity.finish() } }
     }
-    @Test fun scopedProgressQueryUsesIndexAtFiftyThousandRecords() = runBlocking {
+    @Test fun scopedProgressQueryUsesIndexAtFiftyThousandRecords() = runBlocking<Unit> {
         val name = "benchmark-${UUID.randomUUID()}"
         val db = Room.databaseBuilder(app, LibraryDatabase::class.java, name).build()
         try {

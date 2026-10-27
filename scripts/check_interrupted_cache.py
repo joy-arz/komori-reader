@@ -49,9 +49,15 @@ def main():
     partial = root + '/cache/reader/page-process-death-probe.part'
     image = root + '/cache/reader/process-probe.img'
     survivor = root + '/files/process-probe-survivor'
+    update_dir = root + '/cache/updates'
+    export_dir = root + '/cache/exports'
+    update_partial = update_dir + '/update-999-123456.part'
+    ready_apk = update_dir + '/update-999.apk'
+    unrelated = update_dir + '/personal.part'
+    export_partial = export_dir + '/comic-123456.cbz'
     staging = root + '/files/local-staging/process-probe'
-    shell('run-as', PACKAGE, 'mkdir', '-p', root + '/cache/reader', staging)
-    for path in (partial, image, survivor, staging + '/interrupted.part'):
+    shell('run-as', PACKAGE, 'mkdir', '-p', root + '/cache/reader', staging, update_dir, export_dir)
+    for path in (partial, image, survivor, staging + '/interrupted.part', update_partial, ready_apk, unrelated, export_partial):
         shell('run-as', PACKAGE, 'touch', path)
     shell('input', 'keyevent', 'KEYCODE_HOME')
     shell('kill', '-9', old_pid)
@@ -59,17 +65,18 @@ def main():
     new_pid = launch()
     def missing(path):
         return shell('sh', '-c', 'if test -e ' + shlex.quote(path) + '; then echo present; else echo missing; fi') == 'missing'
-    wait_for(lambda: missing(partial) and missing(staging), 'startup recovery cleanup')
-    if missing(image) or missing(survivor):
+    wait_for(lambda: missing(partial) and missing(staging) and missing(update_partial) and missing(export_partial), 'startup recovery cleanup')
+    if missing(image) or missing(survivor) or missing(ready_apk) or missing(unrelated):
         raise AssertionError('Recovery deleted retained cached/persistent data')
     if old_pid == new_pid:
         raise AssertionError('Process did not change')
     report = dict(status='PASS', serial=serial, old_pid=old_pid, new_pid=new_pid,
                   partial_removed=True, staging_removed=True, cached_image_preserved=True,
-                  persistent_marker_preserved=True, scope='debug emulator SIGKILL and startup recovery')
+                  persistent_marker_preserved=True, updater_part_removed=True, export_orphan_removed=True,
+                  ready_named_apk_preserved=True, unrelated_update_file_preserved=True, scope='debug emulator SIGKILL and startup recovery')
     Path('device-diagnostics').mkdir(exist_ok=True)
     Path('device-diagnostics/process-recovery.json').write_text(json.dumps(report, indent=2) + '\n')
-    shell('run-as', PACKAGE, 'rm', '-f', image, survivor)
+    shell('run-as', PACKAGE, 'rm', '-f', image, survivor, ready_apk, unrelated)
     print(json.dumps(report))
 
 
