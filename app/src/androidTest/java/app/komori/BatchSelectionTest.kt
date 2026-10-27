@@ -173,7 +173,11 @@ class BatchSelectionTest {
                 java.io.File(app.getExternalFilesDir(null), "downloads-compact.png")
             )
             assertTrue(device.wait(Until.hasObject(By.text(titles[0].title)), 8000))
-            compose.onNodeWithText(titles[0].title).performTouchInput { longClick() }
+            val groupHeader = SemanticsMatcher.expectValue(
+                androidx.compose.ui.semantics.SemanticsProperties.Text,
+                listOf(androidx.compose.ui.text.AnnotatedString(titles[0].title)),
+            ) and SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsActions.OnLongClick)
+            compose.onNode(groupHeader).performTouchInput { longClick() }
             compose.waitForIdle()
             tapText(titles[1].title)
             tapText("Actions")

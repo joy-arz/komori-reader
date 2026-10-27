@@ -1,0 +1,29 @@
+{
+  "status": "PASS",
+  "old_pid": "4534",
+  "new_pid": "5294",
+  "completed_page_reused": true,
+  "queued_chapter_completed": true,
+  "paused_intent_preserved": true,
+  "os_network_constraint_recovery": true,
+  "emulator_screen_off_transfer_completed": true,
+  "counts": {
+    "/at-home/server/work-fixture-3720c7f8-0227-4fdc-bd6c-fe906b9a8ea5?forcePort443=true": 2,
+    "/data-saver/work-fixture-3720c7f8-0227-4fdc-bd6c-fe906b9a8ea5/0.png": 1,
+    "/data-saver/work-fixture-3720c7f8-0227-4fdc-bd6c-fe906b9a8ea5/1.png": 2,
+    "/data-saver/work-fixture-3720c7f8-0227-4fdc-bd6c-fe906b9a8ea5/2.png": 1,
+    "/at-home/server/work-fixture-a989d4c7-d98c-40c4-802c-b0eef6845f2d?forcePort443=true": 1,
+    "/data-saver/work-fixture-a989d4c7-d98c-40c4-802c-b0eef6845f2d/0.png": 1,
+    "/data-saver/work-fixture-a989d4c7-d98c-40c4-802c-b0eef6845f2d/1.png": 1,
+    "/data-saver/work-fixture-a989d4c7-d98c-40c4-802c-b0eef6845f2d/2.png": 1,
+    "/at-home/server/work-fixture-c3c513e3-c340-4b8a-a7a8-347d368fbd17?forcePort443=true": 2,
+    "/data-saver/work-fixture-c3c513e3-c340-4b8a-a7a8-347d368fbd17/0.png": 1,
+    "/data-saver/work-fixture-c3c513e3-c340-4b8a-a7a8-347d368fbd17/1.png": 2,
+    "/data-saver/work-fixture-c3c513e3-c340-4b8a-a7a8-347d368fbd17/2.png": 1,
+    "/at-home/server/work-fixture-1aa0f666-065f-4d8c-8f83-8020bf1c7931?forcePort443=true": 1,
+    "/data-saver/work-fixture-1aa0f666-065f-4d8c-8f83-8020bf1c7931/0.png": 1,
+    "/data-saver/work-fixture-1aa0f666-065f-4d8c-8f83-8020bf1c7931/1.png": 1,
+    "/data-saver/work-fixture-1aa0f666-065f-4d8c-8f83-8020bf1c7931/2.png": 1
+  },
+  "scope": "synthetic HTTP, OS WorkManager foreground worker, emulator SIGKILL/restart; not manufacturer battery acceptance"
+}

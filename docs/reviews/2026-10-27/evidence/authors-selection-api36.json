@@ -1,0 +1,26 @@
+{
+  "run": 40555273372,
+  "iterations": "5/5 passed",
+  "after_first_long_press": [
+    {
+      "content-desc": "Select Batch creator b2998aa8 1",
+      "class": "android.widget.CheckBox",
+      "clickable": "true",
+      "long-clickable": "true",
+      "checkable": "true",
+      "checked": "true",
+      "selected": "false",
+      "bounds": "[42,483][1038,630]"
+    },
+    {
+      "content-desc": "Select Batch creator b2998aa8 2",
+      "class": "android.widget.CheckBox",
+      "clickable": "true",
+      "long-clickable": "true",
+      "checkable": "true",
+      "checked": "false",
+      "selected": "false",
+      "bounds": "[42,672][1038,819]"
+    }
+  ]
+}
