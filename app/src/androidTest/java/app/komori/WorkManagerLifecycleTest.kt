@@ -130,6 +130,27 @@ class WorkManagerLifecycleTest {
         }
     }
 
+    @Test fun explicitRetrySupersedesAWorkerStillFinishingItsFailure() = runBlocking<Unit> {
+        Fixture().use { fixture ->
+            val first = id(); val finishing = CompletableDeferred<Unit>()
+            val previous = app.downloadRuntime!!
+            app.downloadRuntime = object : DownloadRuntime by previous {
+                override suspend fun beforeFinish(id: String) {
+                    if (id == first && app.dao.download(id)?.state == "Failed") {
+                        finishing.complete(Unit); awaitCancellation()
+                    }
+                }
+            }
+            try {
+                configure(fixture, first); fixture.failSecond = true; command(first, "queue")
+                withTimeout(15000) { finishing.await() }
+                assertTrue(WorkManager.getInstance(app).getWorkInfosForUniqueWork("download-$first").get().any { it.state == WorkInfo.State.RUNNING })
+                fixture.failSecond = false; command(first, "queue"); complete(first)
+                assertEquals(1, fixture.count(first, 0))
+            } finally { command(first, "cleanup"); app.downloadRuntime = previous }
+        }
+    }
+
     @Test fun movingQueuedTitlesChangesTheNextWorkerWithoutInterruptingTheCurrentWriter() = runBlocking<Unit> {
         Fixture().use { fixture ->
             val first = id(); val second = id(); val third = id()

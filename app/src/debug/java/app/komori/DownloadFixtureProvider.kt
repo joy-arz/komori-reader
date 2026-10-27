@@ -5,6 +5,7 @@ import android.database.Cursor
 import android.database.MatrixCursor
 import android.net.Uri
 import android.os.Bundle
+import androidx.core.content.edit
 import app.komori.data.*
 import app.komori.domain.Release
 import kotlinx.coroutines.flow.first
@@ -44,18 +45,18 @@ class DownloadFixtureProvider : ContentProvider() {
                 val configured = extras?.getString("endpoint") ?: "http://127.0.0.1:${extras?.getInt("port") ?: 0}/"
                 val endpoint = configured.toHttpUrl()
                 require(endpoint.scheme == "http" && endpoint.host == "127.0.0.1" && endpoint.username.isEmpty() && endpoint.password.isEmpty())
-                preferences.edit().putString("endpoint:$id", endpoint.toString()).commit()
+                preferences.edit(commit = true) { putString("endpoint:$id", endpoint.toString()) }
             }
             "queue" -> {
                 enqueueDownload(app, Release(id, id, "1", null, "", "en", emptyList(), "Fixture", 3), app.settings.flow.first())
             }
             "pause" -> app.dao.download(id)?.let { DownloadCoordinator(app).stop(it, "Paused") }
             "delete" -> app.dao.download(id)?.let { DownloadCoordinator(app).delete(it) }
-            "low" -> preferences.edit().putBoolean("low:$id", extras?.getBoolean("value") == true).commit()
+            "low" -> preferences.edit(commit = true) { putBoolean("low:$id", extras?.getBoolean("value") == true) }
             "recover" -> kickDownloadQueue(app, recoverInterrupted = true)
             "cleanup" -> {
                 app.dao.download(id)?.let { DownloadCoordinator(app).delete(it) }
-                preferences.edit().remove("endpoint:$id").remove("low:$id").commit()
+                preferences.edit(commit = true) { remove("endpoint:$id"); remove("low:$id") }
             }
             else -> error("Unknown fixture command")
         }

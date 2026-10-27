@@ -120,7 +120,9 @@ class ChapterDownloadWorker(context: Context, params: WorkerParameters) :
             wakeLock.acquire(TimeUnit.MINUTES.toMillis(9))
             val app = applicationContext as KomoriApp
             val id = inputData.getString("chapter").orEmpty()
-            return download(app.downloadRuntime?.source(id) ?: app.source, enforceQueue = true)
+            val result = download(app.downloadRuntime?.source(id) ?: app.source, enforceQueue = true)
+            app.downloadRuntime?.beforeFinish(id)
+            return result
         } finally {
             if (wakeLock.isHeld) wakeLock.release()
             if (!isStopped) withContext(kotlinx.coroutines.NonCancellable) { kickDownloadQueue(applicationContext) }
