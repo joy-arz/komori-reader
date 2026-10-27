@@ -178,7 +178,7 @@ internal fun Downloads(vm: ReaderViewModel) {
                     chapters,
                     key = { it.releaseId },
                 ) { download ->
-                    val displayState = downloadDisplayState(download, environment, settings.wifi)
+                    val displayState = downloadDisplayState(download, environment, settings.wifi, download.releaseId in transfers)
                     var itemMenu by remember { mutableStateOf(false) }
                     OutlinedCard(
                         modifier =

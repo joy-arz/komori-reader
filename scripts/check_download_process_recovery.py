@@ -55,6 +55,8 @@ def main():
     network = "work-fixture-" + str(uuid.uuid4())
     blocked = threading.Event(); release = threading.Event()
     network_blocked = threading.Event(); network_release = threading.Event()
+    screen = "work-fixture-" + str(uuid.uuid4())
+    screen_blocked = threading.Event(); screen_release = threading.Event()
     wifi_before = shell("settings", "get", "global", "wifi_on") != "0"
     data_before = shell("settings", "get", "global", "mobile_data") != "0"
     counts = collections.Counter(); lock = threading.Lock(); image = png()
@@ -71,7 +73,7 @@ def main():
                 identity = path.rsplit("/", 1)[-1]
                 body = json.dumps(dict(baseUrl="https://fixture.invalid", chapter=dict(hash=identity, data=["0.png", "1.png", "2.png"], dataSaver=["0.png", "1.png", "2.png"]))).encode()
             else:
-                for identity, arrived, resume in ((active, blocked, release), (network, network_blocked, network_release)):
+                for identity, arrived, resume in ((active, blocked, release), (network, network_blocked, network_release), (screen, screen_blocked, screen_release)):
                     if path in (f"/data/{identity}/1.png", f"/data-saver/{identity}/1.png"):
                         arrived.set()
                         if not resume.wait(45):
@@ -105,10 +107,10 @@ def main():
 
     try:
         shell("am", "start", "-W", "-n", PACKAGE + "/app.komori.MainActivity")
-        for identity in (active, queued, paused, network):
-            command("configure", identity, "--extra", f"port:i:{port}")
+        for identity in (active, queued, paused, network, screen):
+            command(f"configure:{port}", identity)
         # A paused row must remain paused across restart, without creating any HTTP work.
-        command("low", paused, "--extra", "value:b:true"); command("queue", paused)
+        command("low:1", paused); command("queue", paused)
         wait_for(lambda: "Waiting for storage" in state(paused), "storage fixture wait")
         command("pause", paused)
         command("queue", network)
@@ -116,13 +118,17 @@ def main():
         assert "done=1" in state(network), state(network)
         shell("svc", "data", "disable"); shell("svc", "wifi", "disable")
         wait_for(lambda: "connected=false" in state(network) and "ENQUEUED" in state(network), "OS network constraint stops the worker")
-        shell("input", "keyevent", "KEYCODE_SLEEP")
-        wait_for(lambda: "mWakefulness=Asleep" in shell("dumpsys", "power"), "emulator display asleep")
         network_release.set()
         shell("svc", "wifi", "enable" if wifi_before else "disable")
         shell("svc", "data", "enable" if data_before else "disable")
         wait_for(lambda: "state=Complete" in state(network), "OS network recovery resumes the worker")
         assert sum(count for path, count in counts.items() if path.endswith(f"/{network}/0.png")) == 1, dict(counts)
+        command("queue", screen)
+        wait_for(screen_blocked.is_set, "screen-off fixture second image")
+        shell("input", "keyevent", "KEYCODE_SLEEP")
+        wait_for(lambda: "mWakefulness=Asleep" in shell("dumpsys", "power"), "emulator display asleep")
+        screen_release.set()
+        wait_for(lambda: "state=Complete" in state(screen), "ongoing foreground transfer completes with screen off")
         assert "mWakefulness=Asleep" in shell("dumpsys", "power"), "Display woke during screen-off transfer"
         shell("input", "keyevent", "KEYCODE_WAKEUP"); shell("wm", "dismiss-keyguard")
         command("queue", active)
@@ -151,16 +157,16 @@ def main():
     except Exception as error:
         Path("device-diagnostics").mkdir(exist_ok=True)
         report = dict(status="FAIL", error=str(error), counts=dict(counts),
-                      rows={identity: state(identity) for identity in (active, queued, paused, network)})
+                      rows={identity: state(identity) for identity in (active, queued, paused, network, screen)})
         Path("device-diagnostics/download-process-recovery.json").write_text(json.dumps(report, indent=2) + "\n")
         print(json.dumps(report))
         raise
     finally:
-        release.set(); network_release.set()
+        release.set(); network_release.set(); screen_release.set()
         shell("input", "keyevent", "KEYCODE_WAKEUP"); shell("wm", "dismiss-keyguard")
         shell("svc", "wifi", "enable" if wifi_before else "disable")
         shell("svc", "data", "enable" if data_before else "disable")
-        for identity in (active, queued, paused, network):
+        for identity in (active, queued, paused, network, screen):
             command("cleanup", identity)
         adb("reverse", "--remove", f"tcp:{port}")
         server.shutdown(); server.server_close()

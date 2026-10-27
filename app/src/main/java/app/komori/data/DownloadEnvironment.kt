@@ -49,10 +49,11 @@ fun downloadEnvironment(context: Context) = callbackFlow {
     awaitClose { ticker.cancel(); manager.unregisterNetworkCallback(callback); app.unregisterReceiver(receiver) }
 }.distinctUntilChanged().flowOn(Dispatchers.IO)
 
-fun downloadDisplayState(download: Download, environment: DownloadEnvironment, wifiOnly: Boolean): String = when {
+fun downloadDisplayState(download: Download, environment: DownloadEnvironment, wifiOnly: Boolean, transferring: Boolean? = null): String = when {
     download.state !in app.komori.domain.DownloadPolicy.activeStates -> download.state
     environment.lowStorage || download.state == "Waiting for storage" -> "Waiting for storage"
     !environment.connected -> "Waiting for network"
     wifiOnly && !environment.unmetered -> "Waiting for Wi-Fi"
+    download.state == "Downloading" && transferring == false -> "Waiting for Android"
     else -> download.state
 }

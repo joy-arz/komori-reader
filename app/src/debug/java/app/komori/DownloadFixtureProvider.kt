@@ -42,9 +42,10 @@ class DownloadFixtureProvider : ContentProvider() {
         val id = requireNotNull(arg)
         require(id.matches(Regex("work-fixture-[A-Za-z0-9-]{1,100}")))
         app.startupRecovery?.join()
-        when (method) {
+        when (method.substringBefore(':')) {
             "configure" -> {
-                val configured = extras?.getString("endpoint") ?: "http://127.0.0.1:${extras?.getInt("port") ?: 0}/"
+                val port = method.substringAfter(':', "0").toIntOrNull() ?: 0
+                val configured = extras?.getString("endpoint") ?: "http://127.0.0.1:$port/"
                 val endpoint = configured.toHttpUrl()
                 require(endpoint.scheme == "http" && endpoint.host == "127.0.0.1" && endpoint.username.isEmpty() && endpoint.password.isEmpty())
                 preferences.edit(commit = true) { putString("endpoint:$id", endpoint.toString()) }
@@ -54,7 +55,7 @@ class DownloadFixtureProvider : ContentProvider() {
             }
             "pause" -> app.dao.download(id)?.let { DownloadCoordinator(app).stop(it, "Paused") }
             "delete" -> app.dao.download(id)?.let { DownloadCoordinator(app).delete(it) }
-            "low" -> preferences.edit(commit = true) { putBoolean("low:$id", extras?.getBoolean("value") == true) }
+            "low" -> preferences.edit(commit = true) { putBoolean("low:$id", extras?.getBoolean("value") == true || method == "low:1") }
             "recover" -> kickDownloadQueue(app, recoverInterrupted = true)
             "cleanup" -> {
                 app.dao.download(id)?.let { DownloadCoordinator(app).delete(it) }
