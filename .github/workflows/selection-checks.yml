@@ -1,5 +1,6 @@
 name: Targeted API 36 selection checks
 on:
+  pull_request:
   workflow_dispatch:
 permissions:
   contents: read
