@@ -11,6 +11,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 
 class KomoriApp : Application(), ImageLoaderFactory {
+    internal var downloadRuntime: DownloadRuntime? = null
     internal var startupRecovery: kotlinx.coroutines.Job? = null
         private set
 
@@ -18,6 +19,7 @@ class KomoriApp : Application(), ImageLoaderFactory {
         super.onCreate()
         startupRecovery = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default).launch {
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching { AppUpdates.recoverTemporaryFiles(this@KomoriApp) }
                 app.komori.ui.ReaderCacheFiles.clean(java.io.File(cacheDir, "reader"))
                 LocalFiles.recoverInterrupted(this@KomoriApp)
             }

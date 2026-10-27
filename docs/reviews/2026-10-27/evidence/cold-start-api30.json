@@ -1,0 +1,8 @@
+{
+  "scope": "local API30 debug emulator, process-cold starts, OS/disk caches retained, empty fixture Library",
+  "runs": [
+    "Starting: Intent { cmp=app.komori.reader.debug/app.komori.MainActivity }\nStatus: ok\nLaunchState: COLD\nActivity: app.komori.reader.debug/app.komori.MainActivity\nTotalTime: 2133\nWaitTime: 2153\nComplete\n",
+    "Starting: Intent { cmp=app.komori.reader.debug/app.komori.MainActivity }\nStatus: ok\nLaunchState: COLD\nActivity: app.komori.reader.debug/app.komori.MainActivity\nTotalTime: 4124\nWaitTime: 4234\nComplete\n",
+    "Starting: Intent { cmp=app.komori.reader.debug/app.komori.MainActivity }\nStatus: ok\nLaunchState: COLD\nActivity: app.komori.reader.debug/app.komori.MainActivity\nTotalTime: 3609\nWaitTime: 3710\nComplete\n"
+  ]
+}

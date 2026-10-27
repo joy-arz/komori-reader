@@ -49,3 +49,8 @@ data class AuthorWorkFilter(
         }.getOrDefault(AuthorWorkFilter())
     }
 }
+
+/** Local enrichment owns metadata failures; only verified native filters are sent to the source. */
+internal fun authorBrowseFilter(source: String, sort: AuthorSort, filter: AuthorWorkFilter) = BrowseFilter(
+    sort = sort.sourceSort(source), language = if (source in setOf("mangadex", "nhentai")) filter.nativeLanguage else "",
+)

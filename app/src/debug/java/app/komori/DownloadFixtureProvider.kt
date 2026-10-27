@@ -1,0 +1,82 @@
+package app.komori
+
+import android.content.*
+import android.database.Cursor
+import android.database.MatrixCursor
+import android.net.Uri
+import android.os.Bundle
+import androidx.core.content.edit
+import app.komori.data.*
+import app.komori.domain.Release
+import androidx.work.WorkManager
+import android.net.ConnectivityManager
+import kotlinx.coroutines.flow.first
+import java.io.File
+import kotlinx.coroutines.*
+import okhttp3.*
+import okhttp3.HttpUrl.Companion.toHttpUrl
+
+/** Shell/instrumentation-only loopback fixtures. This provider does not exist in release APKs. */
+class DownloadFixtureProvider : ContentProvider() {
+    private val app get() = context!!.applicationContext as KomoriApp
+    private val preferences get() = app.getSharedPreferences("download-fixtures", 0)
+    override fun onCreate(): Boolean {
+        app.downloadRuntime = object : DownloadRuntime {
+            override fun source(id: String): Sources? {
+                if (!id.startsWith("work-fixture-")) return null
+                val endpoint = preferences.getString("endpoint:$id", null) ?: return null
+                val base = endpoint.toHttpUrl()
+                check(base.scheme == "http" && base.host == "127.0.0.1")
+                val client = OkHttpClient.Builder().addInterceptor { chain ->
+                    val url = chain.request().url
+                    chain.proceed(chain.request().newBuilder().url(base.newBuilder().encodedPath(url.encodedPath).encodedQuery(url.encodedQuery).build()).build())
+                }.build()
+                return Sources(client, client)
+            }
+            override fun availableBytes(id: String, directory: File): Long? =
+                if (id.startsWith("work-fixture-") && preferences.getBoolean("low:$id", false)) 0L else null
+        }
+        return true
+    }
+    override fun call(method: String, arg: String?, extras: Bundle?): Bundle = runBlocking(Dispatchers.IO) {
+        val id = requireNotNull(arg)
+        require(id.matches(Regex("work-fixture-[A-Za-z0-9-]{1,100}")))
+        app.startupRecovery?.join()
+        when (method.substringBefore(':')) {
+            "ready" -> Unit
+            "configure" -> {
+                val port = method.substringAfter(':', "0").toIntOrNull() ?: 0
+                val configured = extras?.getString("endpoint") ?: "http://127.0.0.1:$port/"
+                val endpoint = configured.toHttpUrl()
+                require(endpoint.scheme == "http" && endpoint.host == "127.0.0.1" && endpoint.username.isEmpty() && endpoint.password.isEmpty())
+                preferences.edit(commit = true) { putString("endpoint:$id", endpoint.toString()) }
+            }
+            "queue" -> {
+                enqueueDownload(app, Release(id, id, "1", null, "", "en", emptyList(), "Fixture", 3), app.settings.flow.first())
+            }
+            "pause" -> app.dao.download(id)?.let { DownloadCoordinator(app).stop(it, "Paused") }
+            "delete" -> app.dao.download(id)?.let { DownloadCoordinator(app).delete(it) }
+            "low" -> preferences.edit(commit = true) { putBoolean("low:$id", extras?.getBoolean("value") == true || method == "low:1") }
+            "recover" -> kickDownloadQueue(app, recoverInterrupted = true)
+            "cleanup" -> {
+                app.dao.download(id)?.let { DownloadCoordinator(app).delete(it) }
+                preferences.edit(commit = true) { remove("endpoint:$id"); remove("low:$id") }
+            }
+            else -> error("Unknown fixture command")
+        }
+        Bundle().apply { putString("result", "ok") }
+    }
+    override fun query(uri: Uri, projection: Array<out String>?, selection: String?, args: Array<out String>?, sort: String?): Cursor = runBlocking(Dispatchers.IO) {
+        val id = uri.lastPathSegment.orEmpty()
+        require(id.startsWith("work-fixture-"))
+        val work = WorkManager.getInstance(app).getWorkInfosForUniqueWork("download-$id").get().joinToString("|") { it.state.name }
+        val connected = app.getSystemService(ConnectivityManager::class.java).activeNetwork != null
+        MatrixCursor(arrayOf("state", "done", "total", "workState", "connected")).apply {
+            app.dao.download(id)?.let { addRow(arrayOf<Any>(it.state, it.done, it.total, work, connected.toString())) }
+        }
+    }
+    override fun getType(uri: Uri) = "vnd.android.cursor.item/download-fixture"
+    override fun insert(uri: Uri, values: ContentValues?): Uri? = throw UnsupportedOperationException()
+    override fun delete(uri: Uri, selection: String?, args: Array<out String>?): Int = throw UnsupportedOperationException()
+    override fun update(uri: Uri, values: ContentValues?, selection: String?, args: Array<out String>?): Int = throw UnsupportedOperationException()
+}

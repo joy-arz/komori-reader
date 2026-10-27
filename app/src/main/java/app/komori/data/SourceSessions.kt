@@ -95,9 +95,10 @@ class SourceHttpException(
         }
     )
 
-fun requiresSourceAction(error: Exception?): Boolean =
-    error is SourceVerificationRequired ||
-        (error is SourceHttpException && error.source != "mangadex" && error.status in listOf(401, 403))
+fun requiresSourceAction(error: Exception?): Boolean = originalFailure(error).let {
+    it is SourceVerificationRequired ||
+        (it is SourceHttpException && it.source != "mangadex" && it.status in listOf(401, 403))
+}
 
 class SourceSessions(context: Context) {
     val userAgent: String = WebSettings.getDefaultUserAgent(context)

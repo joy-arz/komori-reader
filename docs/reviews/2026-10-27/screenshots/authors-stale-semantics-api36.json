@@ -1,0 +1,33 @@
+{
+  "run": 40494412608,
+  "iteration": 4,
+  "rows": [
+    {
+      "text": "1 selected",
+      "content-desc": "",
+      "bounds": "[32,229][507,276]",
+      "clickable": "false",
+      "long-clickable": "false",
+      "selected": "false",
+      "checked": "false"
+    },
+    {
+      "text": "",
+      "content-desc": "Select Batch creator 1",
+      "bounds": "[0,462][1080,651]",
+      "clickable": "false",
+      "long-clickable": "false",
+      "selected": "false",
+      "checked": "false"
+    },
+    {
+      "text": "",
+      "content-desc": "Manage author Batch creator 2",
+      "bounds": "[0,525][1080,714]",
+      "clickable": "false",
+      "long-clickable": "false",
+      "selected": "false",
+      "checked": "false"
+    }
+  ]
+}

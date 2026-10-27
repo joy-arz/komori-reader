@@ -74,7 +74,7 @@ fun UpdateDialog(vm: UpdateViewModel = viewModel()) {
                                     )
                                 }
                         },
-                        enabled = !BuildConfig.DEBUG,
+                        enabled = !state.busy && vm.updater.canDownload,
                     ) {
                         Text(if (state.file == null) "Download update" else "Install update")
                     }
@@ -89,14 +89,14 @@ fun UpdateSettings(vm: UpdateViewModel = viewModel()) {
     Text("App updates", style = MaterialTheme.typography.titleLarge)
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         listOf("stable" to "Stable", "preview" to "Preview").forEach { (key, label) ->
-            FilterChip(state.channel == key, { vm.channel(key) }, { Text(label) }, enabled = !state.checking && !state.downloading)
+            FilterChip(state.channel == key, { vm.channel(key) }, { Text(label) }, enabled = !state.downloading)
         }
     }
     Text("Preview includes prereleases. Automatic checks use HTTP cache validators and a six-hour cooldown.", style = MaterialTheme.typography.bodySmall)
     Text(state.message, style = MaterialTheme.typography.bodyMedium)
     Row {
-        TextButton(onClick = { vm.check(true) }, enabled = !state.checking && !state.downloading) {
-            Text("Check for updates")
+        TextButton(onClick = { if (state.checking) vm.cancelCheck() else vm.check(true) }, enabled = !state.downloading) {
+            Text(if (state.checking) "Cancel update check" else "Check for updates")
         }
         if (state.update != null)
             TextButton(onClick = vm::show) {

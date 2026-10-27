@@ -10,6 +10,7 @@ import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
@@ -53,13 +54,21 @@ suspend fun enqueueDownload(
     val app = context.applicationContext as KomoriApp
     if (app.dao.download(chapter.id)?.state in DownloadPolicy.activeStates) return
     withContext(kotlinx.coroutines.NonCancellable) {
-        ChapterFiles.locked(chapter.id) {
-            val existing = app.dao.download(chapter.id)
-            if (existing?.state in (DownloadPolicy.activeStates + "Complete")) return@locked
-            app.database.withTransaction {
-                val position = app.dao.lastQueuePosition().let { if (it == Long.MAX_VALUE) throw IllegalStateException("Download queue position limit reached.") else it + 1 }
-                app.dao.putDownload(existing?.copy(state = "Queued", error = "", queuePosition = position)
-                    ?: Download(chapter.id, chapter.mangaId, chapter.label, chapter.pages.coerceAtLeast(0), dataSaver = settings.saver, queuePosition = position))
+        withDownloadQueueMutation {
+            val before = app.dao.download(chapter.id)
+            if (before?.state in (DownloadPolicy.activeStates + "Complete")) return@withDownloadQueueMutation
+            // An explicit retry supersedes a failed/backed-off worker, including its finishing window.
+            if (before != null) withContext(Dispatchers.IO) {
+                WorkManager.getInstance(app).cancelUniqueWork("download-${chapter.id}").result.get()
+            }
+            ChapterFiles.locked(chapter.id) {
+                val existing = app.dao.download(chapter.id)
+                if (existing?.state in (DownloadPolicy.activeStates + "Complete")) return@locked
+                app.database.withTransaction {
+                    val position = app.dao.lastQueuePosition().let { if (it == Long.MAX_VALUE) throw IllegalStateException("Download queue position limit reached.") else it + 1 }
+                    app.dao.putDownload(existing?.copy(state = "Queued", error = "", queuePosition = position)
+                        ?: Download(chapter.id, chapter.mangaId, chapter.label, chapter.pages.coerceAtLeast(0), dataSaver = settings.saver, queuePosition = position))
+                }
             }
         }
         kickDownloadQueue(app)
@@ -109,7 +118,11 @@ class ChapterDownloadWorker(context: Context, params: WorkerParameters) :
         try {
             setForeground(getForegroundInfo())
             wakeLock.acquire(TimeUnit.MINUTES.toMillis(9))
-            return download((applicationContext as KomoriApp).source, enforceQueue = true)
+            val app = applicationContext as KomoriApp
+            val id = inputData.getString("chapter").orEmpty()
+            val result = download(app.downloadRuntime?.source(id) ?: app.source, enforceQueue = true)
+            app.downloadRuntime?.beforeFinish(id)
+            return result
         } finally {
             if (wakeLock.isHeld) wakeLock.release()
             if (!isStopped) withContext(kotlinx.coroutines.NonCancellable) { kickDownloadQueue(applicationContext) }
@@ -131,8 +144,10 @@ class ChapterDownloadWorker(context: Context, params: WorkerParameters) :
                     val attempt =
                         inputData.getInt("attemptBase", 0).coerceAtLeast(0).toLong() +
                             runAttemptCount
+                    fun space(directory: File) = app.downloadRuntime?.availableBytes(id, directory) ?: directory.usableSpace
+                    fun elapsed() = app.downloadRuntime?.elapsedMillis(id) ?: elapsedMillis()
                     try {
-                        if (app.filesDir.usableSpace < 64L * 1024 * 1024) throw StorageFailure("Free at least 64 MB to continue downloading.")
+                        if (space(app.filesDir) < 64L * 1024 * 1024) throw StorageFailure("Free at least 64 MB to continue downloading.")
                         record = record.copy(state = "Downloading", error = "")
                         app.dao.putDownload(record)
                         DownloadTransfers.report(id, DownloadTransfer(resolving = true))
@@ -141,42 +156,37 @@ class ChapterDownloadWorker(context: Context, params: WorkerParameters) :
                             throw ContentFailure("This release has no downloadable pages.")
                         kotlinx.coroutines.currentCoroutineContext().ensureActive()
                         val directory = chapterDirectory(app, id).apply { mkdirs() }
+                        directory.listFiles().orEmpty().filter { it.name.matches(Regex("page-[0-9]+-[0-9]+[.]part")) }.forEach { it.delete() }
                         // The manifest tracks image identity, not expiring delivery-host URLs.
-                        val identity =
-                            urls.joinToString("\n") {
-                                it.substringAfterLast(
-                                    "/data/",
-                                    it.substringAfterLast("/data-saver/"),
-                                )
-                            }
+                        val identity = PageContentIdentity.manifest(sourceKey(id), urls)
                         val manifest = File(directory, "manifest")
                         if (!manifest.exists() || manifest.readText() != identity) {
-                            directory.listFiles()?.forEach { it.delete() }
+                            val compatible = manifest.exists() && PageContentIdentity.legacyCompatible(sourceKey(id), manifest.readText(), urls)
+                            if (!compatible) {
+                                if (directory.listFiles().orEmpty().any { it.extension == "img" }) ChapterFiles.requireNotReading(id)
+                                directory.listFiles()?.forEach { it.delete() }
+                            }
                             storageOperation { manifest.writeText(identity) }
                         }
-                        record =
-                            record.copy(
-                                state = "Downloading",
-                                total = urls.size,
-                                done =
-                                    urls.indices.count {
-                                        !repairMarker(app, id, it).exists() &&
-                                            validImage(pageFile(app, id, it))
-                                    },
-                                error = "",
-                            )
+                        val reusable = urls.indices.filterTo(mutableSetOf()) { index ->
+                            val file = pageFile(app, id, index)
+                            val signature = File(file.parentFile, "${file.name}.sha256")
+                            !repairMarker(app, id, index).exists() && validImage(file) &&
+                                (!signature.exists() || signature.length() == 64L && signature.readText() == imageDigest(file))
+                        }
+                        record = record.copy(state = "Downloading", total = urls.size, done = reusable.size, error = "")
                         app.dao.putDownload(record)
-                        val started = elapsedMillis()
+                        val started = elapsed()
                         urls.forEachIndexed { index, url ->
                             if (isStopped) throw CancellationException()
-                            if (elapsedMillis() - started > 8 * 60 * 1000) {
+                            if (elapsed() - started > 8 * 60 * 1000) {
                                 continuation(app, id, attempt, 0)
                                 app.dao.putDownload(record.copy(state = "Queued"))
                                 return@chapter Result.success()
                             }
                             val file = pageFile(app, id, index)
-                            if (repairMarker(app, id, index).exists() || !validImage(file)) {
-                                if (directory.usableSpace < 64L * 1024 * 1024)
+                            if (index !in reusable) {
+                                if (space(directory) < 64L * 1024 * 1024)
                                     throw StorageFailure(
                                         "Free at least 64 MB to continue downloading."
                                     )
@@ -192,7 +202,9 @@ class ChapterDownloadWorker(context: Context, params: WorkerParameters) :
                                         ),
                                     )
                                     var lastProgress = 0L
+                                    val transferContext = kotlinx.coroutines.currentCoroutineContext()
                                     source.transferPage(id, url, temporary) { bytes, total ->
+                                        if (isStopped || !transferContext.isActive) return@transferPage
                                         val now = System.nanoTime()
                                         if (now - lastProgress >= 250_000_000L || bytes == total) {
                                             lastProgress = now

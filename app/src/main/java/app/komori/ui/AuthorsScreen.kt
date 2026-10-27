@@ -52,8 +52,11 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -88,6 +91,8 @@ internal fun Authors(vm: ReaderViewModel) {
     val selected = catalogCreators.find { it.id == selectedId }
     val visible = creators.filter { it.name.contains(query, true) }
     val creatorSelection = rememberMultiSelection(visible.map { it.id })
+    val selecting = creatorSelection.active
+    val selectedCreators = creatorSelection.ids.toSet()
     val context = (selected?.let { listOf(it) } ?: catalogCreators).map { it.id }
     val currentFeed by vm.authorFeed.collectAsStateWithLifecycle()
     val feed =
@@ -112,11 +117,14 @@ internal fun Authors(vm: ReaderViewModel) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
             }
-            if (!manage && creators.isNotEmpty()) RoundControl(KomoriIcons.FilterList, "Filter author works", { filterOpen = true })
+            if (!manage && creators.isNotEmpty()) RoundControl(KomoriIcons.Tune, "Filter author works", { filterOpen = true }, Modifier.semantics {
+                this.selected = workFilter.active
+                stateDescription = if (workFilter.active) "Filters active" else "No filters"
+            })
             if (!manage && creators.isNotEmpty()) RefreshControl("Refresh author works", feed.loading, vm::refreshAuthors)
             if (!manage && creators.isNotEmpty())
                 Box {
-                    RoundControl(KomoriIcons.FilterList, "Sort author works", { sortMenu = true })
+                    RoundControl(KomoriIcons.Sort, "Sort author works", { sortMenu = true })
                     DropdownMenu(sortMenu, { sortMenu = false }) {
                         AuthorSort.entries.forEach { order ->
                             DropdownMenuItem(
@@ -136,14 +144,16 @@ internal fun Authors(vm: ReaderViewModel) {
                         )
                     }
                 }
-            TextButton(
-                onClick = {
-                    manage = !manage
-                    creatorSelection.clear()
-                    query = ""
+            key(manage) {
+                TextButton(
+                    onClick = {
+                        manage = !manage
+                        creatorSelection.clear()
+                        query = ""
+                    }
+                ) {
+                    Text(if (manage) "Done" else "Manage")
                 }
-            ) {
-                Text(if (manage) "Done" else "Manage")
             }
         }
         if (creators.isEmpty()) {
@@ -160,7 +170,7 @@ internal fun Authors(vm: ReaderViewModel) {
             )
             OutlinedTextField(
                 query,
-                { query = it },
+                { query = it; creatorSelection.clear() },
                 Modifier.fillMaxWidth().padding(horizontal = 20.dp),
                 placeholder = { Text("Find a creator") },
                 singleLine = true,
@@ -168,35 +178,17 @@ internal fun Authors(vm: ReaderViewModel) {
             )
             LazyColumn {
                 items(visible, key = { it.id }) { creator ->
-                    ListItem(
-                        headlineContent = { Text(creator.name) },
-                        supportingContent = { Text("${sourceName(creator.id)} · ${creator.role}") },
-                        trailingContent = {
-                            if (creatorSelection.active)
-                                Checkbox(
-                                    creator.id in creatorSelection.ids,
-                                    { creatorSelection.toggle(creator.id) },
-                                    Modifier.semantics {
-                                        contentDescription = "Select ${creator.name}"
-                                    },
-                                )
-                            else TextButton(onClick = { vm.follow(creator) }) { Text("Unfollow") }
-                        },
-                        modifier =
-                            Modifier.combinedClickable(
-                                onLongClick = { creatorSelection.toggle(creator.id) },
-                                onClick = {
-                                    if (creatorSelection.active) creatorSelection.toggle(creator.id)
-                                    else {
-                                        selectedId = creator.id
-                                        manage = false
-                                    }
-                                },
-                            ),
-                    )
+                    AuthorManagementRow(creator, selecting, creator.id in selectedCreators,
+                        toggle = { creatorSelection.toggle(creator.id) },
+                        open = { selectedId = creator.id; manage = false },
+                        unfollow = { vm.follow(creator) })
                 }
             }
         } else {
+            if (workFilter.active) Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Filters active", Modifier.weight(1f), style = MaterialTheme.typography.labelMedium)
+                TextButton(onClick = { encodedFilter = AuthorWorkFilter().encode() }) { Text("Reset filters") }
+            }
             LazyRow(
                 contentPadding = PaddingValues(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -238,6 +230,11 @@ internal fun Authors(vm: ReaderViewModel) {
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             if (feed.loading) CircularProgressIndicator(Modifier.padding(16.dp))
+                            if (feed.incompleteMetadata > 0) {
+                                Text("Partial results: ${feed.incompleteMetadata} titles need metadata. Later pages are still available.",
+                                    Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.bodySmall)
+                                TextButton(onClick = vm::retryAuthorMetadata, enabled = !feed.loading) { Text("Retry incomplete metadata") }
+                            }
                             if (feed.errors.isNotEmpty()) {
                                 Text(
                                     feed.errors.joinToString("\n"),
@@ -252,7 +249,7 @@ internal fun Authors(vm: ReaderViewModel) {
                                     )
                                 }
                             if (!feed.loading && !feed.hasMore && works.isEmpty())
-                                Text(if (workFilter.active) "No works match these filters." else "No works found.")
+                                Text(if (feed.incompleteMetadata > 0) "No verified matches yet. Retry incomplete metadata." else if (workFilter.active) "No works match these filters." else "No works found.")
                         }
                     },
                 )

@@ -255,21 +255,15 @@ class ReaderViewModel(
         authorSort = sort
         authorWorkFilter = workFilter
         authorCatalog =
-            AuthorCatalog(creators, sort, workFilter) { creator, page ->
+            AuthorCatalog(creators, sort, workFilter, enrich = { if (authorPage == null) app.source.details(it) else it }) { creator, page ->
                 val key = sourceKey(creator.id)
                 require(key in setOf("mangadex", "zap", "nhentai", "imhentai")) {
                     "This source does not provide a creator catalog."
                 }
-                val filter = BrowseFilter(sort = sort.sourceSort(key), language = workFilter.nativeLanguage)
+                val filter = authorBrowseFilter(key, sort, workFilter)
                 val result = authorPage?.invoke(creator, page, filter)
-                    ?: app.source.browse(key, "", page, filter, creator)
-                if (workFilter.needsMetadata && authorPage == null) {
-                    val enriched = mutableListOf<Manga>()
-                    for (chunk in result.titles.chunked(2)) enriched += coroutineScope {
-                        chunk.map { async { app.source.details(it) } }.awaitAll()
-                    }
-                    result.copy(titles = enriched)
-                } else result
+                    ?: app.source.browse(key, "", page, filter, creator, deferCreatorDetails = true)
+                result
             }
         authorFeed.value =
             AuthorFeed(
@@ -298,9 +292,21 @@ class ReaderViewModel(
                             authorContext.orEmpty().map { it.id },
                             catalog.sort,
                             authorWorkFilter,
+                            catalog.incompleteMetadataCount,
                         )
                 }
             }
+    }
+
+    fun retryAuthorMetadata() {
+        val catalog = authorCatalog ?: return
+        if (authorJob?.isActive == true) return
+        authorJob = viewModelScope.launch {
+            authorFeed.value = authorFeed.value.copy(loading = true)
+            catalog.retryMetadata()
+            if (authorCatalog === catalog) authorFeed.value = authorFeed.value.copy(
+                items = catalog.items, loading = false, incompleteMetadata = catalog.incompleteMetadataCount)
+        }
     }
 
     fun browseCreator(creator: Creator) {
@@ -1205,13 +1211,14 @@ class ReaderViewModel(
     }
 
     fun pinReaderPages(owner: Any, pages: List<Pair<Release, Int>>) {
-        if (reader.value == null) { ReaderCacheFiles.release(owner); return }
+        if (reader.value == null) { ReaderCacheFiles.release(owner); ChapterFiles.releaseReader(owner); return }
+        ChapterFiles.reading(owner, pages.map { it.first.id }, readerCacheOwner)
         ReaderCacheFiles.pin(owner, pages.flatMap { (chapter, page) ->
             listOf(true, false).map { saver -> File(app.cacheDir, "reader/${chapter.id}-$page-$saver.img") }
         }, readerCacheOwner)
     }
 
-    fun releaseReaderPages(owner: Any) { ReaderCacheFiles.release(owner) }
+    fun releaseReaderPages(owner: Any) { ReaderCacheFiles.release(owner); ChapterFiles.releaseReader(owner) }
 
     suspend fun pageFileFor(chapter: Release, page: Int, speculative: Boolean = false): File {
         val saver = settings.value.saver
@@ -1453,7 +1460,7 @@ class ReaderViewModel(
         pageJob?.cancel()
         manifestRequests.cancel()
         reader.value = null
-        ReaderCacheFiles.releaseGroup(readerCacheOwner)
+        ReaderCacheFiles.releaseGroup(readerCacheOwner); ChapterFiles.releaseReaders(readerCacheOwner)
         readerFile.value = null
     }
 

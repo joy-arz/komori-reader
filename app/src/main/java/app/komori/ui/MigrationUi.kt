@@ -33,7 +33,7 @@ internal fun MigrationDialog(reader: ReaderViewModel, source: Manga, dismiss: ()
             }
             if (state.selected == null) {
                 item {
-                    OutlinedTextField(state.query, { vm.edit(query = it) }, label = { Text("Search destination title") }, singleLine = true)
+                    OutlinedTextField(state.query, { vm.edit(query = it) }, label = { Text("Search destination title") }, singleLine = true, enabled = !state.applying)
                     Row {
                         Box {
                             TextButton(onClick = { sourceMenu = true }) { Text(sourceNames[state.sourceKey].orEmpty()) }
@@ -62,7 +62,7 @@ internal fun MigrationDialog(reader: ReaderViewModel, source: Manga, dismiss: ()
                 items(state.plan, key = { it.position.releaseId }) { entry ->
                     ListItem(headlineContent = { Text(entry.source?.label ?: "Saved reading record") },
                         supportingContent = { Text("${if (entry.position.completed) "Completed" else "Page ${entry.position.page + 1}"} → ${entry.target?.let { "${it.label} · ${it.groupNames}" } ?: "Not mapped"}") },
-                        modifier = Modifier.clickable { mappingId = entry.position.releaseId; chapterQuery = "" })
+                        modifier = Modifier.clickable(enabled = !state.loading) { mappingId = entry.position.releaseId; chapterQuery = "" })
                 }
                 item {
                     Button(enabled = !state.loading, onClick = { vm.apply(keepOriginal, copyPage) { target -> dismiss(); reader.open(target) } }) { Text("Apply reviewed transfer") }
@@ -74,6 +74,7 @@ internal fun MigrationDialog(reader: ReaderViewModel, source: Manga, dismiss: ()
             item { TextButton(onClick = dismiss) { Text("Close") } }
         }
     }
+    LaunchedEffect(state.selected?.id) { mappingId = null; chapterQuery = "" }
     mappingId?.let { position ->
         AlertDialog(onDismissRequest = { mappingId = null }, title = { Text("Choose destination release") }, text = {
             Column {

@@ -1,0 +1,5 @@
+--------- beginning of kernel
+--------- beginning of main
+--------- beginning of system
+10-28 00:28:43.498  3116  3285 I KomoriBenchmark: library titles=1000 progress=50000 seed_ms=19915.700427 warm_activity_first_visible_ms=17768 visible_cover_nodes=4 progress_writes=50 observation_ms=2836.565626 composition_apply_delta=0 pss_before_kb=95259 pss_after_kb=170514
+10-28 00:31:16.096  3116  3285 I KomoriBenchmark: PROGRESS_QUERY_BENCHMARK records=50000 titles=1000 warm_median_all_ms=415.727583 warm_median_scoped_ms=2.309375 plan=SEARCH TABLE progress USING INDEX index_progress_mangaId (mangaId=?)

@@ -25,7 +25,7 @@ enum class FailureKind {
 
 class StorageFailure(message: String, cause: Throwable? = null) : IOException(message, cause)
 
-class ContentFailure(message: String) : IOException(message)
+class ContentFailure(message: String, cause: Throwable? = null) : IOException(message, cause)
 
 internal inline fun <T> storageOperation(block: () -> T): T =
     try {
@@ -40,7 +40,9 @@ class PageRetryLimit(cause: Exception) :
         cause,
     )
 
-fun failureKind(error: Exception?): FailureKind =
+fun failureKind(error: Exception?): FailureKind = classifyFailure(originalFailure(error))
+
+private fun classifyFailure(error: Exception?): FailureKind =
     when {
         requiresSourceAction(error) -> FailureKind.VERIFICATION
         error is StorageFailure -> FailureKind.STORAGE
@@ -66,12 +68,11 @@ fun automaticRetryAllowed(error: Exception?): Boolean =
             FailureKind.VERIFICATION,
             FailureKind.MISSING_PAGE -> false
             FailureKind.HTTP ->
-                (error as SourceHttpException).status in listOf(408, 425, 429) ||
-                    error.status >= 500
+                (originalFailure(error) as SourceHttpException).status.let { it in listOf(408, 425, 429) || it >= 500 }
             else -> true
         }
 
-fun retryAtMillis(error: Exception?): Long = (error as? SourceHttpException)?.retryAtMillis ?: 0L
+fun retryAtMillis(error: Exception?): Long = (originalFailure(error) as? SourceHttpException)?.retryAtMillis ?: 0L
 
 internal fun retryAfterDeadline(header: String?, now: Long = System.currentTimeMillis()): Long? {
     val value = header?.trim()?.takeIf { it.isNotEmpty() } ?: return null
@@ -145,7 +146,7 @@ class PageRetryBudget(private val limit: Int = 4) {
 
     @Synchronized
     fun failed(key: String, error: Exception): Exception {
-        if (error is SourceHttpException && error.deferred) return error
+        if ((originalFailure(error) as? SourceHttpException)?.deferred == true) return error
         val count = (failures[key]?.attempts ?: 0) + 1
         failures[key] = Failure(count, error)
         return if (count >= limit && automaticRetryAllowed(error)) PageRetryLimit(error) else error

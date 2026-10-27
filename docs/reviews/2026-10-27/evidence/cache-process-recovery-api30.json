@@ -1,0 +1,15 @@
+{
+  "status": "PASS",
+  "serial": "emulator-5554",
+  "old_pid": "6594",
+  "new_pid": "6723",
+  "partial_removed": true,
+  "staging_removed": true,
+  "cached_image_preserved": true,
+  "persistent_marker_preserved": true,
+  "updater_part_removed": true,
+  "export_orphan_removed": true,
+  "ready_named_apk_preserved": true,
+  "unrelated_update_file_preserved": true,
+  "scope": "debug emulator SIGKILL and startup recovery"
+}

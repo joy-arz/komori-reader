@@ -17,6 +17,8 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import okhttp3.OkHttpClient
 import okhttp3.Cache
 import okhttp3.CacheControl
@@ -37,16 +39,19 @@ data class AppUpdate(
 )
 
 data class UpdateState(
-    val checking: Boolean = false,
+    val phase: UpdatePhase = UpdatePhase.IDLE,
     val update: AppUpdate? = null,
-    val downloading: Boolean = false,
     val percent: Int = 0,
     val file: File? = null,
     val message: String = "Automatic checks are limited to once every six hours; failed checks cool down for thirty minutes.",
     val channel: String = "stable",
     val snoozedUntil: Long = 0,
     val show: Boolean = false,
-)
+) {
+    val checking get() = phase == UpdatePhase.CHECKING
+    val downloading get() = phase == UpdatePhase.DOWNLOADING
+    val busy get() = checking || downloading
+}
 
 object UpdatePolicy {
     fun acceptsChannel(tag: String, prerelease: Boolean, channel: String): Boolean =
@@ -134,21 +139,22 @@ OkHttpClient.Builder()
     ).also { shared = it }
 }
 
-private object UpdateSelection { val lock = Any() }
+private object UpdateSelection { val lock = Any(); val transfers = Mutex() }
 
-open class AppUpdates(private val context: Context, private val transport: OkHttpClient? = null) {
+open class AppUpdates(private val context: Context, private val transport: OkHttpClient? = null) : UpdateBackend {
+    override val canDownload get() = !BuildConfig.DEBUG
     private val preferences = context.getSharedPreferences("app-updates", Context.MODE_PRIVATE)
-    fun channel() = preferences.getString("channel", "stable").orEmpty().takeIf { it in listOf("stable", "preview") } ?: "stable"
-    fun channel(value: String) = synchronized(UpdateSelection.lock) {
+    override fun channel() = preferences.getString("channel", "stable").orEmpty().takeIf { it in listOf("stable", "preview") } ?: "stable"
+    override fun channel(value: String) = synchronized(UpdateSelection.lock) {
         require(value in listOf("stable", "preview"))
         preferences.edit().putString("channel", value).putLong("selectionRevision", preferences.getLong("selectionRevision", 0) + 1).remove("available").apply()
     }
-    fun snoozedUntil() = preferences.getLong("snoozedUntil", 0)
-    fun snooze() = preferences.edit().putLong("snoozedUntil", System.currentTimeMillis() + TimeUnit.HOURS.toMillis(24)).apply()
-    fun automaticCheckAllowed() = UpdatePolicy.automaticCheckAllowed(System.currentTimeMillis(), preferences.getLong("attempt", 0), preferences.getLong("success", 0))
-    fun recordAttempt() = preferences.edit().putLong("attempt", System.currentTimeMillis()).apply()
-    fun recordSuccess() = preferences.edit().putLong("success", System.currentTimeMillis()).apply()
-    fun cachedUpdate(): AppUpdate? = runCatching {
+    override fun snoozedUntil() = preferences.getLong("snoozedUntil", 0)
+    override fun snooze() = preferences.edit().putLong("snoozedUntil", System.currentTimeMillis() + TimeUnit.HOURS.toMillis(24)).apply()
+    override fun automaticCheckAllowed() = UpdatePolicy.automaticCheckAllowed(System.currentTimeMillis(), preferences.getLong("attempt", 0), preferences.getLong("success", 0))
+    override fun recordAttempt() = preferences.edit().putLong("attempt", System.currentTimeMillis()).apply()
+    override fun recordSuccess() = preferences.edit().putLong("success", System.currentTimeMillis()).apply()
+    override fun cachedUpdate(): AppUpdate? = runCatching {
         val json = JSONObject(preferences.getString("available", null) ?: return@runCatching null)
         val tag = "v${json.getString("versionName")}"
         UpdatePolicy.manifest(json, tag).copy(releaseNotes = json.optString("notes").take(32768)).takeIf {
@@ -195,7 +201,7 @@ open class AppUpdates(private val context: Context, private val transport: OkHtt
             }
     }
 
-    open suspend fun check(): AppUpdate? =
+    override suspend fun check(): AppUpdate? =
         withContext(Dispatchers.IO) {
             val (selectedChannel, revision) = synchronized(UpdateSelection.lock) { channel() to preferences.getLong("selectionRevision", 0) }
             val releases =
@@ -239,19 +245,19 @@ open class AppUpdates(private val context: Context, private val transport: OkHtt
             update.copy(releaseNotes = candidate.optString("body").take(32768)).also { remember(it, revision) }
         }
 
-    fun unmetered(): Boolean {
+    override fun unmetered(): Boolean {
         val manager = context.getSystemService(ConnectivityManager::class.java)
         return manager.activeNetwork != null && !manager.isActiveNetworkMetered
     }
 
-    suspend fun download(
+    override suspend fun download(
         update: AppUpdate,
-        unmeteredOnly: Boolean = false,
+        unmeteredOnly: Boolean,
         progress: (Int) -> Unit,
-    ): File =
+    ): File = UpdateSelection.transfers.withLock {
         withContext(Dispatchers.IO) {
+            OwnedTemporaryFiles.clean(directory, OwnedTemporaryFiles.updateParts)
             val target = File(directory, "update-${update.code}.apk")
-            directory.listFiles()?.filter { it != target && it.extension == "apk" }?.forEach { it.delete() }
             if (target.exists()) {
                 try {
                     verify(target, update)
@@ -260,10 +266,11 @@ open class AppUpdates(private val context: Context, private val transport: OkHtt
                     target.delete()
                 }
             }
-            val partial = File.createTempFile("update-${update.code}-", ".part", directory)
+            val partial = OwnedTemporaryFiles.create(directory, "update-${update.code}-", ".part")
             try {
                 client.newCall(Request.Builder().url(update.url).build()).readResponse { response
                     ->
+                    OwnedTemporaryFiles.use(partial) {
                     if (!response.isSuccessful)
                         throw IOException("Update download failed (${response.code}).")
                     val body = response.body ?: throw IOException("Empty APK response")
@@ -287,14 +294,28 @@ open class AppUpdates(private val context: Context, private val transport: OkHtt
                             }
                         }
                     }
+                    }
                 }
                 verify(partial, update)
                 check(partial.renameTo(target)) { "Could not store the update." }
+                directory.listFiles().orEmpty().filter { it != target && it.name.matches(Regex("update-[0-9]+[.]apk")) }
+                    .sortedByDescending { it.lastModified() }.drop(1).forEach { runCatching { it.delete() } }
                 target
             } finally {
-                partial.delete()
+                OwnedTemporaryFiles.discard(partial)
             }
         }
+    }
+
+    companion object {
+        fun recoverTemporaryFiles(context: Context) {
+            OwnedTemporaryFiles.clean(File(context.cacheDir, "updates"), OwnedTemporaryFiles.updateParts)
+            OwnedTemporaryFiles.clean(File(context.cacheDir, "exports"), OwnedTemporaryFiles.exports)
+            OwnedTemporaryFiles.clean(context.cacheDir, OwnedTemporaryFiles.exports)
+        }
+    }
+
+    suspend fun download(update: AppUpdate, progress: (Int) -> Unit): File = download(update, false, progress)
 
     @Suppress("DEPRECATION")
     private fun verify(file: File, update: AppUpdate) {
