@@ -129,6 +129,20 @@ class UpdateOperationsTest {
         } finally { scope.cancel() }
     }
 
+    @Test fun cancelingCheckRestoresCachedArtifactAndIgnoresItsLateResult() = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        val pending = CompletableDeferred<AppUpdate?>()
+        val cached = update(60)
+        val backend = Backend(cached).apply { fetch = { withContext(NonCancellable) { pending.await() } } }
+        val operations = owner(scope, backend)
+        try {
+            operations.check(true); operations.cancelCheck(); operations.download()
+            assertEquals(UpdatePhase.READY, operations.state.value.phase)
+            pending.complete(update(61)); yield()
+            assertEquals(cached, operations.state.value.update); assertEquals(File("60.apk"), operations.state.value.file)
+        } finally { pending.complete(null); scope.cancel() }
+    }
+
     @Test fun closingOwnerIgnoresEvenNonCooperativeTransferCallbacks() = runBlocking {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
         val complete = CompletableDeferred<File>(); var progress: ((Int) -> Unit)? = null

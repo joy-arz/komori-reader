@@ -14,6 +14,7 @@ class UpdateViewModel @JvmOverloads constructor(application: Application, val up
         { getApplication<KomoriApp>().settings.flow.first().autoUpdateDownload }, SystemClock::elapsedRealtime)
     val state = operations.state
     fun check(manual: Boolean = false) = operations.check(manual)
+    fun cancelCheck() = operations.cancelCheck()
     fun download(unmeteredOnly: Boolean = false) = operations.download(unmeteredOnly)
     fun channel(value: String) = operations.channel(value)
     fun snooze() = operations.snooze()

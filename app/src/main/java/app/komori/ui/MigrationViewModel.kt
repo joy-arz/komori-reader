@@ -133,7 +133,7 @@ class MigrationViewModel private constructor(application: Application, private v
                     val oldLast = fromShelf.lastRelease?.let { app.dao.progress(it) }
                     val last = oldLast?.let { old -> mapped.find { it.position.chapterKey == old.chapterKey } }
                     var lastTarget = toShelf?.lastRelease
-                    if (copyPage && last != null && oldLast != null && !oldLast.completed) {
+                    if (copyPage && last != null && !oldLast.completed) {
                         val release = last.target!!
                         require(release.pages > oldLast.page) { "The destination page count is unknown or shorter. Keep page copying off." }
                         val existing = app.dao.progress(release.id)

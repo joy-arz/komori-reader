@@ -55,6 +55,14 @@ internal class UpdateOperations(
         }
     }
 
+    fun cancelCheck() {
+        if (!state.value.checking) return
+        generation.incrementAndGet()
+        checkJob?.cancel()
+        state.update { it.copy(phase = if (it.file != null) UpdatePhase.READY else if (it.update != null) UpdatePhase.AVAILABLE else UpdatePhase.IDLE,
+            message = "Update check canceled. You can retry manually.") }
+    }
+
     fun download(unmeteredOnly: Boolean = false) {
         val current = state.value
         val update = current.update ?: return
