@@ -1,6 +1,9 @@
 package app.komori
 
 import android.content.Intent
+import androidx.activity.compose.setContent
+import androidx.lifecycle.viewModelScope
+import app.komori.ui.KomoriScreen
 import androidx.compose.ui.test.*
 import android.graphics.Bitmap
 import androidx.lifecycle.ViewModelProvider
@@ -58,6 +61,7 @@ class BatchSelectionTest {
         followed.forEach { app.dao.putCreator(it) }
         val oldSettings = app.settings.flow.first()
         app.settings.set("showContinue", false)
+        app.settings.set("direct", false)
         for ((index, title) in titles.withIndex()) {
             app.dao.putManga(title)
             app.dao.putShelf(Shelf(title.id, saved = false, touched = System.currentTimeMillis()))
@@ -72,16 +76,17 @@ class BatchSelectionTest {
             bitmap.recycle()
         }
         var launched: MainActivity? = null
+        lateinit var vm: ReaderViewModel
         try {
         val activity =
             instrumentation.startActivitySync(
                 Intent(app, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
             ) as MainActivity
         launched = activity
-        lateinit var vm: ReaderViewModel
         instrumentation.runOnMainSync {
-            vm = ViewModelProvider(activity)[ReaderViewModel::class.java]
+            vm = ReaderViewModel(app) { _, _, _ -> BrowsePage(emptyList(), false) }
             ViewModelProvider(activity)[UpdateViewModel::class.java].dismiss()
+            activity.setContent { KomoriScreen(vm) }
         }
         compose.waitForIdle()
         fun tapText(text: String) {
@@ -117,8 +122,11 @@ class BatchSelectionTest {
             assertTrue(titles.all { app.dao.shelf(it.id)?.saved == false })
             compose.onNodeWithContentDescription("End selection").assertDoesNotExist()
             compose.onNodeWithContentDescription(titles[0].title).performClick()
+            compose.waitUntil(5000) {
+                vm.selected.value?.id == titles[0].id && vm.chapterStatus.value == "Saved chapter list · Offline"
+            }
             compose.waitForIdle()
-            assertTrue(device.wait(Until.hasObject(By.text("Saved chapter list · Offline")), 5000))
+            assertTrue(device.hasObject(By.text("Saved chapter list · Offline")))
             tapDescription("Back")
             tapDescription("Authors")
             tapText("Manage")
@@ -194,11 +202,14 @@ class BatchSelectionTest {
             runCatching { compose.onRoot(useUnmergedTree = true).printToLog("KomoriBatchSemantics") }
             device.executeShellCommand("screencap -p /data/local/tmp/komori-batch-failure.png")
             device.dumpWindowHierarchy(java.io.File(app.getExternalFilesDir(null), "batch-failure.xml"))
-            android.util.Log.e("KomoriBatch", "selection failure: ${error.javaClass.simpleName}; fixtureCreators=${runBlocking { app.dao.observeCreators().first().count { it.id.startsWith(prefix) } }}")
+            android.util.Log.e("KomoriBatch", "selection failure: ${error.javaClass.simpleName}; selected=${runCatching { vm.selected.value?.id }.getOrNull()}; chapterStatus=${runCatching { vm.chapterStatus.value }.getOrNull()}; fixtureCreators=${runBlocking { app.dao.observeCreators().first().count { it.id.startsWith(prefix) } }}")
             throw error
         } finally {
-            instrumentation.runOnMainSync { launched?.finish() }
+            val viewModelJob = runCatching { vm.viewModelScope.coroutineContext[Job] }.getOrNull()
+            instrumentation.runOnMainSync { viewModelJob?.cancel(); launched?.finish() }
+            viewModelJob?.join()
             app.settings.set("showContinue", oldSettings.showContinue)
+            app.settings.set("direct", oldSettings.direct)
             followed.forEach { app.dao.removeCreator(it.id) }
             chapters.forEach {
                 app.dao.removeDownload(it.id)

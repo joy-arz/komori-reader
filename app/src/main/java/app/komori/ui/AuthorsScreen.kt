@@ -144,14 +144,16 @@ internal fun Authors(vm: ReaderViewModel) {
                         )
                     }
                 }
-            TextButton(
-                onClick = {
-                    manage = !manage
-                    creatorSelection.clear()
-                    query = ""
+            key(manage) {
+                TextButton(
+                    onClick = {
+                        manage = !manage
+                        creatorSelection.clear()
+                        query = ""
+                    }
+                ) {
+                    Text(if (manage) "Done" else "Manage")
                 }
-            ) {
-                Text(if (manage) "Done" else "Manage")
             }
         }
         if (creators.isEmpty()) {

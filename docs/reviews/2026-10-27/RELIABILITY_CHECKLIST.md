@@ -154,6 +154,12 @@ NavigationHistoryTest previously retained a UiObject2 across lazy-row recycling.
 
 Both harness corrections require another full matrix; these failures are not relabeled as passes.
 
+### Authors navigation semantics and isolated fixtures
+
+The keyed-row trial [40566448090](https://github.com/joy-arz/komori-reader/actions/runs/40566448090) passed initial two-author selection in all five repeats; four completed the entire extended test. One failed after normal navigation because the screenshot showed **Manage** while native XML still exported **Done**. The mode-switch action now also has a mode-specific identity. The batch fixture now supplies an injected local empty author catalog rather than sending invalid synthetic creator IDs to MangaDex. Offline-detail readiness waits for the actual selected title and completed chapter-status producer within the original five-second bound, then advances Compose and checks the native caption; this avoids waiting on an unadvanced test frame after asynchronous disk work. Failure logs include selected title, chapter status and the internal Compose tree at debug priority.
+
+The metered-network fixture correction passed **9/9** local tests in **10.254 seconds** with emulator Wi-Fi disabled and restored afterward: all six real WorkManager cases plus the three reading/background cases. No production network constraint was relaxed.
+
 ## Remaining acceptance and known risks
 
 - Final synchronized API 36 five-repeat run and full API 26/30/36 matrix are still required; current failing CI is disclosed above.
