@@ -206,7 +206,7 @@ class BacklogIntegrationTest {
                 buildString { while(cursor.moveToNext()) append(cursor.getString(3)) }
             }
             assertTrue(plan, plan.contains("index_progress_mangaId"))
-            println("PROGRESS_QUERY_BENCHMARK records=50000 titles=1000 warm_median_all_ms=${allTimes.sorted()[2] / 1000000.0} warm_median_scoped_ms=${scopedTimes.sorted()[2] / 1000000.0} plan=$plan")
+            android.util.Log.i("KomoriBenchmark", "PROGRESS_QUERY_BENCHMARK records=50000 titles=1000 warm_median_all_ms=${allTimes.sorted()[2] / 1000000.0} warm_median_scoped_ms=${scopedTimes.sorted()[2] / 1000000.0} plan=$plan")
         } finally { db.close(); app.deleteDatabase(name) }
     }
 
