@@ -91,6 +91,8 @@ internal fun Authors(vm: ReaderViewModel) {
     val selected = catalogCreators.find { it.id == selectedId }
     val visible = creators.filter { it.name.contains(query, true) }
     val creatorSelection = rememberMultiSelection(visible.map { it.id })
+    val selecting = creatorSelection.active
+    val selectedCreators = creatorSelection.ids.toSet()
     val context = (selected?.let { listOf(it) } ?: catalogCreators).map { it.id }
     val currentFeed by vm.authorFeed.collectAsStateWithLifecycle()
     val feed =
@@ -174,23 +176,25 @@ internal fun Authors(vm: ReaderViewModel) {
             )
             LazyColumn {
                 items(visible, key = { it.id }) { creator ->
+                    val rowSelected = creator.id in selectedCreators
+                    val rowDescription = if (selecting) "Select ${creator.name}" else "Manage author ${creator.name}"
                     ListItem(
                         headlineContent = { Text(creator.name) },
                         supportingContent = { Text("${sourceName(creator.id)} · ${creator.role}") },
                         trailingContent = {
-                            if (creatorSelection.active)
+                            if (selecting)
                                 Checkbox(
-                                    creator.id in creatorSelection.ids,
+                                    rowSelected,
                                     onCheckedChange = null,
                                 )
                             else TextButton(onClick = { vm.follow(creator) }) { Text("Unfollow") }
                         },
                         modifier =
                             Modifier.semantics(mergeDescendants = true) {
-                                contentDescription = if (creatorSelection.active) "Select ${creator.name}" else "Manage author ${creator.name}"
-                                this.selected = creator.id in creatorSelection.ids
+                                contentDescription = rowDescription
+                                this.selected = rowSelected
                             }.combinedClickable(
-                                role = if (creatorSelection.active) Role.Checkbox else Role.Button,
+                                role = if (selecting) Role.Checkbox else Role.Button,
                                 onLongClick = { creatorSelection.toggle(creator.id) },
                                 onClick = {
                                     if (creatorSelection.active) creatorSelection.toggle(creator.id)

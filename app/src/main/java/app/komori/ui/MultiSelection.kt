@@ -10,6 +10,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 
 @Stable
 internal class MultiSelection(active: Boolean = false, ids: List<String> = emptyList()) {
@@ -98,7 +100,7 @@ internal fun SelectionBar(
                 }
             }
         }
-        TextButton(onClick = { selection.clear() }) { Text("Done") }
+        TextButton(onClick = { selection.clear() }, modifier = Modifier.semantics { contentDescription = "End selection" }) { Text("Done") }
     }
     pending?.let { (action, ids) ->
         AlertDialog(
