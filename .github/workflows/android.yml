@@ -25,7 +25,7 @@ jobs:
           log-accepted-android-sdk-licenses: false
       - uses: gradle/actions/setup-gradle@v4
       - name: Validate changelog rendering
-        run: python3 -m unittest discover -s scripts -p test_release_notes.py
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'
       - name: Test, lint and assemble
         run: ./gradlew testDebugUnitTest lintDebug assembleDebug --no-daemon
       - uses: actions/upload-artifact@v4

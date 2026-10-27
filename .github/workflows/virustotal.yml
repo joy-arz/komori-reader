@@ -1,0 +1,58 @@
+name: VirusTotal release evidence
+on:
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+    secrets:
+      VIRUSTOTAL_API_KEY:
+        required: false
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published release tag to verify and scan
+        required: true
+        type: string
+permissions:
+  contents: write
+concurrency:
+  group: virustotal-readme
+  cancel-in-progress: false
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test evidence generation
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'
+      - name: Verify release and refresh VirusTotal evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VIRUSTOTAL_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: python3 scripts/virustotal_release.py --tag "$RELEASE_TAG"
+      - name: Commit version-specific evidence and latest stable README
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          git config user.name 'joy-arz'
+          git config user.email 'jony.huang.me@gmail.com'
+          git add README.md docs/security/virustotal
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Update VirusTotal evidence for ${RELEASE_TAG} [skip ci]"
+          git pull --rebase origin main
+          git push origin HEAD:main
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: virustotal-release-evidence
+          path: docs/security/virustotal/

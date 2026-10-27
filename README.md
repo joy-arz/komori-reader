@@ -185,6 +185,25 @@ Or open [GitHub Releases](https://github.com/joy-arz/komori-reader/releases) and
 
 Full releases and earlier alpha builds use the same private release key. Install over your existing app to keep your Library, downloads and reading progress.
 
+<!-- VIRUSTOTAL:START -->
+### VirusTotal scan · 0.8.5
+
+[![VirusTotal result for Komori 0.8.5](docs/security/virustotal/0.8.5.svg)](https://www.virustotal.com/gui/file/4362f62a7d9ec6e62c750487e3a240817b427178f26134258ac46e0ba39fe780/detection)
+
+**0 / 67 detections · maintainer screenshot.** [Open this APK’s VirusTotal report](https://www.virustotal.com/gui/file/4362f62a7d9ec6e62c750487e3a240817b427178f26134258ac46e0ba39fe780/detection).
+
+APK: `komori-0.8.5.apk` · SHA-256: `4362f62a7d9ec6e62c750487e3a240817b427178f26134258ac46e0ba39fe780`.
+
+This is a point-in-time result for this exact APK, separate from Google Play Protect’s installation checks.
+
+<details>
+<summary>Original scan screenshot · 0.8.5 · 2026-10-27</summary>
+
+![Original VirusTotal scan screenshot for Komori 0.8.5](docs/security/virustotal/komori-0.8.5.png)
+
+</details>
+<!-- VIRUSTOTAL:END -->
+
 ---
 
 ## <img src="https://api.iconify.design/lucide/wrench.svg?color=%23A3E635" width="26" height="26" align="absmiddle"> Build
@@ -209,12 +228,13 @@ Local signing is automated through JVM `keytool` validation and Gradle. See [rel
 
 ## <img src="https://api.iconify.design/lucide/bot.svg?color=%23A3E635" width="26" height="26" align="absmiddle"> Automated releases
 
-Every push to `main` and every pull request runs unit tests, lint, a debug APK build, and API 26/API 36 instrumentation. A separate Signed upgrade checks workflow validates published APKs against the 0.7.5 baseline with synthetic data, process death and offline navigation.
+Every push to `main` and every pull request runs unit tests, lint, a debug APK build, and API 26/API 30/API 36 instrumentation. A separate Signed upgrade checks workflow validates published APKs against the 0.7.5 baseline with synthetic data, process death and offline navigation.
 
 A version tag such as `v0.8.1` automatically tests, builds, signs and publishes a release APK plus a SHA-256 checksum and updater metadata (`update.json`).
 
 - Plain version tags publish full releases and mark them as **Latest**.
 - Tags containing a suffix remain prereleases.
+- After publication, VirusTotal evidence is refreshed for the exact released APK. Latest stable releases also update the README version, download link, hash and scan summary. New scans require the optional `VIRUSTOTAL_API_KEY` Actions secret; without it, new APKs are explicitly marked **scan pending**. Older screenshots are never presented as evidence for a different APK.
 
 ```sh
 git tag v0.8.1

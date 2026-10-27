@@ -63,3 +63,20 @@ For a brand-new signing identity only, `python3 scripts/sign_release.py init --s
 The tag workflow emits `update.json` alongside the signed APK and checksum. It contains the release tag's version name, CI version code, package name, fixed repository APK URL, byte count and SHA-256 digest. Publish all three assets together. Never reuse a version code or change the signing identity. Plain version tags publish full releases and explicitly mark them as Latest; suffixed tags publish prereleases. The updater recognizes both full releases and prereleases for compatibility with earlier builds; it does not rely on GitHub's stable-only `/latest` endpoint.
 
 The repository must remain public for unauthenticated in-app checks. Android installation is user-confirmed and requires the per-app unknown-source installation permission. No root, silent installation, or GitHub credential is used.
+
+
+## VirusTotal evidence and README updates
+
+The `Release APK` workflow calls `VirusTotal release evidence` after successful publication. It downloads the published APK and `update.json`, verifies package/version/URL/size/SHA-256, and creates version-specific JSON/SVG evidence under `docs/security/virustotal/`. The latest stable version also refreshes the README badge, availability text, APK link and generated scan section. Preview receipts are archived without replacing the stable README. Commits retain the repository owner's identity.
+
+For automatic new-file submissions and results, add `VIRUSTOTAL_API_KEY` in repository **Settings → Secrets and variables → Actions**. Obtain a key from your own VirusTotal account; do not put it in source files, documentation or chat. Only published public release APKs are submitted. Existing reports are reused for the same hash; missing files are submitted and polled at 16-second intervals within a five-minute analysis window. API access/quota/network failures leave new scans pending, without inventing detection counts. Re-run after an unfinished analysis using **Actions → VirusTotal release evidence → Run workflow**, with the release tag.
+
+Without a key, version/hash/report links still refresh, but a new APK is marked scan pending. A supplied screenshot/result is retained only for its exact version and hash, with its observation date. The 0.8.5 screenshot is the unchanged maintainer-supplied evidence; future summaries are generated from API results, not edited screenshots. VirusTotal findings are a point-in-time report and do not guarantee Google Play Protect approval.
+
+Manual refresh from a checked-out main branch:
+
+```sh
+python3 scripts/virustotal_release.py --tag v0.8.5
+```
+
+The README's `VIRUSTOTAL:START` / `VIRUSTOTAL:END` comments delimit generated content. Keep both markers. Evidence updates use `[skip ci]` because no app code changes, while the evidence workflow runs its own Python regression tests. Failure to update documentation does not alter the already-published APK or its immutable tag.
