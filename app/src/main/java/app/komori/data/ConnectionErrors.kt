@@ -9,6 +9,7 @@ import javax.net.ssl.SSLException
 
 fun connectionMessage(error: Exception): String =
     when (error) {
+        is SourceRequestFailure -> error.message
         is SSLException ->
             "The source could not be reached securely. Your network may be redirecting or blocking it. Check your device clock or try another network."
         is UnknownHostException ->

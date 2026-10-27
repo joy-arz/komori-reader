@@ -143,8 +143,9 @@ class Sources(val client: OkHttpClient, apiClient: OkHttpClient = client) {
     @Volatile private var dexImageCompatibilityUntil = 0L
 
     suspend fun transferPage(id: String, url: String, file: java.io.File, progress: (Long, Long) -> Unit = { _, _ -> }) {
+        sourceRequest(sourceKey(id), SourceStage.IMAGE) {
         val request = imageRequest(url, id)
-        if (sourceKey(id) != "mangadex") return transferImage(client, request, file, progress)
+        if (sourceKey(id) != "mangadex") { transferImage(client, request, file, progress); return@sourceRequest }
         val usingCompatibility = System.nanoTime() < dexImageCompatibilityUntil
         try { transferImage(if (usingCompatibility) dexCompatibility else dexImages, request, file, progress) }
         catch (e: IOException) {
@@ -153,7 +154,9 @@ class Sources(val client: OkHttpClient, apiClient: OkHttpClient = client) {
             transferImage(if (usingCompatibility) dexImages else dexCompatibility, request, file, progress)
             dexImageCompatibilityUntil = if (usingCompatibility) 0L else System.nanoTime() + java.util.concurrent.TimeUnit.MINUTES.toNanos(15)
         }
+        }
     }
+
     private val demonic = WebSource("demonic", "https://demonicscans.org", client)
     private val weeb = WebSource("weeb", "https://weebcentral.com", client)
     private val zap = WebSource("zap", "https://hentaizap.com", client)
@@ -194,7 +197,7 @@ class Sources(val client: OkHttpClient, apiClient: OkHttpClient = client) {
         page: Int,
         filter: BrowseFilter,
         creator: Creator?,
-    ): BrowsePage =
+    ): BrowsePage = sourceRequest(key, SourceStage.CATALOG) {
         if (key == "mangadex")
             dex.browse(query, (page - 1) * 30, creator, filter).let {
                 BrowsePage(it, it.size == 30)
@@ -204,27 +207,33 @@ class Sources(val client: OkHttpClient, apiClient: OkHttpClient = client) {
             manhwa(key).browse(query, page, filter)
         }
         else web(key).browse(query, page, filter, creator)
+    }
 
-    suspend fun tags(key: String): List<SourceTag> =
+    suspend fun tags(key: String): List<SourceTag> = sourceRequest(key, SourceStage.FILTERS) {
         if (key == "mangadex") dex.tags() else if (key in manhwaSources) manhwa(key).tags() else web(key).tags()
+    }
 
-    suspend fun details(manga: Manga): Manga =
+    suspend fun details(manga: Manga): Manga = sourceRequest(sourceKey(manga.id), SourceStage.DETAILS) {
         if (sourceKey(manga.id) in setOf("mangadex", "local")) manga
         else if (sourceKey(manga.id) in manhwaSources) manhwa(sourceKey(manga.id)).details(manga)
         else web(sourceKey(manga.id)).details(manga)
+    }
 
-    suspend fun chapters(id: String, language: String) =
+    suspend fun chapters(id: String, language: String) = sourceRequest(sourceKey(id), SourceStage.CHAPTERS) {
         if (sourceKey(id) == "mangadex") dex.chapters(id, language)
         else if (sourceKey(id) in manhwaSources) manhwa(sourceKey(id)).chapters(id)
         else web(sourceKey(id)).chapters(id)
+    }
 
-    suspend fun languages(id: String) =
+    suspend fun languages(id: String) = sourceRequest(sourceKey(id), SourceStage.LANGUAGES) {
         if (sourceKey(id) == "mangadex") dex.languages(id) else if (sourceKey(id) in manhwaSources) listOf("en", "ko") else listOf("en")
+    }
 
-    suspend fun pages(id: String, saver: Boolean) =
+    suspend fun pages(id: String, saver: Boolean) = sourceRequest(sourceKey(id), SourceStage.MANIFEST) {
         if (sourceKey(id) == "mangadex") dex.pages(id, saver)
         else if (sourceKey(id) in manhwaSources) manhwa(sourceKey(id)).pages(id)
         else web(sourceKey(id)).pages(id)
+    }
 
     fun imageRequest(url: String, id: String): Request =
         Request.Builder()
