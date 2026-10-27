@@ -190,7 +190,7 @@ Full releases and earlier alpha builds use the same private release key. Install
 
 [![VirusTotal result for Komori 0.8.5](docs/security/virustotal/0.8.5.svg)](https://www.virustotal.com/gui/file/4362f62a7d9ec6e62c750487e3a240817b427178f26134258ac46e0ba39fe780/detection)
 
-**0 / 67 detections · maintainer screenshot.** [Open this APK’s VirusTotal report](https://www.virustotal.com/gui/file/4362f62a7d9ec6e62c750487e3a240817b427178f26134258ac46e0ba39fe780/detection).
+**0 malicious · 0 suspicious · 67 undetected.** [Open this APK’s VirusTotal report](https://www.virustotal.com/gui/file/4362f62a7d9ec6e62c750487e3a240817b427178f26134258ac46e0ba39fe780/detection).
 
 APK: `komori-0.8.5.apk` · SHA-256: `4362f62a7d9ec6e62c750487e3a240817b427178f26134258ac46e0ba39fe780`.
 

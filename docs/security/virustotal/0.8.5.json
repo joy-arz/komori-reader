@@ -3,11 +3,21 @@
   "sha256": "4362f62a7d9ec6e62c750487e3a240817b427178f26134258ac46e0ba39fe780",
   "apk_size": 2567819,
   "report_url": "https://www.virustotal.com/gui/file/4362f62a7d9ec6e62c750487e3a240817b427178f26134258ac46e0ba39fe780/detection",
-  "recorded_at": "2026-10-27",
-  "status": "screenshot",
-  "source": "maintainer-screenshot",
+  "recorded_at": "2026-10-27T04:11:07+00:00",
+  "status": "completed",
+  "source": "virustotal-api",
   "detections": 0,
   "engines": 67,
   "screenshot": "docs/security/virustotal/komori-0.8.5.png",
-  "screenshot_recorded_at": "2026-10-27"
+  "screenshot_recorded_at": "2026-10-27",
+  "stats": {
+    "malicious": 0,
+    "suspicious": 0,
+    "undetected": 67,
+    "harmless": 0,
+    "timeout": 0,
+    "confirmed-timeout": 1,
+    "failure": 0,
+    "type-unsupported": 7
+  }
 }
