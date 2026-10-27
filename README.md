@@ -16,7 +16,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 
 <br>
 
-[Download](#install) · [Features](#features) · [Sources](#sources) · [Build](#build) · [Limits](#current-limits) · [Docs](#documentation) · [Support](#support) · [Contributors](#contributors)
+[Download](#install) · [Features](#features) · [Sources](#sources) · [Build](#build) · [Limits](#current-limits) · [Docs](#documentation) · [Discord](#community) · [Support](#support) · [Contributors](#contributors)
 
 <br>
 
@@ -330,6 +330,14 @@ Install version 0.5 manually once if you are coming from an older build. After t
 
 ---
 
+## <img src="docs/assets/discord.svg" width="26" height="26" align="absmiddle" alt=""> Community
+
+**[Join the Komori Discord →](https://dsc.gg/komori-reader)**
+
+Ask questions, share feedback, and discuss Komori with the community.
+
+---
+
 ## Support
 
 <div align="center">
@@ -371,7 +379,7 @@ Maintained by [@joy-arz](https://github.com/joy-arz). Issues and pull requests a
 
 - **Typography:** Outfit is bundled under the SIL Open Font License. See `app/src/main/assets/licenses/Outfit-OFL.txt`.
 - **Icon:** Supplied bat-and-manga artwork, cropped to remove the outer surround. Android applies the launcher shape through an adaptive icon, and the original illustration is preserved.
-- **Icons:** [Lucide](https://lucide.dev) via [Iconify](https://iconify.design), ISC license.
+- **Icons:** [Lucide](https://lucide.dev) via [Iconify](https://iconify.design), ISC license. Discord logo from [Simple Icons](https://simpleicons.org), CC0, colored lime green.
 - **Sources:** MangaDex and scanlation groups are credited in the application.
 
 <div align="center">
