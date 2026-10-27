@@ -118,7 +118,7 @@ class BatchSelectionTest {
                 ?: throw AssertionError("Creator search is missing")
             findCreator.text = "Batch creator $marker"
             assertFalse(device.hasObject(By.text("Select")))
-            val authorRow = device.wait(Until.findObject(By.longClickable(true).hasDescendant(By.desc("Manage author ${followed.first().name}"))), 5000)
+            val authorRow = device.wait(Until.findObject(By.desc("Manage author ${followed.first().name}").longClickable(true)), 5000)
                 ?: throw AssertionError("Author management row did not become interactive")
             authorRow.longClick()
             assertTrue("Long press did not activate selection", device.wait(Until.hasObject(By.text("1 selected")), 5000))
@@ -129,16 +129,19 @@ class BatchSelectionTest {
                 device.findObject(By.desc("Select ${creator.name}")).click()
             }
             assertTrue(device.wait(Until.hasObject(By.text("2 selected")), 5000))
+            for (creator in followed) assertTrue(device.wait(Until.hasObject(By.desc("Select ${creator.name}").checkable(true).checked(true)), 5000))
+            device.takeScreenshot(java.io.File(app.getExternalFilesDir(null), "batch-selection-ready.png"))
+            device.dumpWindowHierarchy(java.io.File(app.getExternalFilesDir(null), "batch-selection-ready.xml"))
             tapDescription("End selection")
             assertTrue(device.wait(Until.gone(By.text("2 selected")), 5000))
             device.findObject(By.desc("Manage author ${followed.first().name}")).click()
             tapText("Manage")
-            val rowAgain = device.wait(Until.findObject(By.longClickable(true).hasDescendant(By.desc("Manage author ${followed.first().name}"))), 5000)!!
+            val rowAgain = device.wait(Until.findObject(By.desc("Manage author ${followed.first().name}").longClickable(true)), 5000)!!
             rowAgain.longClick()
             assertTrue(device.wait(Until.hasObject(By.text("1 selected")), 5000))
             device.findObject(By.clazz("android.widget.EditText")).text = "Batch creator $marker"
             assertTrue(device.wait(Until.gone(By.text("1 selected")), 5000))
-            device.wait(Until.findObject(By.longClickable(true).hasDescendant(By.desc("Manage author ${followed.first().name}"))), 5000)!!.longClick()
+            device.wait(Until.findObject(By.desc("Manage author ${followed.first().name}").longClickable(true)), 5000)!!.longClick()
             assertTrue(device.wait(Until.hasObject(By.desc("Select ${followed.last().name}")), 5000))
             device.findObject(By.desc("Select ${followed.last().name}")).click()
             tapText("Actions")

@@ -20,7 +20,7 @@ if [[ "$test_status" == 0 && "${KOMORI_DISPOSABLE_EMULATOR:-0}" == 1 ]]; then
     fi
 fi
 adb logcat -d -s KomoriBenchmark:I > device-diagnostics/progress-benchmark.txt || true
-for capture in download-maintenance scheduled-backup-settings reader-manual-refresh navigation-failure facet-failure continuous-failure; do
+for capture in download-maintenance scheduled-backup-settings reader-manual-refresh navigation-failure facet-failure continuous-failure author-filter-failure; do
     adb pull "/data/local/tmp/komori-$capture.png" "device-diagnostics/$capture.png" || true
 done
 adb pull /sdcard/Android/data/app.komori.reader.debug/files/ device-diagnostics/app-captures/ || true

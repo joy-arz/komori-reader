@@ -176,35 +176,10 @@ internal fun Authors(vm: ReaderViewModel) {
             )
             LazyColumn {
                 items(visible, key = { it.id }) { creator ->
-                    val rowSelected = creator.id in selectedCreators
-                    val rowDescription = if (selecting) "Select ${creator.name}" else "Manage author ${creator.name}"
-                    ListItem(
-                        headlineContent = { Text(creator.name) },
-                        supportingContent = { Text("${sourceName(creator.id)} · ${creator.role}") },
-                        trailingContent = {
-                            if (selecting)
-                                Checkbox(
-                                    rowSelected,
-                                    onCheckedChange = null,
-                                )
-                            else TextButton(onClick = { vm.follow(creator) }) { Text("Unfollow") }
-                        },
-                        modifier =
-                            Modifier.semantics(mergeDescendants = true) {
-                                contentDescription = rowDescription
-                                this.selected = rowSelected
-                            }.combinedClickable(
-                                role = if (selecting) Role.Checkbox else Role.Button,
-                                onLongClick = { creatorSelection.toggle(creator.id) },
-                                onClick = {
-                                    if (creatorSelection.active) creatorSelection.toggle(creator.id)
-                                    else {
-                                        selectedId = creator.id
-                                        manage = false
-                                    }
-                                },
-                            ),
-                    )
+                    AuthorManagementRow(creator, selecting, creator.id in selectedCreators,
+                        toggle = { creatorSelection.toggle(creator.id) },
+                        open = { selectedId = creator.id; manage = false },
+                        unfollow = { vm.follow(creator) })
                 }
             }
         } else {

@@ -25,13 +25,25 @@ class OwnedTemporaryFilesTest {
         val directory = Files.createTempDirectory("update-callback").toFile()
         val file = OwnedTemporaryFiles.create(directory, "update-100-", ".part").apply { writeText("active") }
         val entered = CountDownLatch(1); val finish = CountDownLatch(1)
-        val thread = Thread { OwnedTemporaryFiles.use(file) { entered.countDown(); check(finish.await(5, TimeUnit.SECONDS)); assertTrue(file.exists()) } }
+        val failure = java.util.concurrent.atomic.AtomicReference<Throwable?>()
+        val thread = Thread { try { OwnedTemporaryFiles.use(file) { entered.countDown(); check(finish.await(5, TimeUnit.SECONDS)); assertTrue(file.exists()) } } catch (error: Throwable) { failure.set(error) } }
         try {
             thread.start(); assertTrue(entered.await(5, TimeUnit.SECONDS))
             OwnedTemporaryFiles.discard(file)
             assertEquals(0L, OwnedTemporaryFiles.clean(directory, OwnedTemporaryFiles.updateParts)); assertTrue(file.exists())
-            finish.countDown(); thread.join(5000); assertFalse(thread.isAlive); assertFalse(file.exists())
+            finish.countDown(); thread.join(5000); assertFalse(thread.isAlive); assertNull(failure.get()); assertFalse(file.exists())
         } finally { finish.countDown(); thread.join(5000); directory.deleteRecursively() }
+    }
+
+    @Test fun callbackStartingAfterCancellationCannotRecreateAnUnownedFile() {
+        val directory = Files.createTempDirectory("update-late-callback").toFile()
+        val file = OwnedTemporaryFiles.create(directory, "update-100-", ".part")
+        try {
+            OwnedTemporaryFiles.discard(file)
+            try { OwnedTemporaryFiles.use(file) { file.writeText("late") }; fail("An abandoned callback must not reopen its file") }
+            catch (_: java.io.IOException) { }
+            assertFalse(file.exists())
+        } finally { directory.deleteRecursively() }
     }
 
     @Test fun legacyExportOrphansAreReclaimedWithoutTouchingOtherArchives() {

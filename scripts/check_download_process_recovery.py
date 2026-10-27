@@ -11,6 +11,7 @@ import subprocess
 import threading
 import time
 import uuid
+from urllib.parse import urlsplit
 import zlib
 
 PACKAGE = "app.komori.reader.debug"
@@ -61,11 +62,12 @@ def main():
         def do_GET(self):
             with lock:
                 counts[self.path] += 1
-            if self.path.startswith("/at-home/server/"):
-                identity = self.path.rsplit("/", 1)[-1]
+            path = urlsplit(self.path).path
+            if path.startswith("/at-home/server/"):
+                identity = path.rsplit("/", 1)[-1]
                 body = json.dumps(dict(baseUrl="https://fixture.invalid", chapter=dict(hash=identity, data=["0.png", "1.png", "2.png"], dataSaver=["0.png", "1.png", "2.png"]))).encode()
             else:
-                if self.path in (f"/data/{active}/1.png", f"/data-saver/{active}/1.png"):
+                if path in (f"/data/{active}/1.png", f"/data-saver/{active}/1.png"):
                     blocked.set()
                     if not release.wait(45):
                         self.send_error(504)
@@ -127,6 +129,13 @@ def main():
         Path("device-diagnostics").mkdir(exist_ok=True)
         Path("device-diagnostics/download-process-recovery.json").write_text(json.dumps(report, indent=2) + "\n")
         print(json.dumps(report))
+    except Exception as error:
+        Path("device-diagnostics").mkdir(exist_ok=True)
+        report = dict(status="FAIL", error=str(error), counts=dict(counts),
+                      rows={identity: state(identity) for identity in (active, queued, paused)})
+        Path("device-diagnostics/download-process-recovery.json").write_text(json.dumps(report, indent=2) + "\n")
+        print(json.dumps(report))
+        raise
     finally:
         release.set()
         for identity in (active, queued, paused):
