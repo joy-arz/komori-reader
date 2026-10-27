@@ -65,7 +65,7 @@ def main():
                 identity = self.path.rsplit("/", 1)[-1]
                 body = json.dumps(dict(baseUrl="https://fixture.invalid", chapter=dict(hash=identity, data=["0.png", "1.png", "2.png"], dataSaver=["0.png", "1.png", "2.png"]))).encode()
             else:
-                if self.path == f"/data/{active}/1.png":
+                if self.path in (f"/data/{active}/1.png", f"/data-saver/{active}/1.png"):
                     blocked.set()
                     if not release.wait(45):
                         self.send_error(504)
@@ -99,7 +99,7 @@ def main():
     try:
         shell("am", "start", "-W", "-n", PACKAGE + "/app.komori.MainActivity")
         for identity in (active, queued, paused):
-            command("configure", identity, "--extra", f"endpoint:s:http://127.0.0.1:{port}/")
+            command("configure", identity, "--extra", f"port:i:{port}")
         # A paused row must remain paused across restart, without creating any HTTP work.
         command("low", paused, "--extra", "value:b:true"); command("queue", paused)
         wait_for(lambda: "Waiting for storage" in state(paused), "storage fixture wait")
@@ -118,7 +118,7 @@ def main():
         wait_for(lambda: "state=Complete" in state(active), "resumed chapter completion")
         wait_for(lambda: "state=Complete" in state(queued), "queue continuation")
         assert "state=Paused" in state(paused), state(paused)
-        assert counts[f"/data/{active}/0.png"] == 1, dict(counts)
+        assert sum(count for path, count in counts.items() if path.endswith(f"/{active}/0.png")) == 1, dict(counts)
         assert not any(paused in path for path in counts), dict(counts)
         new_pid = pid()
         report = dict(status="PASS", old_pid=old_pid, new_pid=new_pid, completed_page_reused=True,

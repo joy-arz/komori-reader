@@ -6,7 +6,8 @@ import android.database.MatrixCursor
 import android.net.Uri
 import android.os.Bundle
 import app.komori.data.*
-import app.komori.domain.DownloadPolicy
+import app.komori.domain.Release
+import kotlinx.coroutines.flow.first
 import java.io.File
 import kotlinx.coroutines.*
 import okhttp3.*
@@ -40,16 +41,13 @@ class DownloadFixtureProvider : ContentProvider() {
         app.startupRecovery?.join()
         when (method) {
             "configure" -> {
-                val endpoint = requireNotNull(extras?.getString("endpoint")).toHttpUrl()
+                val configured = extras?.getString("endpoint") ?: "http://127.0.0.1:${extras?.getInt("port") ?: 0}/"
+                val endpoint = configured.toHttpUrl()
                 require(endpoint.scheme == "http" && endpoint.host == "127.0.0.1" && endpoint.username.isEmpty() && endpoint.password.isEmpty())
                 preferences.edit().putString("endpoint:$id", endpoint.toString()).commit()
             }
             "queue" -> {
-                val existing = app.dao.download(id)
-                require(existing?.state !in DownloadPolicy.activeStates)
-                app.dao.putDownload(existing?.copy(state = "Queued", error = "") ?: Download(id, id, "WorkManager fixture", 3,
-                    queuePosition = app.dao.lastQueuePosition() + 1))
-                kickDownloadQueue(app)
+                enqueueDownload(app, Release(id, id, "1", null, "", "en", emptyList(), "Fixture", 3), app.settings.flow.first())
             }
             "pause" -> app.dao.download(id)?.let { DownloadCoordinator(app).stop(it, "Paused") }
             "delete" -> app.dao.download(id)?.let { DownloadCoordinator(app).delete(it) }

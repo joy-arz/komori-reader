@@ -25,6 +25,7 @@ class WorkManagerLifecycleTest {
         val server = MockWebServer()
         val blocked = CountDownLatch(1); val release = CountDownLatch(1)
         val calls = ConcurrentHashMap<String, Int>()
+        val manifests = java.util.Collections.synchronizedList(mutableListOf<String>())
         @Volatile var holdSecond = false
         @Volatile var failSecond = false
         @Volatile var resetSecond = false
@@ -38,7 +39,7 @@ class WorkManagerLifecycleTest {
                     val path = request.requestUrl!!.encodedPath
                     calls.merge(path, 1, Int::plus)
                     if (path.startsWith("/at-home/")) {
-                        val id = path.substringAfterLast('/')
+                        val id = path.substringAfterLast('/'); manifests += id
                         return MockResponse().setBody("""{"baseUrl":"https://fixture.invalid","chapter":{"hash":"$id","data":["0.png","1.png","2.png"],"dataSaver":["0.png","1.png","2.png"]}}""")
                     }
                     if (path.endsWith("/1.png")) {
@@ -52,7 +53,7 @@ class WorkManagerLifecycleTest {
             }
             server.start(InetAddress.getByName("127.0.0.1"), 0)
         }
-        fun count(id: String, page: Int) = calls["/data/$id/$page.png"] ?: 0
+        fun count(id: String, page: Int) = (calls["/data/$id/$page.png"] ?: 0) + (calls["/data-saver/$id/$page.png"] ?: 0)
         override fun close() { release.countDown(); server.close() }
     }
     private fun command(id: String, method: String, extra: Bundle? = null) = app.contentResolver.call(
@@ -62,7 +63,7 @@ class WorkManagerLifecycleTest {
     }
     private suspend fun configure(fixture: Fixture, id: String) {
         app.startupRecovery?.join()
-        command(id, "configure", Bundle().apply { putString("endpoint", fixture.server.url("/").toString()) })
+        command(id, "configure", Bundle().apply { putString("endpoint", fixture.server.url("/").newBuilder().host("127.0.0.1").build().toString()) })
     }
     private suspend fun complete(id: String) = waitFor("complete") { app.dao.download(id)?.state == "Complete" }
     private fun id() = "work-fixture-${UUID.randomUUID()}"
@@ -126,6 +127,23 @@ class WorkManagerLifecycleTest {
                 assertEquals(1, fixture.count(first, 0)); assertEquals(1, fixture.count(first, 2))
                 assertTrue(validImage(pageFile(app, first, 1)))
             } finally { ChapterFiles.releaseReader(reader); command(first, "cleanup") }
+        }
+    }
+
+    @Test fun movingQueuedTitlesChangesTheNextWorkerWithoutInterruptingTheCurrentWriter() = runBlocking<Unit> {
+        Fixture().use { fixture ->
+            val first = id(); val second = id(); val third = id()
+            try {
+                for (id in listOf(first, second, third)) configure(fixture, id)
+                fixture.holdSecond = true; command(first, "queue")
+                assertTrue(withContext(Dispatchers.IO) { fixture.blocked.await(10, TimeUnit.SECONDS) })
+                command(second, "queue"); command(third, "queue")
+                DownloadCoordinator(app).move(app.dao.download(third)!!, null)
+                assertEquals(listOf(first), fixture.manifests.toList())
+                fixture.holdSecond = false; fixture.release.countDown()
+                complete(first); complete(third); complete(second)
+                assertEquals(listOf(first, third, second), fixture.manifests.toList())
+            } finally { fixture.release.countDown(); for (id in listOf(first, second, third)) command(id, "cleanup") }
         }
     }
 

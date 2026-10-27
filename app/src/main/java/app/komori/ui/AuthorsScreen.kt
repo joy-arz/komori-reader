@@ -268,7 +268,7 @@ internal fun Authors(vm: ReaderViewModel) {
                                     )
                                 }
                             if (!feed.loading && !feed.hasMore && works.isEmpty())
-                                Text(if (workFilter.active) "No works match these filters." else "No works found.")
+                                Text(if (feed.incompleteMetadata > 0) "No verified matches yet. Retry incomplete metadata." else if (workFilter.active) "No works match these filters." else "No works found.")
                         }
                     },
                 )

@@ -51,6 +51,6 @@ internal fun AuthorFiltersDialog(current: AuthorWorkFilter, sources: List<String
             }
         },
         confirmButton = { TextButton(onClick = { apply(draft) }) { Text("Apply") } },
-        dismissButton = { Row { TextButton(onClick = { draft = AuthorWorkFilter() }) { Text("Reset filters") }; TextButton(onClick = close) { Text("Cancel") } } },
+        dismissButton = { FlowRow(horizontalArrangement = Arrangement.End) { TextButton(onClick = { draft = AuthorWorkFilter() }) { Text("Reset filters") }; TextButton(onClick = close) { Text("Cancel") } } },
     )
 }

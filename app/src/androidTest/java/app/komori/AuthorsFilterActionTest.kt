@@ -41,7 +41,7 @@ class AuthorsFilterActionTest {
         try {
             compose.waitUntil(5000) { compose.onAllNodes(primary).fetchSemanticsNodes().size == 1 }
             compose.onAllNodes(primary).assertCountEquals(1)
-            compose.onNode(primary).assertIsDisplayed().assertIsNotSelected().performClick()
+            compose.onNode(primary).assertIsDisplayed().assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp).assertIsNotSelected().performClick()
             compose.onNodeWithText("Title or creator").performTextInput("forest")
             compose.onNodeWithText("Apply").performClick()
             compose.onNode(primary).assertIsSelected()

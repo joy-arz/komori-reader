@@ -25,7 +25,7 @@ enum class FailureKind {
 
 class StorageFailure(message: String, cause: Throwable? = null) : IOException(message, cause)
 
-class ContentFailure(message: String) : IOException(message)
+class ContentFailure(message: String, cause: Throwable? = null) : IOException(message, cause)
 
 internal inline fun <T> storageOperation(block: () -> T): T =
     try {

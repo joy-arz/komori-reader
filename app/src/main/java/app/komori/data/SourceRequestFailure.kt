@@ -37,4 +37,7 @@ internal fun originalFailure(error: Exception?): Exception? = if (error is Sourc
 internal suspend inline fun <T> sourceRequest(source: String, stage: SourceStage, block: () -> T): T =
     try { block() } catch (error: CancellationException) { throw error }
     catch (error: SourceRequestFailure) { throw error }
-    catch (error: Exception) { throw SourceRequestFailure(source, stage, error) }
+    catch (error: Exception) {
+        val failure = if (error is JSONException || error is IllegalArgumentException) ContentFailure("The source format is unsupported.", error) else error
+        throw SourceRequestFailure(source, stage, failure)
+    }

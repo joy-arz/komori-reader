@@ -112,7 +112,7 @@ class BatchSelectionTest {
             tapDescription("Authors")
             tapText("Manage")
             assertFalse(device.hasObject(By.text("Select")))
-            val authorRow = device.wait(Until.findObject(By.desc("Manage author ${followed.first().name}").longClickable(true)), 5000)
+            val authorRow = device.wait(Until.findObject(By.longClickable(true).hasDescendant(By.desc("Manage author ${followed.first().name}"))), 5000)
                 ?: throw AssertionError("Author management row did not become interactive")
             authorRow.longClick()
             assertTrue("Long press did not activate selection", device.wait(Until.hasObject(By.text("1 selected")), 5000))

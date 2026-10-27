@@ -54,13 +54,21 @@ suspend fun enqueueDownload(
     val app = context.applicationContext as KomoriApp
     if (app.dao.download(chapter.id)?.state in DownloadPolicy.activeStates) return
     withContext(kotlinx.coroutines.NonCancellable) {
-        ChapterFiles.locked(chapter.id) {
-            val existing = app.dao.download(chapter.id)
-            if (existing?.state in (DownloadPolicy.activeStates + "Complete")) return@locked
-            app.database.withTransaction {
-                val position = app.dao.lastQueuePosition().let { if (it == Long.MAX_VALUE) throw IllegalStateException("Download queue position limit reached.") else it + 1 }
-                app.dao.putDownload(existing?.copy(state = "Queued", error = "", queuePosition = position)
-                    ?: Download(chapter.id, chapter.mangaId, chapter.label, chapter.pages.coerceAtLeast(0), dataSaver = settings.saver, queuePosition = position))
+        withDownloadQueueMutation {
+            val before = app.dao.download(chapter.id)
+            if (before?.state in (DownloadPolicy.activeStates + "Complete")) return@withDownloadQueueMutation
+            // An explicit retry supersedes a failed/backed-off worker, including its finishing window.
+            if (before != null) withContext(Dispatchers.IO) {
+                WorkManager.getInstance(app).cancelUniqueWork("download-${chapter.id}").result.get()
+            }
+            ChapterFiles.locked(chapter.id) {
+                val existing = app.dao.download(chapter.id)
+                if (existing?.state in (DownloadPolicy.activeStates + "Complete")) return@locked
+                app.database.withTransaction {
+                    val position = app.dao.lastQueuePosition().let { if (it == Long.MAX_VALUE) throw IllegalStateException("Download queue position limit reached.") else it + 1 }
+                    app.dao.putDownload(existing?.copy(state = "Queued", error = "", queuePosition = position)
+                        ?: Download(chapter.id, chapter.mangaId, chapter.label, chapter.pages.coerceAtLeast(0), dataSaver = settings.saver, queuePosition = position))
+                }
             }
         }
         kickDownloadQueue(app)
@@ -153,7 +161,7 @@ class ChapterDownloadWorker(context: Context, params: WorkerParameters) :
                         if (!manifest.exists() || manifest.readText() != identity) {
                             val compatible = manifest.exists() && PageContentIdentity.legacyCompatible(sourceKey(id), manifest.readText(), urls)
                             if (!compatible) {
-                                ChapterFiles.requireNotReading(id)
+                                if (directory.listFiles().orEmpty().any { it.extension == "img" }) ChapterFiles.requireNotReading(id)
                                 directory.listFiles()?.forEach { it.delete() }
                             }
                             storageOperation { manifest.writeText(identity) }
