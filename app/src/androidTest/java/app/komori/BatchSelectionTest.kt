@@ -113,6 +113,8 @@ class BatchSelectionTest {
             tapText("Manage")
             assertFalse(device.hasObject(By.text("Select")))
             device.findObject(By.text(followed.first().name)).longClick()
+            device.dumpWindowHierarchy(java.io.File(app.getExternalFilesDir(null), "batch-after-long-press.xml"))
+            android.util.Log.i("KomoriBatch", "afterLongPress selectedLabel=${device.hasObject(By.text("1 selected"))} firstVisible=${device.hasObject(By.text(followed.first().name))} secondVisible=${device.hasObject(By.text(followed.last().name))}")
             for (creator in followed.drop(1)) {
                 assertTrue(device.wait(Until.hasObject(By.desc("Select ${creator.name}")), 5000))
                 device.findObject(By.desc("Select ${creator.name}")).click()
@@ -144,6 +146,8 @@ class BatchSelectionTest {
             assertTrue(chapters.none { chapterDirectory(app, it.id).exists() })
         } catch (error: Throwable) {
             device.executeShellCommand("screencap -p /data/local/tmp/komori-batch-failure.png")
+            device.dumpWindowHierarchy(java.io.File(app.getExternalFilesDir(null), "batch-failure.xml"))
+            android.util.Log.e("KomoriBatch", "selection failure: ${error.javaClass.simpleName}; fixtureCreators=${runBlocking { app.dao.observeCreators().first().count { it.id.startsWith(prefix) } }}")
             throw error
         } finally {
             instrumentation.runOnMainSync { activity.finish() }
