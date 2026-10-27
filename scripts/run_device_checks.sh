@@ -19,6 +19,13 @@ if [[ "$test_status" == 0 && "${KOMORI_DISPOSABLE_EMULATOR:-0}" == 1 ]]; then
         python3 scripts/check_download_process_recovery.py || test_status=$?
     fi
 fi
+adb logcat -d > device-diagnostics/logcat.txt || true
+adb shell dumpsys activity processes > device-diagnostics/processes-after.txt || true
+if [[ "$test_status" != 0 ]]; then
+    adb root >/dev/null 2>&1 || true
+    adb wait-for-device
+    adb pull /data/anr device-diagnostics/anr >/dev/null 2>&1 || true
+fi
 adb logcat -d -s KomoriBenchmark:I > device-diagnostics/progress-benchmark.txt || true
 for capture in download-maintenance scheduled-backup-settings reader-manual-refresh navigation-failure facet-failure continuous-failure author-filter-failure; do
     adb pull "/data/local/tmp/komori-$capture.png" "device-diagnostics/$capture.png" || true

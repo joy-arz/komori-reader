@@ -41,7 +41,13 @@ def main():
     def pid():
         return shell('sh', '-c', 'pidof ' + PACKAGE + ' || true')
     def launch():
-        shell('am', 'start', '-W', '-n', PACKAGE + '/app.komori.MainActivity')
+        try:
+            shell('am', 'start', '-W', '-n', PACKAGE + '/app.komori.MainActivity')
+        except subprocess.TimeoutExpired:
+            process = pid()
+            if process:
+                shell('kill', '-3', process)
+            raise
         return wait_for(lambda: pid(), 'application process')
     old_pid = launch()
     time.sleep(3)

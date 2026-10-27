@@ -18,6 +18,7 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class BatchSelectionTest {
+    @get:org.junit.Rule val compose = androidx.compose.ui.test.junit4.createEmptyComposeRule()
     @Test
     fun downloadedIncludesUnsavedTitlesAndBatchActionsAreExplicit() = runBlocking {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
@@ -81,9 +82,11 @@ class BatchSelectionTest {
             vm = ViewModelProvider(activity)[ReaderViewModel::class.java]
             ViewModelProvider(activity)[UpdateViewModel::class.java].dismiss()
         }
+        compose.waitForIdle()
         fun tapText(text: String) {
             assertTrue("Missing $text", device.wait(Until.hasObject(By.text(text)), 8000))
             device.findObject(By.text(text)).click()
+            compose.waitForIdle()
             device.waitForIdle()
         }
         fun tapDescription(description: String) {
@@ -92,6 +95,7 @@ class BatchSelectionTest {
                 device.wait(Until.hasObject(By.pkg(app.packageName).desc(description)), 8000),
             )
             device.findObject(By.pkg(app.packageName).desc(description)).click()
+            compose.waitForIdle()
             device.waitForIdle()
         }
             tapText("Downloaded")
@@ -102,6 +106,7 @@ class BatchSelectionTest {
             )
             assertFalse(device.hasObject(By.text("Select")))
             device.findObject(By.desc(titles[0].title)).longClick()
+            compose.waitForIdle()
             tapText("Select all")
             tapText("Actions")
             tapText("Like")
@@ -110,6 +115,7 @@ class BatchSelectionTest {
             }
             assertTrue(titles.all { app.dao.shelf(it.id)?.saved == false })
             device.findObject(By.desc(titles[0].title)).click()
+            compose.waitForIdle()
             assertTrue(device.wait(Until.hasObject(By.text("Saved chapter list · Offline")), 5000))
             tapDescription("Back")
             tapDescription("Authors")
@@ -117,16 +123,19 @@ class BatchSelectionTest {
             val findCreator = device.wait(Until.findObject(By.clazz("android.widget.EditText")), 5000)
                 ?: throw AssertionError("Creator search is missing")
             findCreator.text = "Batch creator $marker"
+            compose.waitForIdle()
             assertFalse(device.hasObject(By.text("Select")))
             val authorRow = device.wait(Until.findObject(By.desc("Manage author ${followed.first().name}").longClickable(true)), 5000)
                 ?: throw AssertionError("Author management row did not become interactive")
             authorRow.longClick()
+            compose.waitForIdle()
             assertTrue("Long press did not activate selection", device.wait(Until.hasObject(By.text("1 selected")), 5000))
             device.dumpWindowHierarchy(java.io.File(app.getExternalFilesDir(null), "batch-after-long-press.xml"))
             android.util.Log.i("KomoriBatch", "afterLongPress selectedLabel=${device.hasObject(By.text("1 selected"))} firstVisible=${device.hasObject(By.desc("Select ${followed.first().name}"))} secondVisible=${device.hasObject(By.desc("Select ${followed.last().name}"))}")
             for (creator in followed.drop(1)) {
                 assertTrue(device.wait(Until.hasObject(By.desc("Select ${creator.name}")), 5000))
                 device.findObject(By.desc("Select ${creator.name}")).click()
+                compose.waitForIdle()
             }
             assertTrue(device.wait(Until.hasObject(By.text("2 selected")), 5000))
             for (creator in followed) assertTrue(device.wait(Until.hasObject(By.desc("Select ${creator.name}").checkable(true).checked(true)), 5000))
@@ -135,15 +144,20 @@ class BatchSelectionTest {
             tapDescription("End selection")
             assertTrue(device.wait(Until.gone(By.text("2 selected")), 5000))
             device.findObject(By.desc("Manage author ${followed.first().name}")).click()
+            compose.waitForIdle()
             tapText("Manage")
             val rowAgain = device.wait(Until.findObject(By.desc("Manage author ${followed.first().name}").longClickable(true)), 5000)!!
             rowAgain.longClick()
+            compose.waitForIdle()
             assertTrue(device.wait(Until.hasObject(By.text("1 selected")), 5000))
             device.findObject(By.clazz("android.widget.EditText")).text = "Batch creator $marker"
+            compose.waitForIdle()
             assertTrue(device.wait(Until.gone(By.text("1 selected")), 5000))
             device.wait(Until.findObject(By.desc("Manage author ${followed.first().name}").longClickable(true)), 5000)!!.longClick()
+            compose.waitForIdle()
             assertTrue(device.wait(Until.hasObject(By.desc("Select ${followed.last().name}")), 5000))
             device.findObject(By.desc("Select ${followed.last().name}")).click()
+            compose.waitForIdle()
             tapText("Actions")
             tapText("Unfollow selected")
             tapText("Confirm")

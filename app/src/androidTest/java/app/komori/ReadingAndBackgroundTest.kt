@@ -111,15 +111,19 @@ class ReadingAndBackgroundTest {
             Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(200).message("OK").body(body).build()
         }.build()
         val browser = OkHttpClient.Builder().addInterceptor { throw AssertionError("MangaDex pages must not use browser-session transport") }.build()
+        val oldRuntime = app.downloadRuntime
+        val source = Sources(browser, api)
+        app.downloadRuntime = object : DownloadRuntime {
+            override fun source(chapter: String) = if (chapter == id) source else oldRuntime?.source(chapter)
+        }
         app.dao.putDownload(Download(id, id, "Background fixture", 0))
-        val worker = TestListenableWorkerBuilder<ChapterDownloadWorker>(app).setInputData(workDataOf("chapter" to id)).build()
         val activity = instrumentation.startActivitySync(Intent(app, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)) as MainActivity
-        val work = async(Dispatchers.IO) { worker.download(Sources(browser, api)) }
         try {
+            kickDownloadQueue(app)
             until { started.count == 0L }
             instrumentation.runOnMainSync { activity.finish() }
             proceed.countDown()
-            assertEquals(ListenableWorker.Result.success(), withTimeout(10000) { work.await() })
+            until { app.dao.download(id)?.state == "Complete" }
             assertEquals("Complete", app.dao.download(id)!!.state)
             assertTrue(validImage(pageFile(app, id, 0))); assertTrue(validImage(pageFile(app, id, 1)))
             assertEquals(3, imageCalls.get())
@@ -128,8 +132,11 @@ class ReadingAndBackgroundTest {
             if (android.os.Build.VERSION.SDK_INT >= 29)
                 assertEquals(android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC, info.foregroundServiceType)
         } finally {
-            proceed.countDown(); work.cancelAndJoin()
-            app.dao.removeDownload(id); chapterDirectory(app, id).deleteRecursively()
+            proceed.countDown()
+            androidx.work.WorkManager.getInstance(app).cancelUniqueWork("download-$id").result.get()
+            ChapterFiles.locked(id) { app.dao.removeDownload(id); chapterDirectory(app, id).deleteRecursively() }
+            app.downloadRuntime = oldRuntime
+            kickDownloadQueue(app)
             api.dispatcher.executorService.shutdown(); browser.dispatcher.executorService.shutdown()
             instrumentation.runOnMainSync { activity.finish() }
         }

@@ -58,13 +58,13 @@ class NavigationHistoryTest {
                 )
             }
             device.waitForIdle()
-            val row =
-                device.findObjects(By.textStartsWith("Ch. ")).first {
-                    it.visibleBounds.height() > 20
-                }
-            val label = row.text
-            val bounds = row.visibleBounds
-            row.click()
+            val (label, bounds) = device.findObjects(By.textStartsWith("Ch. ")).firstNotNullOf { row ->
+                try {
+                    val bounds = row.visibleBounds
+                    row.text?.takeIf { bounds.height() > 20 }?.let { it to bounds }
+                } catch (_: androidx.test.uiautomator.StaleObjectException) { null }
+            }
+            device.click(bounds.centerX(), bounds.centerY())
             val deadline = android.os.SystemClock.uptimeMillis() + 8000
             while (
                 !vm.readerReady.value && android.os.SystemClock.uptimeMillis() < deadline
