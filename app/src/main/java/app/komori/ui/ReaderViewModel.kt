@@ -260,9 +260,9 @@ class ReaderViewModel(
                 require(key in setOf("mangadex", "zap", "nhentai", "imhentai")) {
                     "This source does not provide a creator catalog."
                 }
-                val filter = BrowseFilter(sort = sort.sourceSort(key), language = workFilter.nativeLanguage)
+                val filter = authorBrowseFilter(key, sort, workFilter)
                 val result = authorPage?.invoke(creator, page, filter)
-                    ?: app.source.browse(key, "", page, filter, creator)
+                    ?: app.source.browse(key, "", page, filter, creator, deferCreatorDetails = true)
                 result
             }
         authorFeed.value =

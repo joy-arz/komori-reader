@@ -129,7 +129,12 @@ fun Manga.metadata(): List<SourceTag> = JSONArray(tagsJson).objects().map {
     SourceTag(it.getString("id"), it.getString("name"), it.optString("type", "tag"))
 }
 
-data class BrowsePage(val titles: List<Manga>, val hasMore: Boolean, val paginationIds: List<String> = titles.map { it.id })
+data class BrowsePage(
+    val titles: List<Manga>, val hasMore: Boolean,
+    val paginationIds: List<String> = titles.map { it.id },
+    val incompleteCreatorTitles: List<Manga> = emptyList(),
+    val orderingIds: List<String> = (titles + incompleteCreatorTitles).map { it.id },
+)
 
 /** Existing MangaDex UUIDs stay unchanged; other source IDs encode paths safely for local files. */
 class Sources(val client: OkHttpClient, apiClient: OkHttpClient = client) {
@@ -197,6 +202,7 @@ class Sources(val client: OkHttpClient, apiClient: OkHttpClient = client) {
         page: Int,
         filter: BrowseFilter,
         creator: Creator?,
+        deferCreatorDetails: Boolean = false,
     ): BrowsePage = sourceRequest(key, SourceStage.CATALOG) {
         if (key == "mangadex")
             dex.browse(query, (page - 1) * 30, creator, filter).let {
@@ -206,7 +212,7 @@ class Sources(val client: OkHttpClient, apiClient: OkHttpClient = client) {
             require(creator == null) { "This source does not expose a verified author catalog. Use title search or genre filters." }
             manhwa(key).browse(query, page, filter)
         }
-        else web(key).browse(query, page, filter, creator)
+        else web(key).browse(query, page, filter, creator, deferCreatorDetails)
     }
 
     suspend fun tags(key: String): List<SourceTag> = sourceRequest(key, SourceStage.FILTERS) {
@@ -262,14 +268,22 @@ class WebSource(
 ) {
     private val connectionRecovery = SourceConnectionRecovery(client, key)
     private data class CreatorMetadata(val manga: Manga, val checkedAt: Long)
-    fun clearCreatorMetadata() { synchronized(creatorMetadata) { creatorMetadata.clear() } }
+    fun clearCreatorMetadata() { synchronized(creatorMetadata) { creatorMetadata.clear(); deferredCreatorDetails.clear() } }
+    private val deferredCreatorDetails = object : LinkedHashMap<String, Long>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Long>?) = size > 256
+    }
+    private fun creatorDetailDeferred(id: String): Boolean = synchronized(creatorMetadata) {
+        val now = System.nanoTime()
+        if (creatorMetadata[id]?.let { now - it.checkedAt in 0 until 600_000_000_000L } == true) false
+        else deferredCreatorDetails[id]?.let { now - it in 0 until 600_000_000_000L } == true
+    }
 
     private val creatorMetadata = object : LinkedHashMap<String, CreatorMetadata>(64, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CreatorMetadata>?) = size > 256
     }
 
     private fun rememberCreatorMetadata(manga: Manga): Manga {
-        synchronized(creatorMetadata) { creatorMetadata[manga.id] = CreatorMetadata(manga, System.nanoTime()) }
+        synchronized(creatorMetadata) { creatorMetadata[manga.id] = CreatorMetadata(manga, System.nanoTime()); deferredCreatorDetails.remove(manga.id) }
         return manga
     }
 
@@ -338,7 +352,7 @@ class WebSource(
     }
 
     suspend fun browse(
-        query: String, page: Int, filter: BrowseFilter, creator: Creator? = null,
+        query: String, page: Int, filter: BrowseFilter, creator: Creator? = null, deferCreatorDetails: Boolean = false,
     ): BrowsePage {
         if (key == "demonic" && query.isBlank() && filter.tags.any { !it.matches(Regex("\\d+")) }) {
             val available = tags()
@@ -428,7 +442,7 @@ class WebSource(
                 if (zapCreator) {
                     val name = creator?.name ?: query.takeIf { filter.searchType == "Author" && it.isNotBlank() }
                         ?: "$base$facet".toHttpUrl().pathSegments[1].replace('-', ' ')
-                    return supplementZapCreator(native, name, facet, page, filter)
+                    return supplementZapCreator(native, name, facet, page, filter, deferCreatorDetails)
                 }
                 return native
             }
@@ -558,23 +572,39 @@ class WebSource(
             .distinctBy { it.id }
     }
 
-    private suspend fun supplementZapCreator(native: BrowsePage, name: String, facet: String, page: Int, filter: BrowseFilter): BrowsePage {
+    private suspend fun supplementZapCreator(native: BrowsePage, name: String, facet: String, page: Int, filter: BrowseFilter, deferFailures: Boolean): BrowsePage {
         val search = browseGallery(name, page, filter.copy(searchType = "Title", tags = emptySet(), facetPath = ""))
         val nativeIds = native.titles.map { it.id }.toSet()
         val expected = sourceId(key, facet)
         val verified = mutableMapOf<String, Manga>()
+        val incomplete = mutableListOf<Manga>()
         for (chunk in search.titles.filter { it.id !in nativeIds }.chunked(2)) {
             val checked = coroutineScope { chunk.map { candidate -> async {
-                val detail = creatorDetails(candidate)
-                detail.takeIf { JSONArray(it.creatorsJson).objects().any { creator -> creator.optString("id") == expected } }
+                if (deferFailures && creatorDetailDeferred(candidate.id)) return@async candidate to null
+                candidate to try {
+                    creatorDetails(candidate).also { JSONArray(it.creatorsJson).objects() }
+                } catch (error: kotlinx.coroutines.CancellationException) { throw error }
+                catch (error: Exception) {
+                    if (!deferFailures) throw error
+                    synchronized(creatorMetadata) { deferredCreatorDetails[candidate.id] = System.nanoTime() }
+                    null
+                }
             } }.awaitAll() }
-            checked.filterNotNull().forEach { verified[it.id] = it }
+            checked.forEach { (candidate, detail) ->
+                if (detail == null) incomplete += candidate
+                else if (JSONArray(detail.creatorsJson).objects().any { it.optString("id") == expected }) verified[detail.id] = detail
+            }
         }
         val results = (search.titles.mapNotNull { if (it.id in nativeIds) it else verified[it.id] } + native.titles).distinctBy { it.id }
         val ordered = if (filter.sort == "Popular") results else results.sortedByDescending {
             sourcePath(it.id).trim('/').substringAfterLast('/').toLongOrNull() ?: 0
         }
-        return BrowsePage(ordered, native.hasMore || search.hasMore, (native.paginationIds + search.paginationIds).distinct())
+        val included = (ordered + incomplete).map { it.id }.toSet()
+        val all = (search.titles + native.titles).distinctBy { it.id }.filter { it.id in included }
+        val order = if (filter.sort == "Popular") all else all.sortedByDescending {
+            sourcePath(it.id).trim('/').substringAfterLast('/').toLongOrNull() ?: 0
+        }
+        return BrowsePage(ordered, native.hasMore || search.hasMore, (native.paginationIds + search.paginationIds).distinct(), incomplete, order.map { it.id })
     }
 
     suspend fun details(manga: Manga): Manga {

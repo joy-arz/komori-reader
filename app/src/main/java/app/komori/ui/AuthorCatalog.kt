@@ -2,6 +2,7 @@ package app.komori.ui
 
 import app.komori.data.*
 import java.util.Locale
+import org.json.JSONArray
 import kotlinx.coroutines.*
 
 enum class AuthorSort(val label: String) {
@@ -54,6 +55,7 @@ class AuthorCatalog(
     private val titles = linkedMapOf<String, Manga>()
     private val incomplete = linkedMapOf<String, Manga>()
     private val resolved = mutableSetOf<String>()
+    private val waitingOwners = mutableMapOf<String, MutableSet<Creator>>()
     val incompleteMetadataCount get() = incomplete.size
 
     private suspend fun metadata(batch: List<Manga>): Map<String, Manga?> = coroutineScope {
@@ -63,6 +65,7 @@ class AuthorCatalog(
                 title.id to try {
                     val detailed = enrich?.invoke(title) ?: title
                     require(detailed.id == title.id) { "Details belong to a different title." }
+                    detailed.metadata(); JSONArray(detailed.creatorsJson).objects()
                     detailed
                 } catch (error: CancellationException) { throw error }
                 catch (_: Exception) { null }
@@ -76,9 +79,18 @@ class AuthorCatalog(
     suspend fun retryMetadata() {
         val result = metadata(incomplete.values.toList())
         currentCoroutineContext().ensureActive()
-        result.forEach { (id, title) -> if (title != null) {
-            titles[id] = title; resolved += id; incomplete.remove(id)
-        } }
+        result.forEach { (id, title) -> if (title != null) acceptMetadata(id, title) }
+    }
+
+    private fun acceptMetadata(id: String, title: Manga) {
+        val pending = waitingOwners[id]
+        if (pending != null) {
+            val known = JSONArray(title.creatorsJson).objects().map { it.optString("id") }.filter { it.isNotBlank() }.toSet()
+            pending.filter { it.id in known }.forEach { owners.getOrPut(id) { mutableSetOf() }.add(it) }
+            if (known.isNotEmpty()) waitingOwners.remove(id)
+        }
+        if (owners[id].orEmpty().isNotEmpty()) { titles[id] = title; resolved += id }
+        if (id !in waitingOwners) incomplete.remove(id)
     }
 
     private val ranks = mutableMapOf<String, Int>()
@@ -99,7 +111,7 @@ class AuthorCatalog(
                             .thenBy { owner(it.id) }
                             .then(alphabetical)
                 }
-            return titles.values.filter { (!filter.needsMetadata || it.id !in incomplete) && filter.matches(it, owners[it.id].orEmpty()) }.sortedWith(ordering)
+            return titles.values.filter { (!filter.needsMetadata || it.id in resolved) && filter.matches(it, owners[it.id].orEmpty()) }.sortedWith(ordering)
         }
 
     val hasMore: Boolean
@@ -121,16 +133,21 @@ class AuthorCatalog(
                 currentCoroutineContext().ensureActive()
                 val fresh = result.paginationIds.any { it !in cursor.paginationIds }
                 cursor.paginationIds.addAll(result.paginationIds)
+                result.orderingIds.distinct().forEach { id ->
+                    if (cursor.seen.add(id)) ranks[id] = minOf(ranks[id] ?: Int.MAX_VALUE, cursor.rank++)
+                }
                 result.titles.forEach {
-                    if (cursor.seen.add(it.id)) {
-                        ranks[it.id] = minOf(ranks[it.id] ?: Int.MAX_VALUE, cursor.rank++)
-                    }
                     owners.getOrPut(it.id) { mutableSetOf() }.add(cursor.creator)
                     if (filter.needsMetadata) {
                         val detail = details[it.id]
-                        if (detail != null) { titles[it.id] = detail; resolved += it.id }
+                        if (detail != null) acceptMetadata(it.id, detail)
                         else if (it.id !in resolved) { titles[it.id] = it; incomplete.putIfAbsent(it.id, it) }
-                    } else titles[it.id] = it
+                    } else if (it.id !in resolved) titles[it.id] = it
+                }
+                result.incompleteCreatorTitles.forEach { candidate ->
+                    waitingOwners.getOrPut(candidate.id) { mutableSetOf() }.add(cursor.creator)
+                    incomplete.putIfAbsent(candidate.id, candidate)
+                    if (candidate.id in resolved) acceptMetadata(candidate.id, titles.getValue(candidate.id))
                 }
                 cursor.page++
                 cursor.done = !result.hasMore || !fresh
