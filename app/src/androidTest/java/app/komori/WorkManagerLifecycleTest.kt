@@ -126,6 +126,16 @@ class WorkManagerLifecycleTest {
                 command(first, "queue"); complete(first)
                 assertEquals(1, fixture.count(first, 0)); assertEquals(1, fixture.count(first, 2))
                 assertTrue(validImage(pageFile(app, first, 1)))
+                // A valid image with changed bytes must also fail the stored integrity identity.
+                val changed = Bitmap.createBitmap(48, 64, Bitmap.Config.ARGB_8888)
+                changed.eraseColor(android.graphics.Color.RED)
+                pageFile(app, first, 1).outputStream().use { changed.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                changed.recycle()
+                assertTrue(validImage(pageFile(app, first, 1)))
+                app.dao.putDownload(app.dao.download(first)!!.copy(state = "Failed"))
+                command(first, "queue"); complete(first)
+                assertArrayEquals(fixture.bytes, pageFile(app, first, 1).readBytes())
+                assertEquals(1, fixture.count(first, 0)); assertEquals(1, fixture.count(first, 2))
             } finally { ChapterFiles.releaseReader(reader); command(first, "cleanup") }
         }
     }

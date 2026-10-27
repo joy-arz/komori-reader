@@ -123,7 +123,7 @@ class BatchSelectionTest {
             authorRow.longClick()
             assertTrue("Long press did not activate selection", device.wait(Until.hasObject(By.text("1 selected")), 5000))
             device.dumpWindowHierarchy(java.io.File(app.getExternalFilesDir(null), "batch-after-long-press.xml"))
-            android.util.Log.i("KomoriBatch", "afterLongPress selectedLabel=${device.hasObject(By.text("1 selected"))} firstVisible=${device.hasObject(By.text(followed.first().name))} secondVisible=${device.hasObject(By.text(followed.last().name))}")
+            android.util.Log.i("KomoriBatch", "afterLongPress selectedLabel=${device.hasObject(By.text("1 selected"))} firstVisible=${device.hasObject(By.desc("Select ${followed.first().name}"))} secondVisible=${device.hasObject(By.desc("Select ${followed.last().name}"))}")
             for (creator in followed.drop(1)) {
                 assertTrue(device.wait(Until.hasObject(By.desc("Select ${creator.name}")), 5000))
                 device.findObject(By.desc("Select ${creator.name}")).click()

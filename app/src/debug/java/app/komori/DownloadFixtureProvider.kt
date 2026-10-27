@@ -8,6 +8,8 @@ import android.os.Bundle
 import androidx.core.content.edit
 import app.komori.data.*
 import app.komori.domain.Release
+import androidx.work.WorkManager
+import android.net.ConnectivityManager
 import kotlinx.coroutines.flow.first
 import java.io.File
 import kotlinx.coroutines.*
@@ -65,7 +67,11 @@ class DownloadFixtureProvider : ContentProvider() {
     override fun query(uri: Uri, projection: Array<out String>?, selection: String?, args: Array<out String>?, sort: String?): Cursor = runBlocking(Dispatchers.IO) {
         val id = uri.lastPathSegment.orEmpty()
         require(id.startsWith("work-fixture-"))
-        MatrixCursor(arrayOf("state", "done", "total")).apply { app.dao.download(id)?.let { addRow(arrayOf<Any>(it.state, it.done, it.total)) } }
+        val work = WorkManager.getInstance(app).getWorkInfosForUniqueWork("download-$id").get().joinToString("|") { it.state.name }
+        val connected = app.getSystemService(ConnectivityManager::class.java).activeNetwork != null
+        MatrixCursor(arrayOf("state", "done", "total", "workState", "connected")).apply {
+            app.dao.download(id)?.let { addRow(arrayOf<Any>(it.state, it.done, it.total, work, connected.toString())) }
+        }
     }
     override fun getType(uri: Uri) = "vnd.android.cursor.item/download-fixture"
     override fun insert(uri: Uri, values: ContentValues?): Uri? = throw UnsupportedOperationException()

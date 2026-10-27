@@ -18,12 +18,7 @@ internal object PageContentIdentity {
     fun legacyCompatible(source: String, old: String, urls: List<String>): Boolean {
         val previous = old.split('\n')
         if (previous.size != urls.size) return false
-        return previous.zip(urls).all { (before, after) ->
-            page(source, before) == page(source, after) || source == "mangadex" &&
-                after.toHttpUrlOrNull()?.let { url ->
-                    url.query == null && url.encodedPath.matches(Regex("/(data|data-saver)/[A-Za-z0-9]+/[^/]+")) &&
-                        before == url.encodedPath.substringAfter('/', "").substringAfter('/')
-                } == true
-        }
+        // Hash-only legacy MangaDex manifests omitted quality. They cannot prove reuse is safe.
+        return previous.zip(urls).all { (before, after) -> page(source, before) == page(source, after) }
     }
 }

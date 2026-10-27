@@ -52,7 +52,11 @@ def main():
     active = "work-fixture-" + str(uuid.uuid4())
     queued = "work-fixture-" + str(uuid.uuid4())
     paused = "work-fixture-" + str(uuid.uuid4())
+    network = "work-fixture-" + str(uuid.uuid4())
     blocked = threading.Event(); release = threading.Event()
+    network_blocked = threading.Event(); network_release = threading.Event()
+    wifi_before = shell("settings", "get", "global", "wifi_on") != "0"
+    data_before = shell("settings", "get", "global", "mobile_data") != "0"
     counts = collections.Counter(); lock = threading.Lock(); image = png()
 
     class Handler(http.server.BaseHTTPRequestHandler):
@@ -67,11 +71,12 @@ def main():
                 identity = path.rsplit("/", 1)[-1]
                 body = json.dumps(dict(baseUrl="https://fixture.invalid", chapter=dict(hash=identity, data=["0.png", "1.png", "2.png"], dataSaver=["0.png", "1.png", "2.png"]))).encode()
             else:
-                if path in (f"/data/{active}/1.png", f"/data-saver/{active}/1.png"):
-                    blocked.set()
-                    if not release.wait(45):
-                        self.send_error(504)
-                        return
+                for identity, arrived, resume in ((active, blocked, release), (network, network_blocked, network_release)):
+                    if path in (f"/data/{identity}/1.png", f"/data-saver/{identity}/1.png"):
+                        arrived.set()
+                        if not resume.wait(45):
+                            self.send_error(504)
+                            return
                 body = image
             try:
                 self.send_response(200)
@@ -100,12 +105,26 @@ def main():
 
     try:
         shell("am", "start", "-W", "-n", PACKAGE + "/app.komori.MainActivity")
-        for identity in (active, queued, paused):
+        for identity in (active, queued, paused, network):
             command("configure", identity, "--extra", f"port:i:{port}")
         # A paused row must remain paused across restart, without creating any HTTP work.
         command("low", paused, "--extra", "value:b:true"); command("queue", paused)
         wait_for(lambda: "Waiting for storage" in state(paused), "storage fixture wait")
         command("pause", paused)
+        command("queue", network)
+        wait_for(network_blocked.is_set, "network fixture second image")
+        assert "done=1" in state(network), state(network)
+        shell("svc", "data", "disable"); shell("svc", "wifi", "disable")
+        wait_for(lambda: "connected=false" in state(network) and "ENQUEUED" in state(network), "OS network constraint stops the worker")
+        shell("input", "keyevent", "KEYCODE_SLEEP")
+        wait_for(lambda: "mWakefulness=Asleep" in shell("dumpsys", "power"), "emulator display asleep")
+        network_release.set()
+        shell("svc", "wifi", "enable" if wifi_before else "disable")
+        shell("svc", "data", "enable" if data_before else "disable")
+        wait_for(lambda: "state=Complete" in state(network), "OS network recovery resumes the worker")
+        assert sum(count for path, count in counts.items() if path.endswith(f"/{network}/0.png")) == 1, dict(counts)
+        assert "mWakefulness=Asleep" in shell("dumpsys", "power"), "Display woke during screen-off transfer"
+        shell("input", "keyevent", "KEYCODE_WAKEUP"); shell("wm", "dismiss-keyguard")
         command("queue", active)
         wait_for(blocked.is_set, "second image transfer")
         assert "done=1" in state(active), state(active)
@@ -124,7 +143,7 @@ def main():
         assert not any(paused in path for path in counts), dict(counts)
         new_pid = pid()
         report = dict(status="PASS", old_pid=old_pid, new_pid=new_pid, completed_page_reused=True,
-                      queued_chapter_completed=True, paused_intent_preserved=True, counts=dict(counts),
+                      queued_chapter_completed=True, paused_intent_preserved=True, os_network_constraint_recovery=True, emulator_screen_off_transfer_completed=True, counts=dict(counts),
                       scope="synthetic HTTP, OS WorkManager foreground worker, emulator SIGKILL/restart; not manufacturer battery acceptance")
         Path("device-diagnostics").mkdir(exist_ok=True)
         Path("device-diagnostics/download-process-recovery.json").write_text(json.dumps(report, indent=2) + "\n")
@@ -132,13 +151,16 @@ def main():
     except Exception as error:
         Path("device-diagnostics").mkdir(exist_ok=True)
         report = dict(status="FAIL", error=str(error), counts=dict(counts),
-                      rows={identity: state(identity) for identity in (active, queued, paused)})
+                      rows={identity: state(identity) for identity in (active, queued, paused, network)})
         Path("device-diagnostics/download-process-recovery.json").write_text(json.dumps(report, indent=2) + "\n")
         print(json.dumps(report))
         raise
     finally:
-        release.set()
-        for identity in (active, queued, paused):
+        release.set(); network_release.set()
+        shell("input", "keyevent", "KEYCODE_WAKEUP"); shell("wm", "dismiss-keyguard")
+        shell("svc", "wifi", "enable" if wifi_before else "disable")
+        shell("svc", "data", "enable" if data_before else "disable")
+        for identity in (active, queued, paused, network):
             command("cleanup", identity)
         adb("reverse", "--remove", f"tcp:{port}")
         server.shutdown(); server.server_close()

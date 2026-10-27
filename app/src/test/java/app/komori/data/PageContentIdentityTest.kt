@@ -29,9 +29,11 @@ class PageContentIdentityTest {
         assertNotEquals(PageContentIdentity.page("zap", "https://i.nhentai.net/galleries/123/1.jpg"), PageContentIdentity.page("zap", "https://i3.nhentai.net/galleries/123/1.jpg"))
         assertEquals("https://evil.invalid/galleries/123/1.jpg", PageContentIdentity.page("nhentai", "https://evil.invalid/galleries/123/1.jpg"))
     }
-    @Test fun mangadexQualityIsExplicitAndLegacyPagesCanUpgradeWithoutRedownload() {
+    @Test fun mangadexQualityIsExplicitAndUnqualifiedLegacyPagesAreNotTrusted() {
         val urls = listOf("https://cdn.example/data/hash/1.jpg")
-        assertTrue(PageContentIdentity.legacyCompatible("mangadex", "hash/1.jpg", urls))
+        assertFalse(PageContentIdentity.legacyCompatible("mangadex", "hash/1.jpg", urls))
+        assertFalse(PageContentIdentity.legacyCompatible("mangadex", "hash/1.jpg", urls.map { it.replace("/data/", "/data-saver/") }))
+        assertTrue(PageContentIdentity.legacyCompatible("mangadex", "/data/hash/1.jpg", urls))
         assertNotEquals(PageContentIdentity.manifest("mangadex", urls), PageContentIdentity.manifest("mangadex", urls.map { it.replace("/data/", "/data-saver/") }))
         assertFalse(PageContentIdentity.legacyCompatible("mangadex", "old/1.jpg", urls))
     }

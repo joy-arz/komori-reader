@@ -168,17 +168,13 @@ class ChapterDownloadWorker(context: Context, params: WorkerParameters) :
                             }
                             storageOperation { manifest.writeText(identity) }
                         }
-                        record =
-                            record.copy(
-                                state = "Downloading",
-                                total = urls.size,
-                                done =
-                                    urls.indices.count {
-                                        !repairMarker(app, id, it).exists() &&
-                                            validImage(pageFile(app, id, it))
-                                    },
-                                error = "",
-                            )
+                        val reusable = urls.indices.filterTo(mutableSetOf()) { index ->
+                            val file = pageFile(app, id, index)
+                            val signature = File(file.parentFile, "${file.name}.sha256")
+                            !repairMarker(app, id, index).exists() && validImage(file) &&
+                                (!signature.exists() || signature.length() == 64L && signature.readText() == imageDigest(file))
+                        }
+                        record = record.copy(state = "Downloading", total = urls.size, done = reusable.size, error = "")
                         app.dao.putDownload(record)
                         val started = elapsed()
                         urls.forEachIndexed { index, url ->
@@ -189,7 +185,7 @@ class ChapterDownloadWorker(context: Context, params: WorkerParameters) :
                                 return@chapter Result.success()
                             }
                             val file = pageFile(app, id, index)
-                            if (repairMarker(app, id, index).exists() || !validImage(file)) {
+                            if (index !in reusable) {
                                 if (space(directory) < 64L * 1024 * 1024)
                                     throw StorageFailure(
                                         "Free at least 64 MB to continue downloading."
