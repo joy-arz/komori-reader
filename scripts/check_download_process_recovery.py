@@ -1,0 +1,139 @@
+#!/usr/bin/env python3
+"""Actual WorkManager + HTTP + SIGKILL/restart check on disposable debug emulators."""
+import collections
+import http.server
+import json
+import os
+from pathlib import Path
+import shlex
+import struct
+import subprocess
+import threading
+import time
+import uuid
+import zlib
+
+PACKAGE = "app.komori.reader.debug"
+AUTHORITY = f"content://{PACKAGE}.download-fixtures"
+
+
+def adb(*args):
+    return subprocess.check_output(["adb", *args], text=True, timeout=30).strip()
+
+
+def shell(*args):
+    return adb("shell", shlex.join(args))
+
+
+def wait_for(predicate, label):
+    deadline = time.monotonic() + 45
+    while time.monotonic() < deadline:
+        value = predicate()
+        if value:
+            return value
+        time.sleep(0.2)
+    raise AssertionError("Timed out: " + label)
+
+
+def png():
+    def chunk(kind, data):
+        return struct.pack("!I", len(data)) + kind + data + struct.pack("!I", zlib.crc32(kind + data))
+    header = struct.pack("!2I5B", 32, 64, 8, 2, 0, 0, 0)
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header) + chunk(b"IDAT", zlib.compress((b"\0" + b"\x30\x90\x60" * 32) * 64)) + chunk(b"IEND", b"")
+
+
+def main():
+    if os.environ.get("KOMORI_DISPOSABLE_EMULATOR") != "1" or not adb("get-serialno").startswith("emulator-"):
+        raise RuntimeError("Explicit disposable emulator opt-in is required")
+    if shell("getprop", "ro.kernel.qemu") != "1":
+        raise RuntimeError("Physical devices are not supported by this SIGKILL probe")
+    adb("root"); adb("wait-for-device")
+    active = "work-fixture-" + str(uuid.uuid4())
+    queued = "work-fixture-" + str(uuid.uuid4())
+    paused = "work-fixture-" + str(uuid.uuid4())
+    blocked = threading.Event(); release = threading.Event()
+    counts = collections.Counter(); lock = threading.Lock(); image = png()
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *_):
+            pass
+
+        def do_GET(self):
+            with lock:
+                counts[self.path] += 1
+            if self.path.startswith("/at-home/server/"):
+                identity = self.path.rsplit("/", 1)[-1]
+                body = json.dumps(dict(baseUrl="https://fixture.invalid", chapter=dict(hash=identity, data=["0.png", "1.png", "2.png"], dataSaver=["0.png", "1.png", "2.png"]))).encode()
+            else:
+                if self.path == f"/data/{active}/1.png":
+                    blocked.set()
+                    if not release.wait(45):
+                        self.send_error(504)
+                        return
+                body = image
+            try:
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json" if self.path.startswith("/at-home/") else "image/png")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers(); self.wfile.write(body)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    server.daemon_threads = True
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    port = server.server_port
+    adb("reverse", f"tcp:{port}", f"tcp:{port}")
+
+    def command(method, identity, *extras):
+        result = shell("content", "call", "--uri", AUTHORITY, "--method", method, "--arg", identity, *extras)
+        if "result=ok" not in result:
+            raise AssertionError(result)
+
+    def state(identity):
+        return shell("content", "query", "--uri", AUTHORITY + "/" + identity)
+
+    def pid():
+        return shell("sh", "-c", "pidof " + PACKAGE + " || true")
+
+    try:
+        shell("am", "start", "-W", "-n", PACKAGE + "/app.komori.MainActivity")
+        for identity in (active, queued, paused):
+            command("configure", identity, "--extra", f"endpoint:s:http://127.0.0.1:{port}/")
+        # A paused row must remain paused across restart, without creating any HTTP work.
+        command("low", paused, "--extra", "value:b:true"); command("queue", paused)
+        wait_for(lambda: "Waiting for storage" in state(paused), "storage fixture wait")
+        command("pause", paused)
+        command("queue", active)
+        wait_for(blocked.is_set, "second image transfer")
+        assert "done=1" in state(active), state(active)
+        command("queue", queued)
+        old_pid = pid()
+        assert old_pid and " " not in old_pid, old_pid
+        shell("input", "keyevent", "KEYCODE_HOME")
+        shell("kill", "-9", old_pid)
+        wait_for(lambda: pid() != old_pid, "old process death")
+        release.set()
+        shell("am", "start", "-W", "-n", PACKAGE + "/app.komori.MainActivity")
+        wait_for(lambda: "state=Complete" in state(active), "resumed chapter completion")
+        wait_for(lambda: "state=Complete" in state(queued), "queue continuation")
+        assert "state=Paused" in state(paused), state(paused)
+        assert counts[f"/data/{active}/0.png"] == 1, dict(counts)
+        assert not any(paused in path for path in counts), dict(counts)
+        new_pid = pid()
+        report = dict(status="PASS", old_pid=old_pid, new_pid=new_pid, completed_page_reused=True,
+                      queued_chapter_completed=True, paused_intent_preserved=True, counts=dict(counts),
+                      scope="synthetic HTTP, OS WorkManager foreground worker, emulator SIGKILL/restart; not manufacturer battery acceptance")
+        Path("device-diagnostics").mkdir(exist_ok=True)
+        Path("device-diagnostics/download-process-recovery.json").write_text(json.dumps(report, indent=2) + "\n")
+        print(json.dumps(report))
+    finally:
+        release.set()
+        for identity in (active, queued, paused):
+            command("cleanup", identity)
+        adb("reverse", "--remove", f"tcp:{port}")
+        server.shutdown(); server.server_close()
+
+
+if __name__ == "__main__":
+    main()

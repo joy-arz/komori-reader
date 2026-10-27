@@ -38,6 +38,7 @@ internal class DownloadCoordinator(private val app: KomoriApp) {
             withContext(Dispatchers.IO) {
                 WorkManager.getInstance(app).cancelUniqueWork("download-${download.releaseId}").result.get()
                 ChapterFiles.locked(download.releaseId) {
+                    ChapterFiles.requireNotReading(download.releaseId)
                     ChapterFiles.invalidate(download.releaseId)
                     val directory = chapterDirectory(app, download.releaseId)
                     if (directory.exists() && !directory.deleteRecursively()) throw IOException("Could not delete the downloaded chapter. Please retry.")

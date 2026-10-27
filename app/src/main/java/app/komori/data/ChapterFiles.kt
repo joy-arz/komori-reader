@@ -17,6 +17,15 @@ object ChapterFiles {
         val epoch = AtomicLong()
     }
 
+    private data class Reading(val chapters: Set<String>, val group: Any?)
+    private val readers = mutableMapOf<Any, Reading>()
+    @Synchronized fun reading(owner: Any, ids: Collection<String>, group: Any? = null) { readers[owner] = Reading(ids.toSet(), group) }
+    @Synchronized fun releaseReader(owner: Any) { readers.remove(owner) }
+    @Synchronized fun releaseReaders(group: Any) { readers.entries.removeAll { it.value.group === group } }
+    @Synchronized fun requireNotReading(id: String) {
+        if (readers.values.any { id in it.chapters }) throw ContentFailure("Close this chapter in the reader before deleting or replacing its downloaded pages.")
+    }
+
     private val entries = ConcurrentHashMap<String, Entry>()
 
     private fun entry(id: String) = entries.getOrPut(id) { Entry() }

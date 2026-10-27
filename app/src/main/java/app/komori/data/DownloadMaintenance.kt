@@ -114,6 +114,7 @@ class DownloadMaintenance(private val app: KomoriApp) {
                 val latest = app.dao.download(row.releaseId) ?: return@locked
                 if (latest != row || latest.state in DownloadPolicy.activeStates || app.dao.progress(row.releaseId)?.completed != true) return@locked
                 withContext(kotlinx.coroutines.NonCancellable) {
+                    ChapterFiles.requireNotReading(row.releaseId)
                     ChapterFiles.invalidate(row.releaseId)
                     val directory = chapterDirectory(app, row.releaseId)
                     if (directory.exists() && !directory.deleteRecursively()) throw IOException("Could not delete ${row.label}. Retry after checking storage.")

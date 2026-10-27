@@ -11,6 +11,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 
 class KomoriApp : Application(), ImageLoaderFactory {
+    internal var downloadRuntime: DownloadRuntime? = null
     internal var startupRecovery: kotlinx.coroutines.Job? = null
         private set
 
