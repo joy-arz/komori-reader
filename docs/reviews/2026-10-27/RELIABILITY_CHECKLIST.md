@@ -141,6 +141,10 @@ NavigationHistoryTest previously retained a UiObject2 across lazy-row recycling.
 
 [Android checks 40562830618](https://github.com/joy-arz/komori-reader/actions/runs/40562830618) passed again, including release shrinking. All new local selector changes compile; the previous complete six-test local subset passed, and the latest action-specific subset is being verified.
 
+### API 36 final recurrence and identity correction
+
+[40564567979](https://github.com/joy-arz/komori-reader/actions/runs/40564567979) again passed four repeats but the fifth reproduced the original native-role defect at the initial second-author assertion, even with synchronized Compose gestures. Its failure XML exposed `Select … 1` as a checked CheckBox while the visibly rendered second checkbox still exported `Manage author … 2` as a Button with old bounds. This disproves synchronization alone as a complete fix. AuthorManagementRow now keys its subtree by browse/selection mode: the role change creates a fresh semantic identity instead of updating a cached Button into a CheckBox. Normal taps, checkbox state updates, list item ownership and spacing remain. Failure artifacts also capture the internal Compose semantics tree alongside native XML for any further recurrence. Local JVM/debug/test compilation passed; the focused BatchSelection and AuthorsInteraction pair passed **2/2 in 40.940 seconds**. Cloud repeated verification of this correction is required.
+
 ## Remaining acceptance and known risks
 
 - Final synchronized API 36 five-repeat run and full API 26/30/36 matrix are still required; current failing CI is disclosed above.

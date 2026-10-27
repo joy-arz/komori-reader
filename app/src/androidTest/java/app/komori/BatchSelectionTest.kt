@@ -191,6 +191,7 @@ class BatchSelectionTest {
             withTimeout(5000) { while (chapters.any { app.dao.download(it.id) != null }) delay(30) }
             assertTrue(chapters.none { chapterDirectory(app, it.id).exists() })
         } catch (error: Throwable) {
+            runCatching { compose.onRoot(useUnmergedTree = true).printToLog("KomoriBatchSemantics") }
             device.executeShellCommand("screencap -p /data/local/tmp/komori-batch-failure.png")
             device.dumpWindowHierarchy(java.io.File(app.getExternalFilesDir(null), "batch-failure.xml"))
             android.util.Log.e("KomoriBatch", "selection failure: ${error.javaClass.simpleName}; fixtureCreators=${runBlocking { app.dao.observeCreators().first().count { it.id.startsWith(prefix) } }}")

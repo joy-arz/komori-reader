@@ -12,6 +12,6 @@ for iteration in 1 2 3 4 5; do
     adb pull /sdcard/Android/data/app.komori.reader.debug/files/batch-failure.xml "device-diagnostics/batch-$iteration-failure.xml" || true
     adb pull /sdcard/Android/data/app.komori.reader.debug/files/batch-after-long-press.xml "device-diagnostics/batch-$iteration-selection.xml" || true
     adb shell dumpsys window > "device-diagnostics/batch-$iteration-window.txt"
-    adb logcat -d -s KomoriBatch:I AndroidRuntime:E > "device-diagnostics/batch-$iteration-logcat.txt"
+    adb logcat -d -s KomoriBatch:I KomoriBatchSemantics:I AndroidRuntime:E > "device-diagnostics/batch-$iteration-logcat.txt"
 done
 exit "$status"
