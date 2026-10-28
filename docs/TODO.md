@@ -6,7 +6,7 @@ Updated October 27, 2026 for the 0.8.5 reliability and Authors-filter pass. Publ
 
 - [x] Start each reader session with controls hidden; reserve a two-dimensional center region for deliberate control taps.
 - [x] Remove image-strip-wide control clicks and the interactive corner shortcut; retain a passive page count, Back escape and a screen-reader action.
-- [ ] Merge this follow-up after targeted reader checks and API 26/30/36 CI have passed.
+- [x] Merge the reader follow-up (PR #4); pre-merge API 26/30/36 checks passed. Post-merge API 36 Authors catalog scroll assertion needs separate investigation.
 
 ## October 27 code review: implemented reliability fixes
 
