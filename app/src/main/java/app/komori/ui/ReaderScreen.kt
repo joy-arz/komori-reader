@@ -99,7 +99,7 @@ fun ReaderScreen(vm: ReaderViewModel, chapter: Release) {
         view.keepScreenOn = settings.keepScreenOn
         onDispose { view.keepScreenOn = before }
     }
-    BackHandler { if (!controls) controls = true else vm.closeReader() }
+    BackHandler { vm.closeReader() }
     fun navigate(delta: Int) = vm.navigateReader(delta)
     Box(Modifier.fillMaxSize().background(Color.Black).safeDrawingPadding().onGloballyPositioned { viewportBounds = it.boundsInWindow() }.semantics {
         contentDescription = "Reading area"

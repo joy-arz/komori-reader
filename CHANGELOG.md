@@ -1,5 +1,9 @@
 # Komori changelog
 
+## Unreleased
+
+- Return directly to the title with one system Back press from the reader, whether controls are hidden or visible. Keep center-tap and accessibility actions for toggling controls.
+
 ## 0.8.7
 
 - Start the reader with controls hidden. A deliberate tap in the middle third of both screen axes shows or hides them in paged and webtoon modes.
