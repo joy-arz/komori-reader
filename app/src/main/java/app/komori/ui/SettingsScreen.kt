@@ -305,6 +305,7 @@ internal fun SettingsScreen(vm: ReaderViewModel, settings: Settings) {
                             vm.setting("saver", it)
                         }
                     }
+                    item { BackgroundDownloadSettings() }
                     item {
                         Toggle(
                             "Wi-Fi-only downloads",

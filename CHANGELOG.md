@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add Background downloads controls in Settings and the Downloads menu. Show Android's battery restriction status and let users explicitly allow background transfers through system settings.
+- Use regular foreground WorkManager transfers for long chapter downloads instead of the expedited-work quota. Preserve persisted queue order, pause intent, retries, integrity checks and foreground notifications.
+- Expand download acceptance to Android 14, switching applications, and screen-off Doze with battery exemption, including the next queued chapter.
+
 - Return directly to the title with one system Back press from the reader, whether controls are hidden or visible. Keep center-tap and accessibility actions for toggling controls.
 
 ## 0.8.7

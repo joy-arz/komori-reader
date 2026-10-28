@@ -104,6 +104,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 
 ### <img src="https://api.iconify.design/lucide/download.svg?color=%23A3E635" width="22" height="22" align="absmiddle"> Downloads
 
+- For screen-off downloads, open **Downloads → Queue options → Background downloads** (also in **Settings → App**) and allow background downloads in Android’s confirmation. If Android marks the app restricted, allow background battery/data use in its app settings. The app does not grant itself an exemption.
 - Background downloads use persisted WorkManager jobs, a foreground progress notification and a timed CPU wake lock. Returning to the app or regaining connectivity reconciles interrupted queued work while preserving paused downloads and intentional retry delays. Closing the activity does not cancel them. Android Force stop and system/device quotas still apply; Android 13+ notification permission controls drawer visibility.
 - Persistent ordered chapter downloads with Download now, reordering, cancel without file deletion, explicit network/storage waits, title grouping, Wi-Fi constraint, retries, pause and resume, original or data-saving images, and offline access.
 - Local CBZ/folder import and completed-chapter CBZ export through Android document providers, including a preferred export folder. Metadata backups exclude local pages.

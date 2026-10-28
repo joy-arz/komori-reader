@@ -76,3 +76,10 @@ After fast-forwarding merged PRs #1/#2, this pass changes the general reader and
 ## October 28 reader interaction follow-up
 
 The user requested hidden controls on entry and a deliberate screen-center tap. The new implementation reserves the middle third of both viewport axes, removes strip-wide clicks from webtoon images, and makes the corner page counter passive. The Reading area accessibility action remains an alternative control access path. System Back now exits directly to the title, whether controls are hidden or visible. Scrolling and zoom gestures do not toggle controls; retry buttons retain their own touch handling. This supersedes the original permanent corner shortcut described above.
+
+
+## October 28: background download comparison
+
+Compared Komikku revision `1656575e8fdaaef010c652f9758130c2a01d8890` (`DownloadJob.kt` and `SettingsAdvancedScreen.kt`). It also uses a foreground WorkManager download job, with an explicit user-requested battery-optimization exemption in Advanced settings. Komori retains its transactional Room queue, bounded worker, committed-page progress, notification and timed CPU wake lock. Long chapter requests now use regular foreground work instead of expedited-job quota; retry delays and constraints are unchanged. Settings and Downloads expose the missing battery-status/consent flow. This is a targeted policy improvement, not proof that quota caused the reported phone's stall.
+
+Android's documented Doze restrictions suspend network/jobs even with a visible notification; exemptions are user-controlled. Expanded disposable-emulator coverage tests another foreground application, screen off, forced Doze with the app explicitly exempted by the test harness, and next-chapter continuation. The production app never changes that list itself. Android 14 joins the CI matrix. Manufacturer-specific battery management remains real-phone acceptance.
