@@ -43,7 +43,8 @@ This update focuses on clearer Authors browsing, more reliable downloads, and sa
 
 ### Validation and upgrade notes
 
-- Automated code validation passed: 194 JVM tests, with six optional live-network tests skipped; 80 instrumented tests on each of Android 8, Android 11 and Android 16; and five complete repeated Android 16 author-selection checks.
+- Automated code validation passed: 194 JVM tests, with six optional live-network tests skipped; 80 instrumented tests on each of Android 8, Android 11 and Android 16; and five complete repeated Android 16 author-selection checks during the original audit.
+- Additional release-tag stress testing passed four of five repeated Android 16 selection checks. One native checked-state assertion timed out; its failure screenshot and native hierarchy show both authors selected and checked. This remains an accessibility/test synchronization investigation.
 - Startup cleanup and real WorkManager network-loss, screen-off, process-restart, queue-continuation, page-reuse and pause-preservation probes passed on all three Android API levels.
 - Android lint reported zero errors and 46 existing warnings. Debug and release compilation with shrinking passed. Signed APK packaging and signature verification run in the release workflow before publication.
 - Keep the existing application identity and signing configuration so the signed release can update the installed app in place. Library entries, reading progress and completed downloads remain preserved.
