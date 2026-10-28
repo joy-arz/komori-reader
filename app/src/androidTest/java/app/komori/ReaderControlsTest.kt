@@ -86,6 +86,7 @@ class ReaderControlsTest {
             val activity = compose.activity
             val chapter = app.komori.domain.Release("controls-loading", "controls-title", "1", null, "", "en", emptyList(), "", 3)
             compose.runOnUiThread { activity.setContent { MaterialTheme { app.komori.ui.ReaderScreen(vm, chapter) } } }
+            androidx.test.uiautomator.UiDevice.getInstance(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()).confirmFullscreenTutorial()
             compose.onNodeWithContentDescription("Close reader").assertDoesNotExist()
             val area = compose.onNodeWithContentDescription("Reading area")
             area.performTouchInput { click(Offset(width * .5f, height * .15f)) }

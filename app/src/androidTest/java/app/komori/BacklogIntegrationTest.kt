@@ -238,7 +238,9 @@ class BacklogIntegrationTest {
                 vm.read(rows.last().release(), requestedPage = 0)
             }
             suspend fun waitUntil(check: () -> Boolean) = withTimeout(8000) { while (!check()) delay(30) }
-            waitUntil { vm.readerReady.value && activity!!.volumeNavigation != null && activity!!.hasWindowFocus() }
+            waitUntil { vm.readerReady.value && activity!!.volumeNavigation != null }
+            device.confirmFullscreenTutorial()
+            waitUntil { activity!!.hasWindowFocus() }
             assertTrue(device.wait(Until.hasObject(By.text("1 / 3")), 5000))
             assertTrue(device.pressKeyCode(android.view.KeyEvent.KEYCODE_VOLUME_UP))
             waitUntil { vm.reader.value?.id == rows.first().id && vm.readerReady.value && vm.readerPage.value == 2 }
@@ -263,6 +265,13 @@ class BacklogIntegrationTest {
             waitUntil { vm.readerReady.value && vm.readerPage.value == 1 }
             app.settings.number("brightness", 40)
             waitUntil { kotlin.math.abs(activity!!.window.attributes.screenBrightness - .4f) < .01f }
+            device.waitForIdle()
+            val viewport = device.wait(Until.findObject(By.desc("Reading area")), 5000)?.visibleBounds
+                ?: throw AssertionError("Reader viewport missing after brightness change")
+            val from = if (vm.settings.value.rtl) .2f else .8f
+            assertTrue(device.swipe(viewport.left + (viewport.width() * from).toInt(), viewport.centerY(),
+                viewport.left + (viewport.width() * (1f - from)).toInt(), viewport.centerY(), 52))
+            waitUntil { vm.readerReady.value && vm.readerPage.value == 2 }
             instrumentation.runOnMainSync { vm.closeReader() }
             waitUntil { activity!!.volumeNavigation == null }
             waitUntil { kotlin.math.abs(activity!!.window.attributes.screenBrightness - (-1f)) < .01f }

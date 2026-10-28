@@ -91,6 +91,7 @@ class ContinuousReaderTest {
             waitUntil { vm.readerReady.value && vm.reader.value?.id == "$id-1" }
             val session = vm.readerSession.value
             val device = UiDevice.getInstance(instrumentation)
+            device.confirmFullscreenTutorial()
             assertTrue("Reader must be in the foreground before injected gestures", device.wait(Until.hasObject(By.desc("Reading area")), 8000))
             assertFalse("Reader starts with controls hidden", device.hasObject(By.desc("Close reader")))
             SystemClock.sleep(1000)

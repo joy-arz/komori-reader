@@ -6,7 +6,7 @@ Updated October 27, 2026 for the 0.8.5 reliability and Authors-filter pass. Publ
 
 - [x] Start each reader session with controls hidden; reserve a two-dimensional center region for deliberate control taps.
 - [x] Remove image-strip-wide control clicks and the interactive corner shortcut; retain a passive page count, Back escape and a screen-reader action.
-- [ ] Complete targeted gesture/continuous-reader checks and API 26/30/36 CI for this change before merging.
+- [ ] Merge this follow-up after targeted reader checks and API 26/30/36 CI have passed.
 
 ## October 27 code review: implemented reliability fixes
 

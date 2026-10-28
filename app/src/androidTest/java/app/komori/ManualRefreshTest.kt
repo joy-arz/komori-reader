@@ -80,6 +80,7 @@ class ManualRefreshTest {
             assertEquals(id, vm.chapters.value.single().id)
             instrumentation.runOnMainSync { vm.read(chapter.release(), requestedPage = 1) }
             settled { vm.readerReady.value && vm.readerPage.value == 1 }
+            device.confirmFullscreenTutorial()
             assertTrue("Restored page must be rendered before a center tap", device.wait(Until.hasObject(By.descContains(", page 2, part ")), 10_000))
             device.waitForIdle()
             val readingArea = shown("Reading area")

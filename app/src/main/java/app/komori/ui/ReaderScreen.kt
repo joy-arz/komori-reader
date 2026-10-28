@@ -41,6 +41,7 @@ import app.komori.domain.Release
 import com.davemorrissey.labs.subscaleview.ImageSource
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
 
+@Suppress("DEPRECATION")
 @Composable
 fun ReaderScreen(vm: ReaderViewModel, chapter: Release) {
     val page by vm.readerPage.collectAsStateWithLifecycle()
@@ -74,11 +75,24 @@ fun ReaderScreen(vm: ReaderViewModel, chapter: Release) {
     }
     DisposableEffect(window, controls) {
         val controller = window?.let { WindowCompat.getInsetsController(it, view) }
+        val decor = window?.decorView
+        val legacyMask = android.view.View.SYSTEM_UI_FLAG_IMMERSIVE or android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+        val legacyBefore = decor?.systemUiVisibility?.and(legacyMask) ?: 0
         controller?.systemBarsBehavior =
             WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        // Android 11 loses controller behavior after LayoutParams changes such as reader brightness.
+        if (android.os.Build.VERSION.SDK_INT == 30 && decor != null) {
+            decor.systemUiVisibility = (decor.systemUiVisibility and android.view.View.SYSTEM_UI_FLAG_IMMERSIVE.inv()) or
+                android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+        }
         if (controls) controller?.show(WindowInsetsCompat.Type.systemBars())
         else controller?.hide(WindowInsetsCompat.Type.systemBars())
-        onDispose { controller?.show(WindowInsetsCompat.Type.systemBars()) }
+        onDispose {
+            controller?.show(WindowInsetsCompat.Type.systemBars())
+            if (android.os.Build.VERSION.SDK_INT == 30 && decor != null) {
+                decor.systemUiVisibility = (decor.systemUiVisibility and legacyMask.inv()) or legacyBefore
+            }
+        }
     }
     DisposableEffect(settings.keepScreenOn) {
         val before = view.keepScreenOn

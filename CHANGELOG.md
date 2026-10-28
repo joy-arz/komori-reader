@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Keep Android 11 fullscreen scrolling responsive after brightness/window updates by retaining transient system-bar behavior.
+
 - Start the reader with controls hidden. A deliberate tap in the middle third of both screen axes shows or hides them in paged and webtoon modes.
 - Prevent scrolling, pinching, double taps and taps outside that center region from opening the reader controls. Preserve directional page turns, retry buttons and accessible control actions; keep the corner page count passive.
 
