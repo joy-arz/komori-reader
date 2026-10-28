@@ -238,17 +238,23 @@ class BacklogIntegrationTest {
                 vm.read(rows.last().release(), requestedPage = 0)
             }
             suspend fun waitUntil(check: () -> Boolean) = withTimeout(8000) { while (!check()) delay(30) }
-            waitUntil { vm.readerReady.value && activity!!.volumeNavigation != null }
+            waitUntil { vm.readerReady.value && activity!!.volumeNavigation != null && activity!!.hasWindowFocus() }
             assertTrue(device.wait(Until.hasObject(By.text("1 / 3")), 5000))
-            instrumentation.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_VOLUME_UP)
+            assertTrue(device.pressKeyCode(android.view.KeyEvent.KEYCODE_VOLUME_UP))
             waitUntil { vm.reader.value?.id == rows.first().id && vm.readerReady.value && vm.readerPage.value == 2 }
             assertTrue(device.wait(Until.hasObject(By.text("3 / 3")), 5000))
-            instrumentation.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_VOLUME_DOWN)
+            waitUntil { activity!!.hasWindowFocus() }
+            assertTrue(device.pressKeyCode(android.view.KeyEvent.KEYCODE_VOLUME_DOWN))
             assertTrue(device.wait(Until.hasObject(By.text("Chapter gap")), 5000))
             assertEquals(rows.first().id, vm.reader.value!!.id)
             device.findObject(By.text("Continue")).click()
             waitUntil { vm.reader.value?.id == rows.last().id && vm.readerReady.value }
             assertTrue(device.wait(Until.hasObject(By.text("1 / 3")), 5000))
+            waitUntil { vm.readerFile.value != null && activity!!.hasWindowFocus() }
+            device.waitForIdle()
+            val readingArea = device.wait(Until.findObject(By.desc("Reading area")), 5000) ?: throw AssertionError("Reader viewport missing")
+            device.click(readingArea.visibleBounds.centerX(), readingArea.visibleBounds.centerY())
+            assertTrue(device.wait(Until.hasObject(By.desc("Reader settings")), 5000))
             device.findObject(By.text("1 / 3")).click()
             assertTrue(device.wait(Until.hasObject(By.text("Go to chapter / page")), 5000))
             val field = device.findObject(By.clazz("android.widget.EditText"))

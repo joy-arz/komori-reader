@@ -6,7 +6,6 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.os.SystemClock
-import android.view.MotionEvent
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.platform.app.InstrumentationRegistry
@@ -95,28 +94,16 @@ class ContinuousReaderTest {
             assertTrue("Reader must be in the foreground before injected gestures", device.wait(Until.hasObject(By.desc("Reading area")), 8000))
             assertFalse("Reader starts with controls hidden", device.hasObject(By.desc("Close reader")))
             SystemClock.sleep(1000)
-            val metrics = instrumentation.targetContext.resources.displayMetrics
+            fun scroll(from: Float, to: Float) {
+                val viewport = device.findObject(By.desc("Reading area"))?.visibleBounds
+                    ?: throw AssertionError("Reader viewport missing before scroll")
+                assertTrue("Reader swipe was not injected", device.swipe(viewport.centerX(),
+                    viewport.top + (viewport.height() * from).toInt(), viewport.centerX(),
+                    viewport.top + (viewport.height() * to).toInt(), 52))
+            }
             repeat(18) {
                 if (vm.reader.value?.id != "$id-4") {
-                    val start = SystemClock.uptimeMillis()
-                    for (step in 0..12) {
-                        val event =
-                            MotionEvent.obtain(
-                                start,
-                                start + step * 20L,
-                                when (step) {
-                                    0 -> MotionEvent.ACTION_DOWN
-                                    12 -> MotionEvent.ACTION_UP
-                                    else -> MotionEvent.ACTION_MOVE
-                                },
-                                metrics.widthPixels * .5f,
-                                metrics.heightPixels * (.8f - .5f * step / 12f),
-                                0,
-                            )
-                        instrumentation.sendPointerSync(event)
-                        event.recycle()
-                        SystemClock.sleep(20)
-                    }
+                    scroll(.8f, .3f)
                     SystemClock.sleep(450)
                 }
             }
@@ -140,13 +127,7 @@ class ContinuousReaderTest {
             assertEquals("$id-4", app.dao.shelf(id)?.lastRelease)
             repeat(30) {
                 if (vm.reader.value?.id != "$id-1") {
-                    val start = SystemClock.uptimeMillis()
-                    for (step in 0..12) {
-                        val event = MotionEvent.obtain(start, start + step * 20L,
-                            when (step) { 0 -> MotionEvent.ACTION_DOWN; 12 -> MotionEvent.ACTION_UP; else -> MotionEvent.ACTION_MOVE },
-                            metrics.widthPixels * .5f, metrics.heightPixels * (.25f + .5f * step / 12f), 0)
-                        instrumentation.sendPointerSync(event); event.recycle(); SystemClock.sleep(20)
-                    }
+                    scroll(.25f, .75f)
                     SystemClock.sleep(450)
                 }
             }
