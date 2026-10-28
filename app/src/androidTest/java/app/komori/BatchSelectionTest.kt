@@ -89,8 +89,15 @@ class BatchSelectionTest {
             activity.setContent { KomoriScreen(vm) }
         }
         compose.waitForIdle()
+        fun waitForNative(condition: androidx.test.uiautomator.SearchCondition<Boolean>, timeout: Long): Boolean =
+            device.wait(object : androidx.test.uiautomator.Condition<UiDevice, Boolean> {
+                override fun apply(device: UiDevice): Boolean {
+                    if (android.os.Build.VERSION.SDK_INT >= 34) instrumentation.uiAutomation.clearCache()
+                    return condition.apply(device)
+                }
+            }, timeout)
         fun tapText(text: String) {
-            assertTrue("Missing $text", device.wait(Until.hasObject(By.text(text)), 8000))
+            assertTrue("Missing $text", waitForNative(Until.hasObject(By.text(text)), 8000))
             device.findObject(By.text(text)).click()
             compose.waitForIdle()
             device.waitForIdle()
@@ -98,14 +105,14 @@ class BatchSelectionTest {
         fun tapDescription(description: String) {
             assertTrue(
                 "Missing $description",
-                device.wait(Until.hasObject(By.pkg(app.packageName).desc(description)), 8000),
+                waitForNative(Until.hasObject(By.pkg(app.packageName).desc(description)), 8000),
             )
             device.findObject(By.pkg(app.packageName).desc(description)).click()
             compose.waitForIdle()
             device.waitForIdle()
         }
             tapText("Downloaded")
-            assertTrue(device.wait(Until.hasObject(By.desc(titles[0].title)), 5000))
+            assertTrue(waitForNative(Until.hasObject(By.desc(titles[0].title)), 5000))
             assertTrue(device.hasObject(By.desc(titles[1].title)))
             device.takeScreenshot(
                 java.io.File(app.getExternalFilesDir(null), "downloaded-library.png")
@@ -136,46 +143,41 @@ class BatchSelectionTest {
             compose.waitForIdle()
             assertFalse(device.hasObject(By.text("Select")))
             assertTrue("Author management row did not become interactive",
-                device.wait(Until.hasObject(By.desc("Manage author ${followed.first().name}").longClickable(true)), 5000))
+                waitForNative(Until.hasObject(By.desc("Manage author ${followed.first().name}").longClickable(true)), 5000))
             compose.onNodeWithContentDescription("Manage author ${followed.first().name}").performTouchInput { longClick() }
             compose.waitForIdle()
-            assertTrue("Long press did not activate selection", device.wait(Until.hasObject(By.text("1 selected")), 5000))
+            assertTrue("Long press did not activate selection", waitForNative(Until.hasObject(By.text("1 selected")), 5000))
             device.dumpWindowHierarchy(java.io.File(app.getExternalFilesDir(null), "batch-after-long-press.xml"))
             android.util.Log.i("KomoriBatch", "afterLongPress selectedLabel=${device.hasObject(By.text("1 selected"))} firstVisible=${device.hasObject(By.desc("Select ${followed.first().name}"))} secondVisible=${device.hasObject(By.desc("Select ${followed.last().name}"))}")
             for (creator in followed.drop(1)) {
-                assertTrue(device.wait(Until.hasObject(By.desc("Select ${creator.name}")), 5000))
+                assertTrue(waitForNative(Until.hasObject(By.desc("Select ${creator.name}")), 5000))
                 compose.onNodeWithContentDescription("Select ${creator.name}").performClick()
                 compose.waitForIdle()
             }
-            assertTrue(device.wait(Until.hasObject(By.text("2 selected")), 5000))
+            assertTrue(waitForNative(Until.hasObject(By.text("2 selected")), 5000))
             for (creator in followed) {
                 compose.onNodeWithContentDescription("Select ${creator.name}").assertIsOn()
                 device.waitForIdle()
-                val selectedNative = device.wait(object : androidx.test.uiautomator.Condition<UiDevice, Boolean> {
-                    override fun apply(device: UiDevice): Boolean {
-                        if (android.os.Build.VERSION.SDK_INT >= 34) instrumentation.uiAutomation.clearCache()
-                        return device.hasObject(By.desc("Select ${creator.name}").checkable(true).checked(true))
-                    }
-                }, 5000)
-                assertTrue("Native checkbox must report selected for ${creator.name}", selectedNative)
+                assertTrue("Native checkbox must report selected for ${creator.name}",
+                    waitForNative(Until.hasObject(By.desc("Select ${creator.name}").checkable(true).checked(true)), 5000))
             }
             device.takeScreenshot(java.io.File(app.getExternalFilesDir(null), "batch-selection-ready.png"))
             device.dumpWindowHierarchy(java.io.File(app.getExternalFilesDir(null), "batch-selection-ready.xml"))
             tapDescription("End selection")
-            assertTrue(device.wait(Until.gone(By.text("2 selected")), 5000))
+            assertTrue(waitForNative(Until.gone(By.text("2 selected")), 5000))
             compose.onNodeWithContentDescription("Manage author ${followed.first().name}").performClick()
             compose.waitForIdle()
             tapText("Manage")
-            assertTrue(device.wait(Until.hasObject(By.desc("Manage author ${followed.first().name}").longClickable(true)), 5000))
+            assertTrue(waitForNative(Until.hasObject(By.desc("Manage author ${followed.first().name}").longClickable(true)), 5000))
             compose.onNodeWithContentDescription("Manage author ${followed.first().name}").performTouchInput { longClick() }
             compose.waitForIdle()
-            assertTrue(device.wait(Until.hasObject(By.text("1 selected")), 5000))
+            assertTrue(waitForNative(Until.hasObject(By.text("1 selected")), 5000))
             device.findObject(By.clazz("android.widget.EditText")).text = "Batch creator $marker"
             compose.waitForIdle()
-            assertTrue(device.wait(Until.gone(By.text("1 selected")), 5000))
+            assertTrue(waitForNative(Until.gone(By.text("1 selected")), 5000))
             compose.onNodeWithContentDescription("Manage author ${followed.first().name}").performTouchInput { longClick() }
             compose.waitForIdle()
-            assertTrue(device.wait(Until.hasObject(By.desc("Select ${followed.last().name}")), 5000))
+            assertTrue(waitForNative(Until.hasObject(By.desc("Select ${followed.last().name}")), 5000))
             compose.onNodeWithContentDescription("Select ${followed.last().name}").performClick()
             compose.waitForIdle()
             tapText("Actions")
@@ -191,7 +193,7 @@ class BatchSelectionTest {
             device.takeScreenshot(
                 java.io.File(app.getExternalFilesDir(null), "downloads-compact.png")
             )
-            assertTrue(device.wait(Until.hasObject(By.text(titles[0].title)), 8000))
+            assertTrue(waitForNative(Until.hasObject(By.text(titles[0].title)), 8000))
             val groupHeader = SemanticsMatcher.expectValue(
                 androidx.compose.ui.semantics.SemanticsProperties.Text,
                 listOf(androidx.compose.ui.text.AnnotatedString(titles[0].title)),
