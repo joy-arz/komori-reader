@@ -87,16 +87,14 @@ class AuthorFilterAccessibilityTest {
         compose.waitForIdle()
     }
 
-    private fun captureFailure() {
+    private fun captureFailure(error: Throwable) {
+        android.util.Log.e("KomoriAuthorFilter", "Filter acceptance failed", error)
         runCatching {
             val roots = compose.onAllNodes(isRoot(), useUnmergedTree = true)
             repeat(roots.fetchSemanticsNodes().size) { roots[it].printToLog("KomoriAuthorFilter") }
         }
-        device.executeShellCommand("screencap -p /data/local/tmp/komori-author-filter-failure.png")
-        val hierarchy = java.io.ByteArrayOutputStream()
-        device.dumpWindowHierarchy(hierarchy)
-        val encoded = android.util.Base64.encodeToString(hierarchy.toByteArray(), android.util.Base64.NO_WRAP)
-        device.executeShellCommand("sh -c 'echo $encoded | base64 -d > /data/local/tmp/komori-author-filter-failure.xml'")
+        // A failed IME/accessibility query must not block the test runner's teardown.
+        device.executeShellCommand("sh -c 'screencap -p /data/local/tmp/komori-author-filter-failure.png >/dev/null 2>&1 </dev/null &'")
     }
 
     @Test fun filterActionsRemainReachableInLandscapeWithLargeRtlText() {
@@ -123,7 +121,7 @@ class AuthorFilterAccessibilityTest {
             compose.waitUntil(5000) { result.get() != null }
             assertEquals(AuthorWorkFilter(), result.get())
         } catch (error: Throwable) {
-            captureFailure()
+            captureFailure(error)
             throw error
         } finally {
             device.setOrientationNatural()
@@ -154,7 +152,7 @@ class AuthorFilterAccessibilityTest {
             compose.waitUntil(5000) { result.get() != null }
             assertEquals("forest", result.get()!!.query)
         } catch (error: Throwable) {
-            captureFailure()
+            captureFailure(error)
             throw error
         } finally {
             device.unfreezeRotation()
