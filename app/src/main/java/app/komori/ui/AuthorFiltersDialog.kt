@@ -7,6 +7,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.unit.dp
 import app.komori.data.*
 
@@ -15,6 +16,8 @@ internal fun AuthorFiltersDialog(current: AuthorWorkFilter, sources: List<String
     var draft by remember(current) { mutableStateOf(current) }
     AlertDialog(
         onDismissRequest = close,
+        properties = DialogProperties(decorFitsSystemWindows = false),
+        modifier = Modifier.imePadding(),
         title = { Text("Filter author works") },
         text = {
             Column(Modifier.fillMaxWidth().heightIn(max = 440.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {

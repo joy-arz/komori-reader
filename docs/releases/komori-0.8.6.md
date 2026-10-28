@@ -11,7 +11,7 @@ This update focuses on clearer Authors browsing, more reliable downloads, and sa
 - Make filtering and sorting easier to distinguish: keep one primary filter button and give sorting its own icon and label. Preserve Latest, Popularity/views, Alphabetical and Author ordering, along with all existing filter options.
 - Show when author filters are active and provide a clear Reset filters action. Preserve Authors filter state when switching tabs without applying it to unrelated searches.
 - Fix stale accessibility roles and labels when entering selection mode or switching between Manage and Done. Keep author selection, unfollowing, ordinary navigation and search changes consistent.
-- Improve filter-dialog usability on narrow screens, in landscape, with larger text and with right-to-left layouts.
+- Improve filter-dialog usability on narrow screens, in landscape, with larger text and with right-to-left layouts. Resize around the on-screen keyboard so filter actions stay reachable while editing.
 - Keep successful author results visible when another title's metadata fails to load. A failed title no longer prevents later catalog pages or other followed creators from loading.
 - Show incomplete metadata with a targeted retry action. Unknown metadata is not treated as a language, category or tag match, and persistent failures do not trigger an automatic retry loop.
 - Improve HentaiZap supplemental author lookups: retain pending candidates until their creator metadata can be verified, rather than accepting unrelated search matches or failing the entire page.
