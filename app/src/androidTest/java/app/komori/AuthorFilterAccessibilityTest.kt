@@ -57,17 +57,29 @@ class AuthorFilterAccessibilityTest {
         }
     }
 
+    private fun hasKeyboardOnboarding(node: android.view.accessibility.AccessibilityNodeInfo?, depth: Int = 0): Boolean {
+        if (node == null || depth > 30) return false
+        if (node.text?.toString() == "Tap to Google Search and more") return true
+        return (0 until node.childCount.coerceAtMost(100)).any { hasKeyboardOnboarding(node.getChild(it), depth + 1) }
+    }
+
     private fun requireKeyboardAndActions() {
         val labels = listOf("Apply", "Cancel", "Reset filters")
         var previousBounds: List<android.graphics.Rect>? = null
         var stableSince = 0L
+        var onboardingHandled = false
         compose.waitUntil(5000) {
-            // Fresh Google emulator images display this IME onboarding bubble over app controls.
-            val tip = device.findObject(By.text("Tap to Google Search and more"))
-            if (tip != null) {
-                val close = tip.parent?.parent?.children?.singleOrNull { it.className == "android.widget.ImageView" }
-                assertNotNull("Gboard onboarding close control changed", close)
-                close!!.click()
+            // Gboard reports its painted first-run bubble as invisible on API 26, so By.text omits it.
+            val keyboardWindows = instrumentation.uiAutomation.windows.filter { it.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_INPUT_METHOD }
+            val onboarding = !onboardingHandled && keyboardWindows.any { hasKeyboardOnboarding(it.root) }
+            if (onboarding) {
+                onboardingHandled = true
+                android.util.Log.i("KomoriAuthorFilter", "Preparing first-run Gboard window before native action checks")
+                device.pressBack()
+                compose.waitUntil(5000) {
+                    instrumentation.uiAutomation.windows.none { it.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_INPUT_METHOD }
+                }
+                compose.onNodeWithText("Title or creator").performClick()
                 previousBounds = null
                 return@waitUntil false
             }
