@@ -58,13 +58,39 @@ class AuthorFilterAccessibilityTest {
     }
 
     private fun requireKeyboardAndActions() {
-        compose.waitUntil(5000) { instrumentation.uiAutomation.windows.any { it.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_INPUT_METHOD } }
-        compose.onNodeWithText("Title or creator").assertHeightIsAtLeast(48.dp)
-        for (label in listOf("Apply", "Cancel", "Reset filters")) {
-            assertTrue("$label is inaccessible with the IME visible", device.wait(androidx.test.uiautomator.Until.hasObject(By.text(label)), 5000))
-            val bounds = device.findObject(By.text(label)).visibleBounds
-            assertTrue("$label has no visible native bounds", bounds.width() > 0 && bounds.height() > 0)
+        val labels = listOf("Apply", "Cancel", "Reset filters")
+        var previousBounds: List<android.graphics.Rect>? = null
+        var stableSince = 0L
+        compose.waitUntil(5000) {
+            // Fresh Google emulator images display this IME onboarding bubble over app controls.
+            val tip = device.findObject(By.text("Tap to Google Search and more"))
+            if (tip != null) {
+                val close = tip.parent?.parent?.children?.singleOrNull { it.className == "android.widget.ImageView" }
+                assertNotNull("Gboard onboarding close control changed", close)
+                close!!.click()
+                previousBounds = null
+                return@waitUntil false
+            }
+            val keyboardShown = instrumentation.uiAutomation.windows.any { it.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_INPUT_METHOD }
+            val bounds = try {
+                labels.map { label -> device.findObject(By.pkg(instrumentation.targetContext.packageName).text(label))?.visibleBounds }
+            } catch (_: androidx.test.uiautomator.StaleObjectException) {
+                emptyList()
+            }
+            if (!keyboardShown || bounds.size != labels.size || bounds.any { it == null || it.isEmpty }) {
+                previousBounds = null
+                return@waitUntil false
+            }
+            val current = bounds.map { android.graphics.Rect(it!!) }
+            val now = android.os.SystemClock.uptimeMillis()
+            if (current != previousBounds) {
+                previousBounds = current
+                stableSince = now
+                false
+            } else now - stableSince >= 100L
         }
+        compose.onNodeWithText("Title or creator").assertHeightIsAtLeast(48.dp)
+        for (label in labels) compose.onNodeWithText(label).assertIsDisplayed().assertHasClickAction()
     }
 
     private fun showFilter(initial: AuthorWorkFilter, result: AtomicReference<AuthorWorkFilter>) {
