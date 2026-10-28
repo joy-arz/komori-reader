@@ -4,6 +4,7 @@ import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.draw.clipToBounds
 import app.komori.domain.ReaderContinuity
 
@@ -11,7 +12,6 @@ import android.graphics.BitmapFactory
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -86,6 +86,7 @@ fun WebtoonReader(
     chapter: Release,
     modifier: Modifier = Modifier,
     onTap: () -> Unit = {},
+    controlBounds: () -> Rect? = { null },
 ) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val chapterFeed by vm.chapters.collectAsStateWithLifecycle()
@@ -167,7 +168,7 @@ fun WebtoonReader(
 
     var zoom by remember { mutableFloatStateOf(1f) }
     var pan by remember { mutableStateOf(Offset.Zero) }
-    BoxWithConstraints(modifier.fillMaxWidth().clipToBounds()) {
+    BoxWithConstraints(modifier.fillMaxWidth().clipToBounds().readerCenterTap(controlBounds, onTap)) {
         val viewportWidth = with(LocalDensity.current) { maxWidth.toPx() }
         val viewportHeight = with(LocalDensity.current) { maxHeight.toPx() }
         val zoomState = rememberTransformableState { factor, movement, _ ->
@@ -420,7 +421,7 @@ fun WebtoonReader(
                                             Image(
                                                 it.asImageBitmap(),
                                                 "${release.label}, page ${page + 1}, part ${strip + 1} of ${image.strips}",
-                                                Modifier.fillMaxSize().clickable { onTap() },
+                                                Modifier.fillMaxSize(),
                                                 contentScale = ContentScale.FillBounds,
                                             )
                                         }

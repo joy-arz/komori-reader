@@ -180,7 +180,13 @@ def main():
         print("Reader restored after process death", flush=True)
         try:
             shell("svc wifi disable"); shell("svc data disable")
-            wait_for(lambda: tap("Next page"), "Next-page action missing")
+            def next_page():
+                if tap("Next page"):
+                    return True
+                # New reader sessions start immersive. Reveal controls through the viewport center.
+                tap("Reading area")
+                return False
+            wait_for(next_page, "Next-page action missing after a reader-center tap")
             wait_for(lambda: visible("3 / 3"), "Cached reading failed without network")
         finally:
             shell("svc wifi enable"); shell("svc data enable")

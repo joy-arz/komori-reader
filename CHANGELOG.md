@@ -1,5 +1,10 @@
 # Komori changelog
 
+## Unreleased
+
+- Start the reader with controls hidden. A deliberate tap in the middle third of both screen axes shows or hides them in paged and webtoon modes.
+- Prevent scrolling, pinching, double taps and taps outside that center region from opening the reader controls. Preserve directional page turns, retry buttons and accessible control actions; keep the corner page count passive.
+
 ## 0.8.6
 
 This update focuses on clearer Authors browsing, more reliable downloads, and safer update and source-migration flows.

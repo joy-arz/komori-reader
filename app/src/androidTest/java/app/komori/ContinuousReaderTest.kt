@@ -92,7 +92,8 @@ class ContinuousReaderTest {
             waitUntil { vm.readerReady.value && vm.reader.value?.id == "$id-1" }
             val session = vm.readerSession.value
             val device = UiDevice.getInstance(instrumentation)
-            assertTrue("Reader must be in the foreground before injected gestures", device.wait(Until.hasObject(By.desc("Close reader")), 8000))
+            assertTrue("Reader must be in the foreground before injected gestures", device.wait(Until.hasObject(By.desc("Reading area")), 8000))
+            assertFalse("Reader starts with controls hidden", device.hasObject(By.desc("Close reader")))
             SystemClock.sleep(1000)
             val metrics = instrumentation.targetContext.resources.displayMetrics
             repeat(18) {
@@ -124,6 +125,7 @@ class ContinuousReaderTest {
                 device.executeShellCommand("screencap -p /data/local/tmp/komori-continuous-failure.png")
                 throw AssertionError("Forward continuity: reader=${vm.reader.value?.id} ready=${vm.readerReady.value} error=${vm.readerError.value}", error)
             }
+            assertFalse("Scrolling must not reveal controls", device.hasObject(By.desc("Close reader")))
             assertEquals(
                 "Continuous transitions must keep the same reader session",
                 session,

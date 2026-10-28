@@ -72,3 +72,7 @@ After fast-forwarding merged PRs #1/#2, this pass changes the general reader and
 - Chapter rows show download progress with pause/resume/retry; Downloads offers queue-wide controls and puts unfinished work first.
 - Failed visible reader images retry at a configurable interval, up to three times, with manual retry always available. Leaving the page cancels its timer.
 - Source settings show numbered positions, identify the default, and support resetting the order. Existing saved source ordering remains supported.
+
+## October 28 reader interaction follow-up
+
+The user requested hidden controls on entry and a deliberate screen-center tap. The new implementation reserves the middle third of both viewport axes, removes strip-wide clicks from webtoon images, and makes the corner page counter passive. Back and the Reading area accessibility action remain alternative access paths. Scrolling and zoom gestures do not toggle controls; retry buttons retain their own touch handling. This supersedes the original permanent corner shortcut described above.
