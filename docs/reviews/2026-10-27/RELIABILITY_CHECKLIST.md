@@ -6,7 +6,7 @@ Updated October 28, 2026. [PR #3](https://github.com/joy-arz/komori-reader/pull/
 
 Fetched main on October 27 and again October 28: **501ea97f3cd060395cf4ab8a495adfc7d5d3774a**, exactly the supplied audit revision. No intervening merged app changes existed. The initial working tree was clean; no applicable repository/ancestor AGENTS.md was found. Supplied historical test results were treated as starting evidence and rerun.
 
-Application implementation validated by the final green cloud matrix: **ebceecbde46b6ef7afd2ca2087143a3a6457faea**. Subsequent changes add only a debug-only startup-recovery barrier and this report/evidence; main application sources and release configuration remain identical to that validated revision. The barrier passed three local SIGKILL/restart probes, and current-head checks are available on the PR.
+Application implementation validated by the final green cloud matrix: **ebceecbde46b6ef7afd2ca2087143a3a6457faea**. Subsequent changes add a debug-only startup-recovery barrier, instrumented-test synchronization, and this report/evidence; main application sources and release configuration remain identical to that validated revision. The barrier passed three local SIGKILL/restart probes, and current-head checks are available on the PR.
 
 Package identity, version, production signing configuration/secrets, TLS validation and APK verification remain unchanged. All commits use the existing repository-owner identity without coauthor attribution. No unrelated changes were discarded. PR release compilation is unsigned and includes shrinking.
 
@@ -167,3 +167,9 @@ No heavy dependency, expensive effect or broad database rewrite was added based 
 - Software-emulator frame measurements were poor, as recorded above. No claim of phone smoothness or low-memory performance is made.
 
 The PR is the review/delivery artifact. It must not merge automatically; no release, tag, signing identity or version change is included.
+
+## 0.8.6 release-preparation follow-up
+
+The notes-only preparation commit 08d4b24 passed Android checks and the API 30/36 device jobs. API 26 passed 79/80 instrumentation tests and every startup/download recovery probe, but AuthorFilterAccessibilityTest could not find Apply during initial landscape dialog detection (run 40623089334). The previous landscape test attached custom content to a manually launched Activity and immediately queried native accessibility, without an orientation/configuration or Compose-layout readiness barrier. It also lacked failure captures for that case.
+
+Both filter accessibility cases now use an ActivityScenario-backed Compose rule, explicitly wait for their actual portrait/landscape configuration, await the dialog's rendered Apply action, and assert both Compose click/display semantics and native control visibility. Reset, text input and Apply remain functional assertions. Failure captures include every Compose root, a screenshot and native hierarchy. Existing five-second dialog/result bounds remain; no sleeps, removed assertions or production UI changes were introduced. Release tagging remains blocked until current-commit checks pass.

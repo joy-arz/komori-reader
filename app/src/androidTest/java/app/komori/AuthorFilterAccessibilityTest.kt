@@ -1,89 +1,112 @@
 package app.komori
 
-import android.content.Intent
+import android.content.res.Configuration
 import androidx.activity.compose.setContent
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.test.*
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
-import androidx.test.uiautomator.Until
 import app.komori.ui.AuthorFiltersDialog
 import app.komori.ui.AuthorWorkFilter
 import java.util.concurrent.atomic.AtomicReference
 import org.junit.Assert.*
+import org.junit.Rule
 import org.junit.Test
 
 class AuthorFilterAccessibilityTest {
-    @Test fun filterActionsRemainReachableInLandscapeWithLargeRtlText() {
-        val instrumentation = InstrumentationRegistry.getInstrumentation()
-        val context = instrumentation.targetContext
-        val device = UiDevice.getInstance(instrumentation)
-        val result = AtomicReference<AuthorWorkFilter>()
-        var activity: MainActivity? = null
-        try {
-            device.setOrientationLeft()
-            activity = instrumentation.startActivitySync(Intent(context, MainActivity::class.java)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)) as MainActivity
-            instrumentation.runOnMainSync {
-                activity!!.setContent {
-                    val density = LocalDensity.current
-                    CompositionLocalProvider(LocalDensity provides Density(density.density, 1.5f), LocalLayoutDirection provides LayoutDirection.Rtl) {
-                        MaterialTheme { AuthorFiltersDialog(AuthorWorkFilter(query = "active"), listOf("zap", "nhentai"), { result.set(it) }, {}) }
+    @get:Rule val compose = createAndroidComposeRule<MainActivity>()
+    private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
+    private val device get() = UiDevice.getInstance(instrumentation)
+
+    private fun showFilter(initial: AuthorWorkFilter, result: AtomicReference<AuthorWorkFilter>) {
+        val activity = compose.activity
+        compose.runOnUiThread {
+            activity.setContent {
+                val density = LocalDensity.current
+                CompositionLocalProvider(
+                    LocalDensity provides Density(density.density, 1.5f),
+                    LocalLayoutDirection provides LayoutDirection.Rtl,
+                ) {
+                    MaterialTheme {
+                        AuthorFiltersDialog(initial, listOf("zap", "nhentai"), { result.set(it) }, {})
                     }
                 }
             }
-            assertTrue(device.wait(Until.hasObject(By.text("Apply")), 5000))
+        }
+        compose.waitUntil(5000) { compose.onAllNodesWithText("Apply").fetchSemanticsNodes().size == 1 }
+        compose.waitForIdle()
+    }
+
+    private fun captureFailure() {
+        runCatching {
+            val roots = compose.onAllNodes(isRoot(), useUnmergedTree = true)
+            repeat(roots.fetchSemanticsNodes().size) { roots[it].printToLog("KomoriAuthorFilter") }
+        }
+        device.executeShellCommand("screencap -p /data/local/tmp/komori-author-filter-failure.png")
+        device.dumpWindowHierarchy(java.io.File(instrumentation.targetContext.getExternalFilesDir(null), "author-filter-failure.xml"))
+    }
+
+    @Test fun filterActionsRemainReachableInLandscapeWithLargeRtlText() {
+        val result = AtomicReference<AuthorWorkFilter>()
+        try {
+            device.setOrientationLeft()
+            compose.waitUntil(5000) {
+                compose.activity.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE &&
+                    device.displayWidth > device.displayHeight
+            }
+            showFilter(AuthorWorkFilter(query = "active"), result)
             for (label in listOf("Apply", "Cancel", "Reset filters")) {
+                compose.onNodeWithText(label).assertIsDisplayed().assertHasClickAction()
                 val button = device.findObject(By.text(label))
                 assertNotNull("Missing $label in landscape", button)
                 assertTrue("Hidden $label", button.visibleBounds.width() > 0 && button.visibleBounds.height() > 0)
             }
-            device.findObject(By.text("Reset filters")).click()
-            device.waitForIdle()
-            device.findObject(By.text("Apply")).click()
-            instrumentation.waitForIdleSync()
+            compose.onNodeWithText("Reset filters").performClick()
+            compose.onNodeWithText("Apply").performClick()
+            compose.waitUntil(5000) { result.get() != null }
             assertEquals(AuthorWorkFilter(), result.get())
-            device.takeScreenshot(java.io.File(context.getExternalFilesDir(null), "authors-filters-landscape-rtl.png"))
-        } finally { instrumentation.runOnMainSync { activity?.finish() }; device.setOrientationNatural(); device.unfreezeRotation() }
+            device.takeScreenshot(java.io.File(instrumentation.targetContext.getExternalFilesDir(null), "authors-filters-landscape-rtl.png"))
+        } catch (error: Throwable) {
+            captureFailure()
+            throw error
+        } finally {
+            device.setOrientationNatural()
+            device.unfreezeRotation()
+        }
     }
 
     @Test fun filterFieldsAndApplyRemainAccessibleWithLargeTextAndRtl() {
-        val instrumentation = InstrumentationRegistry.getInstrumentation()
-        val context = instrumentation.targetContext
-        val device = UiDevice.getInstance(instrumentation)
         val result = AtomicReference<AuthorWorkFilter>()
-        val activity = instrumentation.startActivitySync(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
         try {
-            instrumentation.runOnMainSync {
-                activity.setContent {
-                    val density = LocalDensity.current
-                    CompositionLocalProvider(LocalDensity provides Density(density.density, 1.5f), LocalLayoutDirection provides LayoutDirection.Rtl) {
-                        MaterialTheme { AuthorFiltersDialog(AuthorWorkFilter(), listOf("zap", "nhentai"), { result.set(it) }, {}) }
-                    }
-                }
+            device.setOrientationNatural()
+            compose.waitUntil(5000) {
+                compose.activity.resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT &&
+                    device.displayHeight > device.displayWidth
             }
-            instrumentation.waitForIdleSync()
-            device.waitForIdle()
-            assertTrue(device.wait(Until.hasObject(By.text("Filter author works")), 10000))
-            val field = device.wait(Until.findObject(By.clazz("android.widget.EditText")), 5000)
-            assertNotNull(field); field!!.text = "forest"
-            device.waitForIdle()
-            val apply = device.wait(Until.findObject(By.text("Apply")), 5000)
+            showFilter(AuthorWorkFilter(), result)
+            compose.onNodeWithText("Filter author works").assertIsDisplayed()
+            val field = device.findObject(By.clazz("android.widget.EditText"))
+            assertNotNull(field)
+            compose.onNodeWithText("Title or creator").performTextInput("forest")
+            compose.onNodeWithText("Apply").assertIsDisplayed().assertHasClickAction()
+            val apply = device.findObject(By.text("Apply"))
             assertNotNull(apply)
             assertTrue(apply!!.visibleBounds.width() > 0 && apply.visibleBounds.height() > 0)
-            apply.click()
-            val deadline = System.currentTimeMillis() + 5000
-            while (result.get() == null && System.currentTimeMillis() < deadline) Thread.sleep(25)
+            compose.onNodeWithText("Apply").performClick()
+            compose.waitUntil(5000) { result.get() != null }
             assertEquals("forest", result.get()!!.query)
         } catch (error: Throwable) {
-            device.executeShellCommand("screencap -p /data/local/tmp/komori-author-filter-failure.png")
-            device.dumpWindowHierarchy(java.io.File(context.getExternalFilesDir(null), "author-filter-failure.xml"))
+            captureFailure()
             throw error
-        } finally { instrumentation.runOnMainSync { activity.finish() } }
+        } finally {
+            device.unfreezeRotation()
+        }
     }
 }
