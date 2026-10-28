@@ -11,6 +11,7 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.Configurator
@@ -58,6 +59,7 @@ class AuthorFilterAccessibilityTest {
 
     private fun requireKeyboardAndActions() {
         compose.waitUntil(5000) { instrumentation.uiAutomation.windows.any { it.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_INPUT_METHOD } }
+        compose.onNodeWithText("Title or creator").assertHeightIsAtLeast(48.dp)
         for (label in listOf("Apply", "Cancel", "Reset filters")) {
             assertTrue("$label is inaccessible with the IME visible", device.wait(androidx.test.uiautomator.Until.hasObject(By.text(label)), 5000))
             val bounds = device.findObject(By.text(label)).visibleBounds
@@ -91,6 +93,13 @@ class AuthorFilterAccessibilityTest {
         compose.waitForIdle()
     }
 
+    private fun exportCapture(file: java.io.File, extension: String) {
+        val space = "\${IFS}"
+        val command = "run-as${space}${instrumentation.targetContext.packageName}${space}cat${space}${file.absolutePath}>/data/local/tmp/komori-author-filter-failure.$extension"
+        val output = device.executeShellCommand("sh -c $command")
+        android.util.Log.i("KomoriAuthorFilter", "Capture $extension: $output")
+    }
+
     private fun captureFailure(error: Throwable) {
         android.util.Log.e("KomoriAuthorFilter", "Filter acceptance failed", error)
         runCatching {
@@ -116,11 +125,11 @@ class AuthorFilterAccessibilityTest {
         }
         val hierarchy = java.io.File(instrumentation.targetContext.cacheDir, "author-filter-failure.json")
         hierarchy.writeText(windows.toString(2))
-        device.executeShellCommand("sh -c 'run-as ${instrumentation.targetContext.packageName} cat ${hierarchy.absolutePath} > /data/local/tmp/komori-author-filter-failure.json'")
+        exportCapture(hierarchy, "json")
         // Capture directly; UiDevice.dumpWindowHierarchy waits for accessibility idle and can stall with an animated IME.
         val screenshot = java.io.File(instrumentation.targetContext.cacheDir, "author-filter-failure.png")
         if (device.takeScreenshot(screenshot)) {
-            device.executeShellCommand("sh -c 'run-as ${instrumentation.targetContext.packageName} cat ${screenshot.absolutePath} > /data/local/tmp/komori-author-filter-failure.png'")
+            exportCapture(screenshot, "png")
         }
     }
 
