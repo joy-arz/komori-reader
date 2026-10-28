@@ -151,7 +151,7 @@ class BatchSelectionTest {
             for (creator in followed) {
                 compose.onNodeWithContentDescription("Select ${creator.name}").assertIsOn()
                 device.waitForIdle()
-                val selectedNative = device.wait(object : androidx.test.uiautomator.Condition<Boolean>() {
+                val selectedNative = device.wait(object : androidx.test.uiautomator.Condition<UiDevice, Boolean> {
                     override fun apply(device: UiDevice): Boolean {
                         if (android.os.Build.VERSION.SDK_INT >= 34) instrumentation.uiAutomation.clearCache()
                         return device.hasObject(By.desc("Select ${creator.name}").checkable(true).checked(true))
