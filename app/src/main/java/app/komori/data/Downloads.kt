@@ -100,7 +100,7 @@ internal fun downloadRequest(
                 .build()
         )
         .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
-        .apply { if (delayMillis <= 0) setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST) }
+        // Chapter transfers promote themselves to foreground; expedited jobs have a short shared quota.
         .build()
 
 class ChapterDownloadWorker(context: Context, params: WorkerParameters) :

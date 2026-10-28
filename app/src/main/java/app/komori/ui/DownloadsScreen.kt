@@ -86,6 +86,11 @@ internal fun Downloads(vm: ReaderViewModel) {
         }
     val exportComic = rememberComicExporter(vm)
     var queueMenu by remember { mutableStateOf(false) }
+    var backgroundDialog by remember { mutableStateOf(false) }
+    if (backgroundDialog) AlertDialog(onDismissRequest = { backgroundDialog = false },
+        title = { Text("Background downloads") },
+        text = { BackgroundDownloadSettings() },
+        confirmButton = { TextButton(onClick = { backgroundDialog = false }) { Text("Done") } })
     var storageDialog by remember { mutableStateOf(false) }
     if (storageDialog) DownloadMaintenanceDialog({ storageDialog = false })
     var groupByTitle by rememberSaveable { mutableStateOf(true) }
@@ -110,6 +115,7 @@ internal fun Downloads(vm: ReaderViewModel) {
             Box {
                     RoundControl(KomoriIcons.More, "Queue options", { queueMenu = true })
                     DropdownMenu(queueMenu, { queueMenu = false }) {
+                        DropdownMenuItem(text = { Text("Background downloads") }, onClick = { queueMenu = false; backgroundDialog = true })
                         DropdownMenuItem(text = { Text("Storage & integrity") }, onClick = { queueMenu = false; storageDialog = true })
                         DropdownMenuItem(text = { Text(if (groupByTitle) "Show queue order" else "Group by title") },
                             onClick = { groupByTitle = !groupByTitle; queueMenu = false })

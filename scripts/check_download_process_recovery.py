@@ -57,6 +57,12 @@ def main():
     network_blocked = threading.Event(); network_release = threading.Event()
     screen = "work-fixture-" + str(uuid.uuid4())
     screen_blocked = threading.Event(); screen_release = threading.Event()
+    background = "work-fixture-" + str(uuid.uuid4())
+    background_blocked = threading.Event(); background_release = threading.Event()
+    sleeping_next = "work-fixture-" + str(uuid.uuid4())
+    identities = (active, queued, paused, network, screen, background, sleeping_next)
+    exempt_before = any(PACKAGE in line.split(',') for line in shell("dumpsys", "deviceidle", "whitelist").splitlines())
+    stayon_before = shell("settings", "get", "global", "stay_on_while_plugged_in")
     wifi_before = shell("settings", "get", "global", "wifi_on") != "0"
     data_before = shell("settings", "get", "global", "mobile_data") != "0"
     counts = collections.Counter(); lock = threading.Lock(); image = png()
@@ -73,7 +79,7 @@ def main():
                 identity = path.rsplit("/", 1)[-1]
                 body = json.dumps(dict(baseUrl="https://fixture.invalid", chapter=dict(hash=identity, data=["0.png", "1.png", "2.png"], dataSaver=["0.png", "1.png", "2.png"]))).encode()
             else:
-                for identity, arrived, resume in ((active, blocked, release), (network, network_blocked, network_release), (screen, screen_blocked, screen_release)):
+                for identity, arrived, resume in ((active, blocked, release), (network, network_blocked, network_release), (screen, screen_blocked, screen_release), (background, background_blocked, background_release)):
                     if path in (f"/data/{identity}/1.png", f"/data-saver/{identity}/1.png"):
                         arrived.set()
                         if not resume.wait(45):
@@ -107,7 +113,7 @@ def main():
 
     try:
         shell("am", "start", "-W", "-n", PACKAGE + "/app.komori.MainActivity")
-        for identity in (active, queued, paused, network, screen):
+        for identity in identities:
             command(f"configure:{port}", identity)
         # A paused row must remain paused across restart, without creating any HTTP work.
         command("low:1", paused); command("queue", paused)
@@ -123,13 +129,32 @@ def main():
         shell("svc", "data", "enable" if data_before else "disable")
         wait_for(lambda: "state=Complete" in state(network), "OS network recovery resumes the worker")
         assert sum(count for path, count in counts.items() if path.endswith(f"/{network}/0.png")) == 1, dict(counts)
+        command("queue", background)
+        wait_for(background_blocked.is_set, "background fixture second image")
+        shell("am", "start", "-W", "-a", "android.settings.SETTINGS")
+        wait_for(lambda: any("mCurrentFocus=" in line and "com.android.settings" in line
+                             for line in shell("dumpsys", "window").splitlines()), "another application focused")
+        background_release.set()
+        wait_for(lambda: "state=Complete" in state(background), "transfer completes while another app is foreground")
+        shell("am", "start", "-W", "-n", PACKAGE + "/app.komori.MainActivity")
+        # This changes only the disposable emulator; production requests the user's consent.
+        shell("dumpsys", "deviceidle", "whitelist", "+" + PACKAGE)
+        shell("dumpsys", "battery", "unplug")
+        shell("svc", "power", "stayon", "false")
         command("queue", screen)
         wait_for(screen_blocked.is_set, "screen-off fixture second image")
+        command("queue", sleeping_next)
         shell("input", "keyevent", "KEYCODE_SLEEP")
         wait_for(lambda: "mWakefulness=Asleep" in shell("dumpsys", "power"), "emulator display asleep")
+        shell("dumpsys", "deviceidle", "force-idle")
+        wait_for(lambda: "mState=IDLE" in shell("dumpsys", "deviceidle"), "forced Doze")
         screen_release.set()
         wait_for(lambda: "state=Complete" in state(screen), "ongoing foreground transfer completes with screen off")
+        wait_for(lambda: "state=Complete" in state(sleeping_next), "next chapter completes during Doze")
         assert "mWakefulness=Asleep" in shell("dumpsys", "power"), "Display woke during screen-off transfer"
+        shell("dumpsys", "deviceidle", "unforce")
+        shell("dumpsys", "battery", "reset")
+        shell("settings", "put", "global", "stay_on_while_plugged_in", stayon_before)
         shell("input", "keyevent", "KEYCODE_WAKEUP"); shell("wm", "dismiss-keyguard")
         command("queue", active)
         wait_for(blocked.is_set, "second image transfer")
@@ -153,7 +178,7 @@ def main():
         assert not any(paused in path for path in counts), dict(counts)
         new_pid = pid()
         report = dict(status="PASS", old_pid=old_pid, new_pid=new_pid, completed_page_reused=True,
-                      queued_chapter_completed=True, paused_intent_preserved=True, os_network_constraint_recovery=True, emulator_screen_off_transfer_completed=True, counts=dict(counts),
+                      queued_chapter_completed=True, paused_intent_preserved=True, os_network_constraint_recovery=True, emulator_screen_off_transfer_completed=True, another_app_transfer_completed=True, battery_exempt_doze_queue_continued=True, counts=dict(counts),
                       scope="synthetic HTTP, OS WorkManager foreground worker, emulator SIGKILL/restart; not manufacturer battery acceptance")
         Path("device-diagnostics").mkdir(exist_ok=True)
         Path("device-diagnostics/download-process-recovery.json").write_text(json.dumps(report, indent=2) + "\n")
@@ -161,16 +186,21 @@ def main():
     except Exception as error:
         Path("device-diagnostics").mkdir(exist_ok=True)
         report = dict(status="FAIL", error=str(error), counts=dict(counts),
-                      rows={identity: state(identity) for identity in (active, queued, paused, network, screen)})
+                      rows={identity: state(identity) for identity in identities})
         Path("device-diagnostics/download-process-recovery.json").write_text(json.dumps(report, indent=2) + "\n")
         print(json.dumps(report))
         raise
     finally:
-        release.set(); network_release.set(); screen_release.set()
+        release.set(); network_release.set(); screen_release.set(); background_release.set()
+        if not exempt_before:
+            shell("dumpsys", "deviceidle", "whitelist", "-" + PACKAGE)
+        shell("dumpsys", "deviceidle", "unforce")
+        shell("dumpsys", "battery", "reset")
+        shell("settings", "put", "global", "stay_on_while_plugged_in", stayon_before)
         shell("input", "keyevent", "KEYCODE_WAKEUP"); shell("wm", "dismiss-keyguard")
         shell("svc", "wifi", "enable" if wifi_before else "disable")
         shell("svc", "data", "enable" if data_before else "disable")
-        for identity in (active, queued, paused, network, screen):
+        for identity in identities:
             command("cleanup", identity)
         adb("reverse", "--remove", f"tcp:{port}")
         server.shutdown(); server.server_close()

@@ -10,6 +10,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -106,6 +108,48 @@ class ReaderControlsTest {
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { vm.viewModelScope.coroutineContext[kotlinx.coroutines.Job]?.cancel() }
             vm.viewModelScope.coroutineContext[kotlinx.coroutines.Job]?.join()
             application.settings.set("webtoon", previousWebtoon)
+        }
+    }
+
+    @Test fun oneBackReturnsToTitleWithHiddenOrVisibleControls() = kotlinx.coroutines.runBlocking<Unit> {
+        val application = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as KomoriApp
+        val vm = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+            app.komori.ui.ReaderViewModel(application) { _, _, _ -> app.komori.data.BrowsePage(emptyList(), false) }
+        }
+        val chapter = app.komori.domain.Release("back-controls", "back-title", "1", null, "", "en", emptyList(), "", 3)
+        val activity = compose.activity
+        try {
+            compose.runOnUiThread {
+                activity.setContent {
+                    val current by vm.reader.collectAsState()
+                    MaterialTheme {
+                        if (current != null) app.komori.ui.ReaderScreen(vm, current!!)
+                        else Text("Back target title")
+                    }
+                }
+            }
+            for (showControls in listOf(false, true)) {
+                compose.runOnUiThread { vm.reader.value = chapter }
+                compose.onNodeWithContentDescription("Reading area").assertExists()
+                compose.onNodeWithContentDescription("Close reader").assertDoesNotExist()
+                if (showControls) {
+                    val show = compose.onNodeWithContentDescription("Reading area").fetchSemanticsNode()
+                        .config[androidx.compose.ui.semantics.SemanticsActions.CustomActions]
+                        .single { it.label == "Show reader controls" }
+                    compose.runOnIdle { assertTrue(show.action()) }
+                    compose.onNodeWithContentDescription("Close reader").assertIsDisplayed()
+                }
+                compose.runOnUiThread { activity.onBackPressedDispatcher.onBackPressed() }
+                compose.onNodeWithText("Back target title").assertIsDisplayed()
+                compose.onNodeWithContentDescription("Reading area").assertDoesNotExist()
+                compose.runOnIdle { assertNull("One Back must close the reader", vm.reader.value) }
+            }
+        } finally {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                vm.closeReader()
+                vm.viewModelScope.coroutineContext[kotlinx.coroutines.Job]?.cancel()
+            }
+            vm.viewModelScope.coroutineContext[kotlinx.coroutines.Job]?.join()
         }
     }
 
