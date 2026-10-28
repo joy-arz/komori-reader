@@ -2,6 +2,12 @@
 
 Updated October 27, 2026 for the 0.8.5 reliability and Authors-filter pass. Published delivery is listed separately below. Checkboxes record implemented features with local checks; device/network acceptance that remains unverified stays open. See [the pass log](BACKLOG_PASS.md) for exact results and release gates. Tracking is deferred by the user until core acceptance.
 
+## October 28 reader controls follow-up
+
+- [x] Start each reader session with controls hidden; reserve a two-dimensional center region for deliberate control taps.
+- [x] Remove image-strip-wide control clicks and the interactive corner shortcut; retain a passive page count, Back escape and a screen-reader action.
+- [ ] Merge this follow-up after targeted reader checks and API 26/30/36 CI have passed.
+
 ## October 27 code review: implemented reliability fixes
 
 See [the October 27 code review](CODEBASE_REVIEW_2026-10-27.md) for conditions, evidence and acceptance checks. The seven fixes are implemented for 0.8.5; exact release acceptance is recorded in VALIDATION.md.

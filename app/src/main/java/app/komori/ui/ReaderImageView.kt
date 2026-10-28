@@ -8,7 +8,7 @@ import kotlin.math.abs
 
 /** Leaves pinch/double-tap zoom and zoomed panning with the tiled decoder. */
 class ReaderImageView(context: Context) : SubsamplingScaleImageView(context) {
-    var onReaderTap: (Float) -> Unit = {}
+    var onReaderTap: (Float, Float) -> Unit = { _, _ -> }
     var onReaderSwipe: ((Float) -> Unit)? = null
     private var multiplePointers = false
     private var startedAtMinimum = false
@@ -21,7 +21,7 @@ class ReaderImageView(context: Context) : SubsamplingScaleImageView(context) {
                 override fun onDown(e: MotionEvent): Boolean = true
 
                 override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
-                    if (!multiplePointers) onReaderTap(e.x / width.coerceAtLeast(1))
+                    if (!multiplePointers) onReaderTap(e.x / width.coerceAtLeast(1), e.y / height.coerceAtLeast(1))
                     return true
                 }
             },

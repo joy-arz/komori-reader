@@ -73,7 +73,11 @@ internal fun ReaderJumpDialog(vm: ReaderViewModel, current: Release, page: Int, 
     var target by remember { mutableStateOf(current) }
     var pageText by remember { mutableStateOf((page + 1).toString()) }
     val targetCount = if (target.id == current.id) count else target.pages
-    val validPage = pageText.toIntOrNull()?.takeIf { it >= 1 && (targetCount <= 0 || it <= targetCount) }
+    fun validRequestedPage(): Int? {
+        val pages = if (target.id == current.id) count else target.pages
+        return pageText.toIntOrNull()?.takeIf { it >= 1 && (pages <= 0 || it <= pages) }
+    }
+    val validPage = validRequestedPage()
     val chapters = vm.selectedChapters().filter { it.readable }
     AlertDialog(
         onDismissRequest = dismiss,
@@ -104,7 +108,7 @@ internal fun ReaderJumpDialog(vm: ReaderViewModel, current: Release, page: Int, 
             }
         },
         confirmButton = { TextButton(enabled = validPage != null, onClick = {
-            vm.jumpTo(target, validPage!! - 1); dismiss()
+            validRequestedPage()?.let { page -> vm.jumpTo(target, page - 1); dismiss() }
         }) { Text("Go") } },
         dismissButton = { TextButton(onClick = dismiss) { Text("Cancel") } },
     )

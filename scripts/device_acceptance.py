@@ -141,6 +141,17 @@ def main():
         def visible(text):
             return any(node.get("text") == text or node.get("content-desc") == text for node in tree().iter("node"))
 
+        def confirm_fullscreen_tutorial():
+            if shell("settings get secure immersive_mode_confirmations") == "confirmed":
+                return
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                for node in tree().iter("node"):
+                    if node.get("package") in ("android", "com.android.systemui") and node.get("text", "").casefold() == "got it":
+                        x1, y1, x2, y2 = map(int, re.findall(r"\d+", node.get("bounds")))
+                        shell(f"input tap {(x1+x2)//2} {(y1+y2)//2}")
+                        return
+
         # Dismiss a previously cached update prompt if this is a debug acceptance run.
         if visible("Snooze 24h"):
             tap("Snooze 24h")
@@ -153,6 +164,7 @@ def main():
         wait_for(lambda: tap("Downloads"), "Downloads action missing")
         wait_for(lambda: visible("Read offline"), "Offline reading action missing")
         wait_for(lambda: tap("Read offline"), "Offline reading action could not be tapped")
+        confirm_fullscreen_tutorial()
         wait_for(lambda: visible("2 / 3"), "Saved page was not restored")
         print("Saved page restored; killing background process", flush=True)
         shell("am start -W -a android.intent.action.MAIN -c android.intent.category.HOME")
@@ -176,11 +188,18 @@ def main():
         # API 26 can display the restored task while am start -W never returns.
         # The actual page assertion below is the readiness check.
         shell(f"am start -n {package}/app.komori.MainActivity")
+        confirm_fullscreen_tutorial()
         wait_for(lambda: visible("2 / 3"), "Reader navigation lost after process death")
         print("Reader restored after process death", flush=True)
         try:
             shell("svc wifi disable"); shell("svc data disable")
-            wait_for(lambda: tap("Next page"), "Next-page action missing")
+            def next_page():
+                if tap("Next page"):
+                    return True
+                # New reader sessions start immersive. Reveal controls through the viewport center.
+                tap("Reading area")
+                return False
+            wait_for(next_page, "Next-page action missing after a reader-center tap")
             wait_for(lambda: visible("3 / 3"), "Cached reading failed without network")
         finally:
             shell("svc wifi enable"); shell("svc data enable")

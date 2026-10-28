@@ -79,8 +79,14 @@ class ManualRefreshTest {
             assertEquals(book.id, vm.selected.value!!.id)
             assertEquals(id, vm.chapters.value.single().id)
             instrumentation.runOnMainSync { vm.read(chapter.release(), requestedPage = 1) }
-            shown("Refresh reading")
             settled { vm.readerReady.value && vm.readerPage.value == 1 }
+            device.confirmFullscreenTutorial()
+            assertTrue("Restored page must be rendered before a center tap", device.wait(Until.hasObject(By.descContains(", page 2, part ")), 10_000))
+            device.waitForIdle()
+            val readingArea = shown("Reading area")
+            assertFalse("Reading controls must start hidden", device.hasObject(By.desc("Refresh reading")))
+            device.click(readingArea.visibleBounds.centerX(), readingArea.visibleBounds.centerY())
+            shown("Refresh reading")
             val session = vm.readerSession.value
             shown("Refresh reading").click()
             settled { vm.readerSession.value > session && vm.readerReady.value }

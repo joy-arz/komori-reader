@@ -6,6 +6,10 @@ import android.net.Uri
 import android.webkit.CookieManager
 import androidx.activity.compose.setContent
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
@@ -162,10 +166,17 @@ class BacklogIntegrationTest {
             assertTrue(device.wait(Until.hasObject(By.text("Support joyarz on Ko-fi")), 5000))
             device.executeShellCommand("screencap -p /data/local/tmp/komori-support.png")
             instrumentation.runOnMainSync {
-                activity.setContent { MaterialTheme { CompositionLocalProvider(LocalUriHandler provides object : UriHandler {
-                    override fun openUri(uri: String) { opened.set(uri) }
-                }) { SupportPage() } } }
+                activity.setContent { MaterialTheme {
+                    Box(Modifier.semantics { contentDescription = "Isolated support destination fixture" }) {
+                        CompositionLocalProvider(LocalUriHandler provides object : UriHandler {
+                            override fun openUri(uri: String) { opened.set(uri) }
+                        }) { SupportPage() }
+                    }
+                } }
             }
+            assertTrue("Replacement Support content must be rendered before interacting",
+                device.wait(Until.hasObject(By.desc("Isolated support destination fixture")), 5000))
+            device.waitForIdle()
             repeat(4) {
                 if (!device.hasObject(By.text("Support joyarz on Ko-fi"))) {
                     device.swipe(device.displayWidth / 2, device.displayHeight * 3 / 4,
@@ -237,18 +248,31 @@ class BacklogIntegrationTest {
                 vm.selected.value = book; vm.chapters.value = rows.map { it.release() }
                 vm.read(rows.last().release(), requestedPage = 0)
             }
-            suspend fun waitUntil(check: () -> Boolean) = withTimeout(8000) { while (!check()) delay(30) }
+            suspend fun waitUntil(check: () -> Boolean) {
+                try { withTimeout(8000) { while (!check()) delay(30) } }
+                catch (timeout: TimeoutCancellationException) {
+                    throw AssertionError("Reader did not settle: chapter=${vm.reader.value?.id}, page=${vm.readerPage.value}, ready=${vm.readerReady.value}, error=${vm.readerError.value}", timeout)
+                }
+            }
             waitUntil { vm.readerReady.value && activity!!.volumeNavigation != null }
+            device.confirmFullscreenTutorial()
+            waitUntil { activity!!.hasWindowFocus() }
             assertTrue(device.wait(Until.hasObject(By.text("1 / 3")), 5000))
-            instrumentation.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_VOLUME_UP)
+            assertTrue(device.pressKeyCode(android.view.KeyEvent.KEYCODE_VOLUME_UP))
             waitUntil { vm.reader.value?.id == rows.first().id && vm.readerReady.value && vm.readerPage.value == 2 }
             assertTrue(device.wait(Until.hasObject(By.text("3 / 3")), 5000))
-            instrumentation.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_VOLUME_DOWN)
+            waitUntil { activity!!.hasWindowFocus() }
+            assertTrue(device.pressKeyCode(android.view.KeyEvent.KEYCODE_VOLUME_DOWN))
             assertTrue(device.wait(Until.hasObject(By.text("Chapter gap")), 5000))
             assertEquals(rows.first().id, vm.reader.value!!.id)
             device.findObject(By.text("Continue")).click()
             waitUntil { vm.reader.value?.id == rows.last().id && vm.readerReady.value }
             assertTrue(device.wait(Until.hasObject(By.text("1 / 3")), 5000))
+            waitUntil { vm.readerFile.value != null && activity!!.hasWindowFocus() }
+            device.waitForIdle()
+            val readingArea = device.wait(Until.findObject(By.desc("Reading area")), 5000) ?: throw AssertionError("Reader viewport missing")
+            device.click(readingArea.visibleBounds.centerX(), readingArea.visibleBounds.centerY())
+            assertTrue(device.wait(Until.hasObject(By.desc("Reader settings")), 5000))
             device.findObject(By.text("1 / 3")).click()
             assertTrue(device.wait(Until.hasObject(By.text("Go to chapter / page")), 5000))
             val field = device.findObject(By.clazz("android.widget.EditText"))
@@ -257,6 +281,13 @@ class BacklogIntegrationTest {
             waitUntil { vm.readerReady.value && vm.readerPage.value == 1 }
             app.settings.number("brightness", 40)
             waitUntil { kotlin.math.abs(activity!!.window.attributes.screenBrightness - .4f) < .01f }
+            device.waitForIdle()
+            val viewport = device.wait(Until.findObject(By.desc("Reading area")), 5000)?.visibleBounds
+                ?: throw AssertionError("Reader viewport missing after brightness change")
+            val from = if (vm.settings.value.rtl) .2f else .8f
+            assertTrue(device.swipe(viewport.left + (viewport.width() * from).toInt(), viewport.centerY(),
+                viewport.left + (viewport.width() * (1f - from)).toInt(), viewport.centerY(), 52))
+            waitUntil { vm.readerReady.value && vm.readerPage.value == 2 }
             instrumentation.runOnMainSync { vm.closeReader() }
             waitUntil { activity!!.volumeNavigation == null }
             waitUntil { kotlin.math.abs(activity!!.window.attributes.screenBrightness - (-1f)) < .01f }
