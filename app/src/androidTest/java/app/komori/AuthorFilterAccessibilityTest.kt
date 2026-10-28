@@ -97,10 +97,30 @@ class AuthorFilterAccessibilityTest {
             val roots = compose.onAllNodes(isRoot(), useUnmergedTree = true)
             repeat(roots.fetchSemanticsNodes().size) { roots[it].printToLog("KomoriAuthorFilter") }
         }
-        // A failed IME/accessibility query must not block the test runner's teardown.
+        for (label in listOf("Apply", "Cancel", "Reset filters")) {
+            runCatching { compose.onNodeWithText(label).printToLog("KomoriAuthorAction") }
+        }
+        val windows = org.json.JSONArray()
+        fun node(info: android.view.accessibility.AccessibilityNodeInfo, depth: Int): org.json.JSONObject {
+            val bounds = android.graphics.Rect()
+            info.getBoundsInScreen(bounds)
+            val value = org.json.JSONObject().put("text", info.text?.toString()).put("description", info.contentDescription?.toString())
+                .put("bounds", bounds.toShortString()).put("visible", info.isVisibleToUser).put("class", info.className?.toString())
+            val children = org.json.JSONArray()
+            if (depth < 30) for (index in 0 until info.childCount.coerceAtMost(100)) info.getChild(index)?.let { children.put(node(it, depth + 1)) }
+            return value.put("children", children)
+        }
+        for (window in instrumentation.uiAutomation.windows) {
+            val root = window.root
+            windows.put(org.json.JSONObject().put("type", window.type).put("root", root?.let { node(it, 0) }))
+        }
+        val hierarchy = java.io.File(instrumentation.targetContext.cacheDir, "author-filter-failure.json")
+        hierarchy.writeText(windows.toString(2))
+        device.executeShellCommand("sh -c 'run-as ${instrumentation.targetContext.packageName} cat ${hierarchy.absolutePath} > /data/local/tmp/komori-author-filter-failure.json'")
+        // Capture directly; UiDevice.dumpWindowHierarchy waits for accessibility idle and can stall with an animated IME.
         val screenshot = java.io.File(instrumentation.targetContext.cacheDir, "author-filter-failure.png")
         if (device.takeScreenshot(screenshot)) {
-            device.executeShellCommand("cp ${screenshot.absolutePath} /data/local/tmp/komori-author-filter-failure.png")
+            device.executeShellCommand("sh -c 'run-as ${instrumentation.targetContext.packageName} cat ${screenshot.absolutePath} > /data/local/tmp/komori-author-filter-failure.png'")
         }
     }
 

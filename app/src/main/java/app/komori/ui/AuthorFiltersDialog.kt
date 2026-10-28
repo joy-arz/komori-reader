@@ -11,6 +11,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.unit.dp
 import app.komori.data.*
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun AuthorFiltersDialog(current: AuthorWorkFilter, sources: List<String>, apply: (AuthorWorkFilter) -> Unit, close: () -> Unit) {
     var draft by remember(current) { mutableStateOf(current) }
@@ -53,7 +54,7 @@ internal fun AuthorFiltersDialog(current: AuthorWorkFilter, sources: List<String
                 Text("Metadata filters apply as each creator page loads. Load more works to keep searching. Latest and popularity follow each source’s creator ranking.", style = MaterialTheme.typography.bodySmall)
             }
         },
-        confirmButton = { TextButton(onClick = { apply(draft) }) { Text("Apply") } },
-        dismissButton = { FlowRow(horizontalArrangement = Arrangement.End) { TextButton(onClick = { draft = AuthorWorkFilter() }) { Text("Reset filters") }; TextButton(onClick = close) { Text("Cancel") } } },
+        confirmButton = { key(WindowInsets.isImeVisible) { TextButton(onClick = { apply(draft) }) { Text("Apply") } } },
+        dismissButton = { key(WindowInsets.isImeVisible) { FlowRow(horizontalArrangement = Arrangement.End) { TextButton(onClick = { draft = AuthorWorkFilter() }) { Text("Reset filters") }; TextButton(onClick = close) { Text("Cancel") } } } },
     )
 }

@@ -38,7 +38,7 @@ adb logcat -d -s KomoriBenchmark:I > device-diagnostics/progress-benchmark.txt |
 for capture in download-maintenance scheduled-backup-settings reader-manual-refresh navigation-failure facet-failure continuous-failure author-filter-failure; do
     adb pull "/data/local/tmp/komori-$capture.png" "device-diagnostics/$capture.png" || true
 done
-adb pull /data/local/tmp/komori-author-filter-failure.xml device-diagnostics/author-filter-failure.xml || true
+adb pull /data/local/tmp/komori-author-filter-failure.json device-diagnostics/author-filter-failure.json || true
 adb pull /sdcard/Android/data/app.komori.reader.debug/files/ device-diagnostics/app-captures/ || true
 adb pull /data/local/tmp/komori-batch-failure.png device-diagnostics/batch-failure.png || true
 adb shell dumpsys power > device-diagnostics/power-after.txt || true
