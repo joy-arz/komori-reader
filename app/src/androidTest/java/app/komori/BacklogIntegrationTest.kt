@@ -6,6 +6,10 @@ import android.net.Uri
 import android.webkit.CookieManager
 import androidx.activity.compose.setContent
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
@@ -162,10 +166,17 @@ class BacklogIntegrationTest {
             assertTrue(device.wait(Until.hasObject(By.text("Support joyarz on Ko-fi")), 5000))
             device.executeShellCommand("screencap -p /data/local/tmp/komori-support.png")
             instrumentation.runOnMainSync {
-                activity.setContent { MaterialTheme { CompositionLocalProvider(LocalUriHandler provides object : UriHandler {
-                    override fun openUri(uri: String) { opened.set(uri) }
-                }) { SupportPage() } } }
+                activity.setContent { MaterialTheme {
+                    Box(Modifier.semantics { contentDescription = "Isolated support destination fixture" }) {
+                        CompositionLocalProvider(LocalUriHandler provides object : UriHandler {
+                            override fun openUri(uri: String) { opened.set(uri) }
+                        }) { SupportPage() }
+                    }
+                } }
             }
+            assertTrue("Replacement Support content must be rendered before interacting",
+                device.wait(Until.hasObject(By.desc("Isolated support destination fixture")), 5000))
+            device.waitForIdle()
             repeat(4) {
                 if (!device.hasObject(By.text("Support joyarz on Ko-fi"))) {
                     device.swipe(device.displayWidth / 2, device.displayHeight * 3 / 4,
