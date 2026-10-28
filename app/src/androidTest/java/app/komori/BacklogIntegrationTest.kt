@@ -237,7 +237,12 @@ class BacklogIntegrationTest {
                 vm.selected.value = book; vm.chapters.value = rows.map { it.release() }
                 vm.read(rows.last().release(), requestedPage = 0)
             }
-            suspend fun waitUntil(check: () -> Boolean) = withTimeout(8000) { while (!check()) delay(30) }
+            suspend fun waitUntil(check: () -> Boolean) {
+                try { withTimeout(8000) { while (!check()) delay(30) } }
+                catch (timeout: TimeoutCancellationException) {
+                    throw AssertionError("Reader did not settle: chapter=${vm.reader.value?.id}, page=${vm.readerPage.value}, ready=${vm.readerReady.value}, error=${vm.readerError.value}", timeout)
+                }
+            }
             waitUntil { vm.readerReady.value && activity!!.volumeNavigation != null }
             device.confirmFullscreenTutorial()
             waitUntil { activity!!.hasWindowFocus() }

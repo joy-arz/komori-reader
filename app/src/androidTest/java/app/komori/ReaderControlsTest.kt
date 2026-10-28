@@ -109,6 +109,45 @@ class ReaderControlsTest {
         }
     }
 
+    @Test fun jumpActionUsesEditedPageBeforeTheNextComposition() = kotlinx.coroutines.runBlocking<Unit> {
+        val application = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as KomoriApp
+        val id = "jump-action-${java.util.UUID.randomUUID()}"
+        application.dao.putManga(app.komori.data.Manga(id, "Jump input fixture", "", ""))
+        val vm = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+            app.komori.ui.ReaderViewModel(application) { _, _, _ -> app.komori.data.BrowsePage(emptyList(), false) }
+        }
+        try {
+            val chapter = app.komori.domain.Release("$id-chapter", id, "1", null, "", "en", emptyList(), "", 3, local = true)
+            val visible = androidx.compose.runtime.mutableStateOf(true)
+            val activity = compose.activity
+            compose.runOnUiThread {
+                activity.setContent {
+                    MaterialTheme {
+                        if (visible.value) app.komori.ui.ReaderJumpDialog(vm, chapter, 0, 3) { visible.value = false }
+                    }
+                }
+            }
+            val edit = compose.onNode(hasSetTextAction()).fetchSemanticsNode().config[androidx.compose.ui.semantics.SemanticsActions.SetText].action!!
+            val go = compose.onNodeWithText("Go").fetchSemanticsNode().config[androidx.compose.ui.semantics.SemanticsActions.OnClick].action!!
+            compose.runOnUiThread {
+                assertTrue(edit(androidx.compose.ui.text.AnnotatedString("2")))
+                assertTrue(go())
+            }
+            compose.waitUntil(5000) { vm.readerReady.value }
+            assertEquals("Go must read the edited value before another composition", 1, vm.readerPage.value)
+        } finally {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                vm.closeReader()
+                vm.viewModelScope.coroutineContext[kotlinx.coroutines.Job]?.cancel()
+            }
+            vm.viewModelScope.coroutineContext[kotlinx.coroutines.Job]?.join()
+            for (table in listOf("progress", "shelf", "manga")) {
+                val column = if (table == "manga") "id" else "mangaId"
+                application.database.openHelper.writableDatabase.execSQL("DELETE FROM $table WHERE $column = ?", arrayOf(id))
+            }
+        }
+    }
+
     @Test fun retryButtonsConsumeTheirOwnTapsInsideTheCenterRegion() {
         val retries = AtomicInteger()
         val toggles = AtomicInteger()
