@@ -17,6 +17,10 @@ Inspected Komikku commit 1656575e8fdaaef010c652f9758130c2a01d8890: [DownloadJob]
 - [x] Local app/test APK compilation passed; Python script suite 10/10, extended probe syntax passed.
 - [x] Add API 34 to the API 26/30/36 full device matrix.
 - [x] Extend actual WorkManager + local HTTP probe to complete a transfer under another foreground app and to complete both the current and next chapter during forced screen-off Doze with explicit test-only battery exemption. Restore emulator power/allowlist/network settings in finally. Production never grants the exemption itself.
-- [ ] Final exact-head build, all four device jobs and five-run native selection stress accepted. PR checks carry current evidence.
+- [x] PR exact-head build 40699754496, all four device jobs 40699754147 (86 tests each, 344 total) and five-run native selection stress 40699754083 passed. Failed-job attempt 2 recovered corrupt SDK downloads (API 34/targeted 36) and an API 26 adb-root reconnection failure; no assertion/timeout changes.
 - [ ] User's physical Android 14 handset: grant background access and verify a multi-chapter queue while switched to another app and locked for several minutes. OEM restrictions and real-site behavior remain unverified.
-- [ ] Merge only after PR checks pass, then tag/build 0.8.8 with full changelog and original signing identity. Publication retains exact-commit acceptance gate.
+- [x] Merged PR #5 only after all checks passed; immutable tag v0.8.8 at a00f473e5eca5849504d634fdea7282be086b47b. Merge build 40704716575 and all four device jobs 40704716592 passed. Release 40704843276 published after exact-commit acceptance. Downloaded APK, checksum, updater metadata, full notes and original signer verified; version code 131. README and VirusTotal receipt refreshed automatically (zero malicious/suspicious, 68 undetected, seven unsupported).
+
+## Post-merge failure retained
+
+The first merged-head API 30 run passed the download probe but failed ManualRefreshTest: after a native center tap it did not find Refresh reading. The other three APIs passed, as had all four PR jobs. A fresh API 30 emulator accepted all 86 tests and probes without source, timeout or assertion changes. This is retained as a reader-fixture reliability investigation, not claimed as a demonstrated production fix. Release attempt 1 was blocked; attempt 2 published only after the complete merged-head matrix passed. Detailed downloaded-artifact receipt is in docs/releases/komori-0.8.8-verification.json.

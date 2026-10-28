@@ -188,3 +188,12 @@ Released repair work: durable per-page repair markers, Needs repair counts, part
 - Webtoon forward/backward continuity and reader controls have API 30 checks; sustained zoom/detection, notifications, document-provider variations and source migration still need broader hands-on acceptance.
 - A 1,000-title / 50,000-progress synthetic emulator query measurement is recorded in BACKLOG_PASS.md. It does not close the physical 2 GB cold-start/long-read benchmark.
 - Nhentai connection recovery is user-confirmed on October 22; this does not establish availability on every network.
+
+
+### October 28 background download follow-up
+
+- [x] One Back exits the reader whether controls are hidden or visible (0.8.8).
+- [x] Background-download battery status and explicit system consent in Settings and Downloads; regular foreground work for long chapters.
+- [x] API 26/30/34/36 emulator acceptance, app switching, battery-exempt forced Doze with next-chapter continuation, and 5/5 Authors selection stress.
+- [ ] Verify the affected physical Android 14 handset after granting background access; OEM policy and real-source behavior remain unverified.
+- [ ] Investigate intermittent ManualRefresh native center-tap fixture failure seen on the first merged-head API 30 run; fresh rerun passed without source/assertion changes.
