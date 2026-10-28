@@ -1,0 +1,33 @@
+{
+  "status": "PASS",
+  "version": "0.8.7",
+  "releaseCommit": "226e326c8777798a318ba87170842581f1599c8a",
+  "versionCode": 130,
+  "package": "app.komori.reader",
+  "bytes": 2584203,
+  "sha256": "e009051766eed3e27082d244973ef1dafa3802313005638f191d0fd76fb67601",
+  "signingCertificateSha256": "0f654f439d6059cf8caea9fa1d5403342cc47b1b5a8228bf90e2858ec423d5fd",
+  "minimumAndroidApi": 26,
+  "fullNotesPublished": true,
+  "release": "https://github.com/joy-arz/komori-reader/releases/tag/v0.8.7",
+  "buildRun": 40679606727,
+  "deviceRun": 40679606724,
+  "deviceAttempt": 2,
+  "releaseRun": 40679629012,
+  "releaseAttempt": 2,
+  "jvmPassed": 196,
+  "optionalLiveNetworkSkipped": 6,
+  "instrumentedPerApi": {
+    "26": 84,
+    "30": 84,
+    "36": 84
+  },
+  "firstAttemptFailures": [
+    "API 26 NavigationHistoryTest: chapter tap did not start reader.",
+    "API 30: all 84 instrumented tests passed, then synthetic storage fixture stayed queued without HTTP requests."
+  ],
+  "limitations": [
+    "Fresh-emulator rerun passed without code or assertion changes; initial failures remain reliability investigation items.",
+    "No physical phone, manual TalkBack, manufacturer battery restriction or live-source acceptance performed."
+  ]
+}
