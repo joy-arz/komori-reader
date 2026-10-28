@@ -148,7 +148,17 @@ class BatchSelectionTest {
                 compose.waitForIdle()
             }
             assertTrue(device.wait(Until.hasObject(By.text("2 selected")), 5000))
-            for (creator in followed) assertTrue(device.wait(Until.hasObject(By.desc("Select ${creator.name}").checkable(true).checked(true)), 5000))
+            for (creator in followed) {
+                compose.onNodeWithContentDescription("Select ${creator.name}").assertIsOn()
+                device.waitForIdle()
+                val selectedNative = device.wait(object : androidx.test.uiautomator.Condition<Boolean>() {
+                    override fun apply(device: UiDevice): Boolean {
+                        if (android.os.Build.VERSION.SDK_INT >= 34) instrumentation.uiAutomation.clearCache()
+                        return device.hasObject(By.desc("Select ${creator.name}").checkable(true).checked(true))
+                    }
+                }, 5000)
+                assertTrue("Native checkbox must report selected for ${creator.name}", selectedNative)
+            }
             device.takeScreenshot(java.io.File(app.getExternalFilesDir(null), "batch-selection-ready.png"))
             device.dumpWindowHierarchy(java.io.File(app.getExternalFilesDir(null), "batch-selection-ready.xml"))
             tapDescription("End selection")
