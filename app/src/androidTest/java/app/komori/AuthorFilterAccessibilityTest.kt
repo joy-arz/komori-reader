@@ -31,7 +31,6 @@ class AuthorFilterAccessibilityTest {
     private var dismissFilter: () -> Unit = {}
     private var previousKeyboardSetting: Int? = null
     private var previousIdleTimeout = 10000L
-    private val keyboardPackage get() = device.executeShellCommand("settings get secure default_input_method").trim().substringBefore('/')
 
     @Before fun showOnScreenKeyboard() {
         previousIdleTimeout = Configurator.getInstance().getWaitForIdleTimeout()
@@ -44,6 +43,9 @@ class AuthorFilterAccessibilityTest {
         try {
             compose.runOnUiThread { dismissFilter() }
             compose.waitForIdle()
+            // Finish the owned Activity before ActivityScenario launches its empty teardown Activity.
+            val activity = compose.activity
+            compose.runOnUiThread { activity.finish() }
         } finally {
             try {
                 val value = previousKeyboardSetting
@@ -55,11 +57,11 @@ class AuthorFilterAccessibilityTest {
     }
 
     private fun requireKeyboardAndActions() {
-        val keyboard = keyboardPackage
-        compose.waitUntil(5000) {
-            device.hasObject(By.pkg(keyboard)) && listOf("Apply", "Cancel", "Reset filters").all { label ->
-                device.findObject(By.text(label))?.visibleBounds?.let { it.width() > 0 && it.height() > 0 } == true
-            }
+        compose.waitUntil(5000) { instrumentation.uiAutomation.windows.any { it.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_INPUT_METHOD } }
+        for (label in listOf("Apply", "Cancel", "Reset filters")) {
+            assertTrue("$label is inaccessible with the IME visible", device.wait(androidx.test.uiautomator.Until.hasObject(By.text(label)), 5000))
+            val bounds = device.findObject(By.text(label)).visibleBounds
+            assertTrue("$label has no visible native bounds", bounds.width() > 0 && bounds.height() > 0)
         }
     }
 
@@ -75,10 +77,12 @@ class AuthorFilterAccessibilityTest {
                     LocalLayoutDirection provides LayoutDirection.Rtl,
                 ) {
                     MaterialTheme {
-                        if (visible.value) AuthorFiltersDialog(initial, listOf("zap", "nhentai"), {
-                            result.set(it)
-                            visible.value = false
-                        }, { visible.value = false })
+                        if (visible.value) {
+                            AuthorFiltersDialog(initial, listOf("zap", "nhentai"), {
+                                result.set(it)
+                                visible.value = false
+                            }, { visible.value = false })
+                        }
                     }
                 }
             }
@@ -94,7 +98,10 @@ class AuthorFilterAccessibilityTest {
             repeat(roots.fetchSemanticsNodes().size) { roots[it].printToLog("KomoriAuthorFilter") }
         }
         // A failed IME/accessibility query must not block the test runner's teardown.
-        device.executeShellCommand("sh -c 'screencap -p /data/local/tmp/komori-author-filter-failure.png >/dev/null 2>&1 </dev/null &'")
+        val screenshot = java.io.File(instrumentation.targetContext.cacheDir, "author-filter-failure.png")
+        if (device.takeScreenshot(screenshot)) {
+            device.executeShellCommand("cp ${screenshot.absolutePath} /data/local/tmp/komori-author-filter-failure.png")
+        }
     }
 
     @Test fun filterActionsRemainReachableInLandscapeWithLargeRtlText() {
