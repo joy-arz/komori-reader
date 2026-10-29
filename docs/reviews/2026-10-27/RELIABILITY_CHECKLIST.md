@@ -1,6 +1,6 @@
 # Reliability and UI follow-up
 
-Updated October 28, 2026. [PR #3](https://github.com/joy-arz/komori-reader/pull/3), branch `codex/reliability-ui-followup`. No merge, tag or release is part of this task.
+Updated October 28, 2026. [PR #3](https://github.com/joy-arz/komori-reader/pull/3). No merge, tag or release is part of this task.
 
 ## Audited revision and delivery
 
