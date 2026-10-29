@@ -87,6 +87,7 @@ fun WebtoonReader(
     modifier: Modifier = Modifier,
     onTap: () -> Unit = {},
     controlBounds: () -> Rect? = { null },
+    state: LazyListState? = null,
 ) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val chapterFeed by vm.chapters.collectAsStateWithLifecycle()
@@ -98,7 +99,8 @@ fun WebtoonReader(
     val initialFraction = remember { vm.readerScroll.value }
     var window by remember { mutableStateOf(listOf(chapter)) }
     val images = remember { mutableStateMapOf<String, ScrollImage>() }
-    val list = remember { LazyListState(initialPage + 1) }
+    val defaultList = remember { LazyListState(initialPage + 1) }
+    val list = state ?: defaultList
     val cacheOwner = remember { Any() }
     var restored by remember { mutableStateOf(false) }
     var nextError by remember { mutableStateOf<Exception?>(null) }
