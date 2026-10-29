@@ -1,0 +1,54 @@
+{
+  "status": "PASS",
+  "version": "0.8.9",
+  "releaseCommit": "7705413c92151be697a3448488ca2cd0b339f059",
+  "versionCode": 132,
+  "package": "app.komori.reader",
+  "bytes": 2584243,
+  "sha256": "778a4dece2d41b5dffeb9862e8e096a8486295ceaa8566029e7df9fd4f354553",
+  "signingCertificateSha256": "0f654f439d6059cf8caea9fa1d5403342cc47b1b5a8228bf90e2858ec423d5fd",
+  "minimumAndroidApi": 26,
+  "targetAndroidApi": 36,
+  "fullNotesPublished": true,
+  "syntheticFixtureAndTemporaryTraceMarkersAbsent": true,
+  "release": "https://github.com/joy-arz/komori-reader/releases/tag/v0.8.9",
+  "pr": "https://github.com/joy-arz/komori-reader/pull/6",
+  "prBuild": 40931330967,
+  "prDevices": 40931330955,
+  "prSelectionStress": 40931331005,
+  "selectionStressPassed": 5,
+  "mergeBuild": 40933481881,
+  "mergeDevices": 40933481983,
+  "releaseRun": 40933510812,
+  "releaseAttempt": 1,
+  "instrumentedPerApi": {
+    "26": 90,
+    "30": 90,
+    "34": 90,
+    "36": 90
+  },
+  "jvm": {
+    "total": 202,
+    "passed": 196,
+    "optionalLiveNetworkSkipped": 6
+  },
+  "lintDebug": {
+    "errors": 0,
+    "warnings": 50,
+    "newWarningMessagesAgainst088": 0
+  },
+  "localStreamingControl": {
+    "sameTestApk": true,
+    "oldReaderFailures": 3,
+    "oldReaderTotal": 4,
+    "fixedReaderPassed": 4,
+    "fixedReaderTotal": 4,
+    "fixedBoundaryRepetitionsPassed": 5
+  },
+  "limitations": [
+    "Sustained online DemonicScans reading on the affected physical Android 14 handset remains pending.",
+    "Source responses are deterministic transport fixtures; no new live-source, OEM battery-policy, TalkBack or physical performance acceptance is claimed."
+  ],
+  "virusTotalEvidence": "docs/security/virustotal/0.8.9.json",
+  "readmeUpdated": true
+}

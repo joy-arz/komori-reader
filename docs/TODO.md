@@ -203,5 +203,5 @@ Released repair work: durable per-page repair markers, Needs repair counts, part
 
 - [x] Reproduce the visible placeholder shrinking past its retained offset, skipping an unread page, on all four emulator APIs.
 - [x] Add a logical page anchor and delay progress/paging publication until the corrected viewport is measured.
-- [ ] Accept delayed short/tall image and chapter-boundary fixtures plus the full device matrix (PR #6).
+- [x] Accept delayed short/tall image and chapter-boundary fixtures plus the full API 26/30/34/36 device matrix (PR #6, 90 tests per API). Publish and verify signed 0.8.9 after exact merged-commit acceptance.
 - [ ] Verify sustained online DemonicScans reading on the affected Android 14 phone.

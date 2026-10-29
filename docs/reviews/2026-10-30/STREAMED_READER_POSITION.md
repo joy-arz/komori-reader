@@ -22,8 +22,8 @@ The original chapter-boundary variant failed earlier during setup: it requested 
 
 - [x] Reproduce the within-chapter jump before the fix on API 26/30/34/36.
 - [x] Add delayed short-page, chapter-boundary, tall-page offset and end-of-title clamping regression cases.
-- [ ] Accept fixed cases and existing forward/backward continuity, navigation, refresh, gestures and progress-restoration checks.
-- [ ] Final JVM/build/lint/release compilation and full API 26/30/34/36 device suites; current evidence is in PR #6.
+- [x] Accept fixed cases and existing forward/backward continuity, navigation, refresh, gestures and progress-restoration checks.
+- [x] Final JVM/build/lint/release compilation and full API 26/30/34/36 device suites; current evidence is in PR #6.
 - [ ] Affected physical Android 14 handset reading DemonicScans online. No live-site, real-phone or performance acceptance is claimed.
 
 Local validation initially encountered a missing Gradle/plugin cache. The online dependency restore was stopped once cloud reproduction was available; this was not an app failure.
@@ -37,3 +37,13 @@ On the same local API 30 emulator, the exact same updated test APK was run again
 Temporary event tracing exposed metadata/anchor publication being interleaved with measurement under coroutine effect dispatching. Critical geometry mutations now explicitly run on Main.immediate. Temporary traces were removed before this commit; no production logging of reading identifiers was added. The final four-API acceptance remains required, including repeated boundary coverage; this local result is not a physical-phone or live-site pass.
 
 The final implementation also passed five consecutive unlogged local chapter-boundary repetitions. Existing user authorization for updates is to merge only after PR checks pass, then trigger the signed build. This follow-up prepares 0.8.9; exact merged-commit acceptance remains required before publication.
+
+## Final acceptance and delivery
+
+PR [#6](https://github.com/joy-arz/komori-reader/pull/6) merged only after every final-head check passed. PR Android checks [40931330967](https://github.com/joy-arz/komori-reader/actions/runs/40931330967) accepted JVM/debug/release compilation and lint. JVM: 202 cases, 196 passed and six optional live-network skips. Debug lint: zero errors, 50 warnings; comparison with the downloaded 0.8.8 release-head report found the same warnings and messages. Device checks [40931330955](https://github.com/joy-arz/komori-reader/actions/runs/40931330955) passed 90/90 on each API 26/30/34/36, zero skips. Separate API 36 selection stress [40931331005](https://github.com/joy-arz/komori-reader/actions/runs/40931331005) passed five repetitions.
+
+Merged commit 7705413c92151be697a3448488ca2cd0b339f059 passed exact-revision Android checks [40933481881](https://github.com/joy-arz/komori-reader/actions/runs/40933481881) and all four device jobs [40933481983](https://github.com/joy-arz/komori-reader/actions/runs/40933481983). Release [40933510812](https://github.com/joy-arz/komori-reader/actions/runs/40933510812) passed the unchanged acceptance gate and published v0.8.9. No final-head rerun, timeout increase, skipped assertion or production trace was needed.
+
+Downloaded APK verification: original signing certificate, package app.komori.reader, version 0.8.9/code 132, minimum API 26, 2,584,243 bytes. SHA-256 778a4dece2d41b5dffeb9862e8e096a8486295ceaa8566029e7df9fd4f354553 matches SHA256SUMS and updater metadata. Published body exactly matches the complete saved release notes. Synthetic fixture/temporary trace markers are absent from release DEX. The merged working branch was removed. Physical sustained online reading remains pending.
+
+The release workflow also completed the API-backed VirusTotal receipt and updated README to 0.8.9 automatically: zero malicious, zero suspicious, 68 undetected. See docs/security/virustotal/0.8.9.json.
