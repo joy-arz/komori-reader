@@ -107,6 +107,30 @@ fun WebtoonReader(
     val cacheOwner = remember { Any() }
     var restored by remember { mutableStateOf(false) }
     var pendingAnchor by remember { mutableStateOf<WebtoonAnchor?>(null) }
+    fun anchorIndex(key: String): Int? {
+        val pageKey = key.substringBeforeLast('|')
+        val strip = key.substringAfterLast('|').toIntOrNull() ?: return null
+        var index = 1
+        window.forEachIndexed { chapterIndex, release ->
+            if (chapterIndex > 0) index++
+            repeat(release.pages.coerceAtLeast(0)) { page ->
+                val prefix = "${release.id}|$page"
+                val strips = images[prefix]?.strips ?: 1
+                if (prefix == pageKey) return index + strip.coerceIn(0, strips - 1)
+                index += strips
+            }
+        }
+        return null
+    }
+    fun requestAnchor(anchor: WebtoonAnchor) {
+        val index = anchorIndex(anchor.key) ?: return
+        pendingAnchor = anchor.copy(beforeLayout = list.layoutInfo)
+        list.requestScrollToItem(index, anchor.scrollOffset)
+    }
+    fun updateWindow(value: List<Release>) {
+        window = value
+        pendingAnchor?.let(::requestAnchor)
+    }
     var nextError by remember { mutableStateOf<Exception?>(null) }
     var nextLoading by remember { mutableStateOf(false) }
     var nextAttempt by remember { mutableIntStateOf(0) }
@@ -147,7 +171,7 @@ fun WebtoonReader(
         nextLoading = true
         try {
             val resolved = vm.resolveChapter(next)
-            if (window.none { it.id == resolved.id }) window = window + resolved
+            if (window.none { it.id == resolved.id }) updateWindow(window + resolved)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -166,7 +190,7 @@ fun WebtoonReader(
         previousLoading = true
         try {
             val resolved = vm.resolveChapter(previous)
-            if (window.none { it.id == resolved.id }) window = listOf(resolved) + window
+            if (window.none { it.id == resolved.id }) updateWindow(listOf(resolved) + window)
         } catch (e: CancellationException) { throw e }
         catch (e: Exception) { previousError = e }
         finally { previousLoading = false }
@@ -185,26 +209,6 @@ fun WebtoonReader(
         }
         val widthPixels = with(LocalDensity.current) { maxWidth.toPx() }
         val currentWidth by rememberUpdatedState(widthPixels)
-        fun anchorIndex(key: String): Int? {
-            val pageKey = key.substringBeforeLast('|')
-            val strip = key.substringAfterLast('|').toIntOrNull() ?: return null
-            var index = 1
-            window.forEachIndexed { chapterIndex, release ->
-                if (chapterIndex > 0) index++
-                repeat(release.pages.coerceAtLeast(0)) { page ->
-                    val prefix = "${release.id}|$page"
-                    val strips = images[prefix]?.strips ?: 1
-                    if (prefix == pageKey) return index + strip.coerceIn(0, strips - 1)
-                    index += strips
-                }
-            }
-            return null
-        }
-        fun requestAnchor(anchor: WebtoonAnchor) {
-            val index = anchorIndex(anchor.key) ?: return
-            pendingAnchor = anchor.copy(beforeLayout = list.layoutInfo)
-            list.requestScrollToItem(index, anchor.scrollOffset)
-        }
         fun publishImage(key: String, image: ScrollImage) {
             val anchor = pendingAnchor ?: list.layoutInfo.visibleItemsInfo.firstOrNull()?.let {
                 WebtoonAnchor(it.key.toString(), (-it.offset).coerceAtLeast(0), list.layoutInfo)
@@ -217,8 +221,9 @@ fun WebtoonReader(
             pendingAnchor?.let(::requestAnchor)
         }
         fun position(flushPending: Boolean = false): Triple<Release, Int, Float>? {
-            val anchor = pendingAnchor
-            if (anchor != null && !flushPending) return null
+            val pending = pendingAnchor
+            if (pending != null && !flushPending) return null
+            val anchor = pending?.takeIf { list.layoutInfo === it.beforeLayout }
             val item = list.layoutInfo.visibleItemsInfo.firstOrNull {
                 it.key.toString().split('|').size == 3
             }
@@ -236,13 +241,10 @@ fun WebtoonReader(
                 ((strip * STRIP_HEIGHT + sourceOffset) / image.height).coerceIn(0f, 1f),
             )
         }
-        LaunchedEffect(window) { pendingAnchor?.let(::requestAnchor) }
         LaunchedEffect(list) {
             snapshotFlow {
                 pendingAnchor?.takeIf {
-                    list.layoutInfo !== it.beforeLayout &&
-                        list.layoutInfo.visibleItemsInfo.firstOrNull()?.key == it.key &&
-                        list.firstVisibleItemScrollOffset == it.scrollOffset
+                    list.layoutInfo !== it.beforeLayout
                 }
             }.filterNotNull().collect { if (pendingAnchor == it) pendingAnchor = null }
         }
@@ -270,7 +272,7 @@ fun WebtoonReader(
                         vm.scrollChapterPosition(release, page, fraction, session)
                         val index = window.indexOfFirst { it.id == release.id }
                         if (index > 1 || window.size > 3) {
-                            window = window.drop((index - 1).coerceAtLeast(0)).take(3)
+                            updateWindow(window.drop((index - 1).coerceAtLeast(0)).take(3))
                             val retained = window.map { it.id }.toSet()
                             images.keys
                                 .filter { it.substringBefore('|') !in retained }

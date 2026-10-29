@@ -14,16 +14,18 @@ The original chapter-boundary variant failed earlier during setup: it requested 
 
 - Detect when newly resolved dimensions invalidate the offset inside the visible placeholder; retain the same chapter/page and start that unread image at its beginning.
 - Keep a logical pending page/strip anchor through layout changes; recalculate its flat index from current chapter and strip counts rather than assuming fixed one-item pages.
-- Publish progress, chapter-window paging and completion only after the corrected layout is committed. Preserve the intended anchor for an exit checkpoint.
+- Publish progress, chapter-window paging and completion only after the requested layout is measured. A legitimate end-of-list clamp or subsequent user input must not leave a permanently pending anchor. Keep an intended anchor for an exit checkpoint only while the old layout remains current.
 - Keep valid offsets for taller images and preserve bounded strip decoding/cache pins, retries, scrolling/zoom, chapter ownership and speculative preload limits.
 - Hoist an optional LazyListState for deterministic layout acceptance; production uses the same default remembered state.
 
 ## Acceptance
 
 - [x] Reproduce the within-chapter jump before the fix on API 26/30/34/36.
-- [x] Add delayed short-page, chapter-boundary and tall-page offset regression cases.
+- [x] Add delayed short-page, chapter-boundary, tall-page offset and end-of-title clamping regression cases.
 - [ ] Accept fixed cases and existing forward/backward continuity, navigation, refresh, gestures and progress-restoration checks.
 - [ ] Final JVM/build/lint/release compilation and full API 26/30/34/36 device suites; current evidence is in PR #6.
 - [ ] Affected physical Android 14 handset reading DemonicScans online. No live-site, real-phone or performance acceptance is claimed.
 
 Local validation initially encountered a missing Gradle/plugin cache. The online dependency restore was stopped once cloud reproduction was available; this was not an app failure.
+
+The first fixed head afc803f passed all three targeted cases locally and full API 30/34/36 checks, but API 26 repeated the within-chapter assertion. The fixture now explicitly waits for initial restoration to finish before requesting its test position. A separate end-of-title case covers the legitimate list clamp; the guard acknowledges the next measured layout rather than requiring an impossible exact top alignment. Final validation must accept this head; earlier partial passes are not presented as final acceptance.

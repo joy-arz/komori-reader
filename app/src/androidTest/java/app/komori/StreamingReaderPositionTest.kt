@@ -43,7 +43,9 @@ class StreamingReaderPositionTest {
 
     @Test fun delayedTallPageKeepsExistingPixelOffset() = delayedShortPage(1, 1800)
 
-    private fun delayedShortPage(shrinkingPage: Int, deliveredHeight: Int = 80) = runBlocking<Unit> {
+    @Test fun shortFinalPageCanSettleAtTheEndOfTheTitle() = delayedShortPage(3, withNext = false)
+
+    private fun delayedShortPage(shrinkingPage: Int, deliveredHeight: Int = 80, withNext: Boolean = true) = runBlocking<Unit> {
         val app = compose.activity.application as KomoriApp
         val token = UUID.randomUUID().toString()
         val book = Manga(sourceId("demonic", "/manga/$token"), "Stream position fixture", "", "")
@@ -74,20 +76,24 @@ class StreamingReaderPositionTest {
             withTimeout(5000) { vm.settings.first { it.preloadPages == 0 && it.continuousChapters } }
             compose.runOnUiThread {
                 vm.selected.value = book
-                vm.chapters.value = listOf(chapter, next)
+                vm.chapters.value = if (withNext) listOf(chapter, next) else listOf(chapter)
                 vm.read(chapter, requestedPage = 0)
                 compose.activity.setContent { MaterialTheme {
                     Box(Modifier.width(300.dp).height(400.dp)) { WebtoonReader(vm, chapter, state = list) }
                 } }
             }
             compose.waitUntil(10000) { compose.onAllNodesWithContentDescription("Ch. 1, page 1, part 1 of 2").fetchSemanticsNodes().isNotEmpty() }
-            val offset = (300 * compose.activity.resources.displayMetrics.density).toInt()
+            compose.waitUntil(5000) {
+                !list.isScrollInProgress && list.firstVisibleItemIndex == 1 && list.firstVisibleItemScrollOffset == 0
+            }
+            compose.waitForIdle()
+            val offset = ((if (withNext) 300 else 100) * compose.activity.resources.displayMetrics.density).toInt()
             val key = "${chapter.id}|$shrinkingPage|0"
             val initialCount = list.layoutInfo.totalItemsCount
             compose.runOnIdle { list.requestScrollToItem(if (shrinkingPage == 3) initialCount - 2 else 3, offset) }
             compose.waitUntil(5000) { list.layoutInfo.visibleItemsInfo.firstOrNull()?.key == key }
             assertTrue("The delayed page must really use the HTTP transport", arrived.await(5, TimeUnit.SECONDS))
-            if (shrinkingPage == 3) {
+            if (shrinkingPage == 3 && withNext) {
                 compose.waitUntil(5000) { list.layoutInfo.totalItemsCount > initialCount }
                 compose.runOnIdle {
                     val index = list.layoutInfo.visibleItemsInfo.first { it.key == key }.index
@@ -102,12 +108,22 @@ class StreamingReaderPositionTest {
                 list.layoutInfo.visibleItemsInfo.firstOrNull()?.let { it.key != key || it.size != placeholderHeight } == true
             }
             compose.waitForIdle()
-            assertEquals("A shrinking network placeholder must not advance to unread pages", key,
-                list.layoutInfo.visibleItemsInfo.firstOrNull()?.key)
-            assertEquals("Short pages must start at the beginning; tall pages retain their offset",
-                if (deliveredHeight == 80) 0 else offset, list.firstVisibleItemScrollOffset)
-            compose.waitUntil(5000) { vm.reader.value?.id == chapter.id && vm.readerPage.value == shrinkingPage }
+            if (withNext) {
+                assertEquals("A shrinking network placeholder must not advance to unread pages", key,
+                    list.layoutInfo.visibleItemsInfo.firstOrNull()?.key)
+                assertEquals("Short pages must start at the beginning; tall pages retain their offset",
+                    if (deliveredHeight == 80) 0 else offset, list.firstVisibleItemScrollOffset)
+                compose.waitUntil(5000) { vm.reader.value?.id == chapter.id && vm.readerPage.value == shrinkingPage }
+            } else {
+                val visible = list.layoutInfo.visibleItemsInfo.single { it.key == key }
+                assertTrue("The final short image must remain entirely visible", visible.offset >= 0 &&
+                    visible.offset + visible.size <= list.layoutInfo.viewportEndOffset)
+                withTimeout(5000) { while (app.dao.progress(chapter.id)?.completed != true) delay(30) }
+            }
             assertNull("Streaming must not create a downloaded chapter", app.dao.download(chapter.id))
+        } catch (error: Throwable) {
+            android.util.Log.e("KomoriStream", "first=${list.firstVisibleItemIndex} offset=${list.firstVisibleItemScrollOffset} reader=${vm.reader.value?.id}:${vm.readerPage.value} visible=${list.layoutInfo.visibleItemsInfo.map { Triple(it.key, it.offset, it.size) }}", error)
+            throw error
         } finally {
             deliver.countDown()
             withContext(Dispatchers.Main) { vm.closeReader(); vm.viewModelScope.cancel() }
