@@ -15,6 +15,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.LazyListLayoutInfo
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -42,6 +43,8 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
 private const val STRIP_HEIGHT = 1024
+
+private data class WebtoonAnchor(val key: String, val scrollOffset: Int, val beforeLayout: LazyListLayoutInfo)
 
 private data class ScrollImage(val file: File, val width: Int, val height: Int) {
     val strips
@@ -103,6 +106,7 @@ fun WebtoonReader(
     val list = state ?: defaultList
     val cacheOwner = remember { Any() }
     var restored by remember { mutableStateOf(false) }
+    var pendingAnchor by remember { mutableStateOf<WebtoonAnchor?>(null) }
     var nextError by remember { mutableStateOf<Exception?>(null) }
     var nextLoading by remember { mutableStateOf(false) }
     var nextAttempt by remember { mutableIntStateOf(0) }
@@ -133,7 +137,7 @@ fun WebtoonReader(
         snapshotFlow {
                 val visible = list.layoutInfo.visibleItemsInfo
                 val current = visible.firstOrNull { it.key.toString().split('|').size == 3 }
-                current?.key?.toString()?.substringBefore('|') == tail.id && visible.any {
+                pendingAnchor == null && current?.key?.toString()?.substringBefore('|') == tail.id && visible.any {
                     val parts = it.key.toString().split('|')
                     parts.size == 3 && parts[0] == tail.id &&
                         (parts[1].toIntOrNull() ?: -1) >= tail.pages - 2
@@ -156,7 +160,7 @@ fun WebtoonReader(
     LaunchedEffect(head.id, previous?.id, settings.continuousChapters, previousAttempt, restored) {
         previousError = null
         if (!restored || !settings.continuousChapters || previous == null) return@LaunchedEffect
-        snapshotFlow { list.firstVisibleItemIndex <= 2 }.first { it }
+        snapshotFlow { pendingAnchor == null && list.firstVisibleItemIndex <= 2 }.first { it }
         if (settings.gapWarnings && ReaderContinuity.gap(previous, head) != null && previous.id !in allowedGaps)
             return@LaunchedEffect
         previousLoading = true
@@ -180,22 +184,67 @@ fun WebtoonReader(
                 moved.y.coerceIn(-viewportHeight * (zoom - 1) / 2, viewportHeight * (zoom - 1) / 2))
         }
         val widthPixels = with(LocalDensity.current) { maxWidth.toPx() }
-        fun position(): Triple<Release, Int, Float>? {
-            val item =
-                list.layoutInfo.visibleItemsInfo.firstOrNull {
-                    it.key.toString().split('|').size == 3
-                } ?: return null
-            val parts = item.key.toString().split('|')
+        val currentWidth by rememberUpdatedState(widthPixels)
+        fun anchorIndex(key: String): Int? {
+            val pageKey = key.substringBeforeLast('|')
+            val strip = key.substringAfterLast('|').toIntOrNull() ?: return null
+            var index = 1
+            window.forEachIndexed { chapterIndex, release ->
+                if (chapterIndex > 0) index++
+                repeat(release.pages.coerceAtLeast(0)) { page ->
+                    val prefix = "${release.id}|$page"
+                    val strips = images[prefix]?.strips ?: 1
+                    if (prefix == pageKey) return index + strip.coerceIn(0, strips - 1)
+                    index += strips
+                }
+            }
+            return null
+        }
+        fun requestAnchor(anchor: WebtoonAnchor) {
+            val index = anchorIndex(anchor.key) ?: return
+            pendingAnchor = anchor.copy(beforeLayout = list.layoutInfo)
+            list.requestScrollToItem(index, anchor.scrollOffset)
+        }
+        fun publishImage(key: String, image: ScrollImage) {
+            val anchor = pendingAnchor ?: list.layoutInfo.visibleItemsInfo.firstOrNull()?.let {
+                WebtoonAnchor(it.key.toString(), (-it.offset).coerceAtLeast(0), list.layoutInfo)
+            }
+            val displayedHeight = (image.height.toFloat() * currentWidth / image.width).coerceAtLeast(1f)
+            if (anchor?.key == "$key|0" && anchor.scrollOffset >= displayedHeight) {
+                pendingAnchor = anchor.copy(scrollOffset = 0)
+            }
+            images[key] = image
+            pendingAnchor?.let(::requestAnchor)
+        }
+        fun position(flushPending: Boolean = false): Triple<Release, Int, Float>? {
+            val anchor = pendingAnchor
+            if (anchor != null && !flushPending) return null
+            val item = list.layoutInfo.visibleItemsInfo.firstOrNull {
+                it.key.toString().split('|').size == 3
+            }
+            val parts = (anchor?.key ?: item?.key?.toString() ?: return null).split('|')
+            if (parts.size != 3) return null
             val release = window.find { it.id == parts[0] } ?: return null
             val page = parts[1].toIntOrNull() ?: return null
             val strip = parts[2].toIntOrNull() ?: return null
             val image = images["${release.id}|$page"] ?: return null
-            val sourceOffset = (-item.offset).coerceAtLeast(0) * image.width / widthPixels
+            val offset = anchor?.scrollOffset ?: (-item!!.offset).coerceAtLeast(0)
+            val sourceOffset = offset * image.width / currentWidth.coerceAtLeast(1f)
             return Triple(
                 release,
                 page,
                 ((strip * STRIP_HEIGHT + sourceOffset) / image.height).coerceIn(0f, 1f),
             )
+        }
+        LaunchedEffect(window) { pendingAnchor?.let(::requestAnchor) }
+        LaunchedEffect(list) {
+            snapshotFlow {
+                pendingAnchor?.takeIf {
+                    list.layoutInfo !== it.beforeLayout &&
+                        list.layoutInfo.visibleItemsInfo.firstOrNull()?.key == it.key &&
+                        list.firstVisibleItemScrollOffset == it.scrollOffset
+                }
+            }.filterNotNull().collect { if (pendingAnchor == it) pendingAnchor = null }
         }
         LaunchedEffect(images["${initialChapter.id}|$initialPage"], widthPixels) {
             val image = images["${initialChapter.id}|$initialPage"] ?: return@LaunchedEffect
@@ -217,6 +266,7 @@ fun WebtoonReader(
                     .distinctUntilChanged()
                     .debounce(150)
                     .collect { (release, page, fraction) ->
+                        if (pendingAnchor != null) return@collect
                         vm.scrollChapterPosition(release, page, fraction, session)
                         val index = window.indexOfFirst { it.id == release.id }
                         if (index > 1 || window.size > 3) {
@@ -240,7 +290,7 @@ fun WebtoonReader(
             onDispose {
                 vm.releaseReaderPages(cacheOwner)
                 if (restored)
-                    position()?.let { (release, page, fraction) ->
+                    position(flushPending = true)?.let { (release, page, fraction) ->
                         vm.scrollChapterPosition(release, page, fraction, session, flush = true)
                     }
             }
@@ -295,7 +345,7 @@ fun WebtoonReader(
                                     if (attempt > 0) vm.invalidateCachedPage(release, page)
                                     val file = vm.pageFileFor(release, page)
                                     vm.prefetchAfter(release, page)
-                                    images[imageKey] =
+                                    val image =
                                         withContext(Dispatchers.IO) {
                                             val bounds =
                                                 BitmapFactory.Options().apply {
@@ -308,6 +358,7 @@ fun WebtoonReader(
                                                 )
                                             ScrollImage(file, bounds.outWidth, bounds.outHeight)
                                         }
+                                    publishImage(imageKey, image)
                                 } catch (e: CancellationException) {
                                     throw e
                                 } catch (e: Exception) {
@@ -466,7 +517,7 @@ fun WebtoonReader(
             item(key = "end-${tail.id}") {
                 LaunchedEffect(tail.id, session) {
                     snapshotFlow {
-                        list.layoutInfo.visibleItemsInfo.any { it.key == "end-${tail.id}" } &&
+                        pendingAnchor == null && list.layoutInfo.visibleItemsInfo.any { it.key == "end-${tail.id}" } &&
                             images["${tail.id}|${tail.pages - 1}"] != null
                     }.distinctUntilChanged().collect { visible ->
                         if (visible) vm.completeVisibleChapter(tail, session)

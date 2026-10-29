@@ -41,7 +41,9 @@ class StreamingReaderPositionTest {
 
     @Test fun delayedShortLastPageDoesNotSkipIntoNextChapter() = delayedShortPage(3)
 
-    private fun delayedShortPage(shrinkingPage: Int) = runBlocking<Unit> {
+    @Test fun delayedTallPageKeepsExistingPixelOffset() = delayedShortPage(1, 1800)
+
+    private fun delayedShortPage(shrinkingPage: Int, deliveredHeight: Int = 80) = runBlocking<Unit> {
         val app = compose.activity.application as KomoriApp
         val token = UUID.randomUUID().toString()
         val book = Manga(sourceId("demonic", "/manga/$token"), "Stream position fixture", "", "")
@@ -54,15 +56,15 @@ class StreamingReaderPositionTest {
         val arrived = CountDownLatch(1)
         val deliver = CountDownLatch(1)
         val tall = image(1800)
-        val short = image(80)
+        val deliveredImage = image(deliveredHeight)
         val client = OkHttpClient.Builder().addInterceptor { chain ->
             val request = chain.request()
             val body = if (request.url.host == "demonicscans.org")
-                (0..3).joinToString("") { "<img class='imgholder' alt='page' src='https://images.example/$token/$it.png'>" }.toResponseBody()
+                (0 until if (request.url.encodedPath.endsWith("/next")) 3 else 4).joinToString("") { "<img class='imgholder' alt='page' src='https://images.example/$token/$it.png'>" }.toResponseBody()
             else {
                 val page = request.url.pathSegments.last().substringBefore('.').toInt()
                 if (page == shrinkingPage) { arrived.countDown(); check(deliver.await(30, TimeUnit.SECONDS)) }
-                (if (page == shrinkingPage) short else tall).toResponseBody()
+                (if (page == shrinkingPage) deliveredImage else tall).toResponseBody()
             }
             Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(200).message("OK").body(body).build()
         }.build()
@@ -85,16 +87,26 @@ class StreamingReaderPositionTest {
             compose.runOnIdle { list.requestScrollToItem(if (shrinkingPage == 3) initialCount - 2 else 3, offset) }
             compose.waitUntil(5000) { list.layoutInfo.visibleItemsInfo.firstOrNull()?.key == key }
             assertTrue("The delayed page must really use the HTTP transport", arrived.await(5, TimeUnit.SECONDS))
+            if (shrinkingPage == 3) {
+                compose.waitUntil(5000) { list.layoutInfo.totalItemsCount > initialCount }
+                compose.runOnIdle {
+                    val index = list.layoutInfo.visibleItemsInfo.first { it.key == key }.index
+                    list.requestScrollToItem(index, offset)
+                }
+                compose.waitUntil(5000) { list.firstVisibleItemScrollOffset == offset }
+            }
             assertEquals(offset, list.firstVisibleItemScrollOffset)
-            if (shrinkingPage == 3) compose.waitUntil(5000) { list.layoutInfo.totalItemsCount > initialCount }
+            val placeholderHeight = list.layoutInfo.visibleItemsInfo.first().size
             deliver.countDown()
             compose.waitUntil(10000) {
-                list.layoutInfo.visibleItemsInfo.firstOrNull()?.let { it.key != key || it.size < offset } == true
+                list.layoutInfo.visibleItemsInfo.firstOrNull()?.let { it.key != key || it.size != placeholderHeight } == true
             }
             compose.waitForIdle()
             assertEquals("A shrinking network placeholder must not advance to unread pages", key,
                 list.layoutInfo.visibleItemsInfo.firstOrNull()?.key)
-            assertEquals("A page shorter than the placeholder offset must open at its beginning", 0, list.firstVisibleItemScrollOffset)
+            assertEquals("Short pages must start at the beginning; tall pages retain their offset",
+                if (deliveredHeight == 80) 0 else offset, list.firstVisibleItemScrollOffset)
+            compose.waitUntil(5000) { vm.reader.value?.id == chapter.id && vm.readerPage.value == shrinkingPage }
             assertNull("Streaming must not create a downloaded chapter", app.dao.download(chapter.id))
         } finally {
             deliver.countDown()

@@ -1,5 +1,10 @@
 # Komori changelog
 
+## Unreleased
+
+- Keep the current continuous-reader page visible when a streamed image replaces a taller loading placeholder. An obsolete placeholder offset can no longer skip unread pages or spill into the next chapter.
+- Wait for the corrected viewport before updating reading progress, chapter-window paging or completion. Preserve offsets that still fit tall images, lazy strip decoding, zoom, retries and the ten-image preload limit.
+
 ## 0.8.8
 
 - Add Background downloads controls in Settings and the Downloads menu. Show Android's battery restriction status and let users explicitly allow background transfers through system settings.
