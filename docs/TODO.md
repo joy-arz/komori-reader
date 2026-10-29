@@ -197,3 +197,11 @@ Released repair work: durable per-page repair markers, Needs repair counts, part
 - [x] API 26/30/34/36 emulator acceptance, app switching, battery-exempt forced Doze with next-chapter continuation, and 5/5 Authors selection stress.
 - [ ] Verify the affected physical Android 14 handset after granting background access; OEM policy and real-source behavior remain unverified.
 - [ ] Investigate intermittent ManualRefresh native center-tap fixture failure seen on the first merged-head API 30 run; fresh rerun passed without source/assertion changes.
+
+
+### October 30 streamed reader position
+
+- [x] Reproduce the visible placeholder shrinking past its retained offset, skipping an unread page, on all four emulator APIs.
+- [x] Add a logical page anchor and delay progress/paging publication until the corrected viewport is measured.
+- [ ] Accept delayed short/tall image and chapter-boundary fixtures plus the full device matrix (PR #6).
+- [ ] Verify sustained online DemonicScans reading on the affected Android 14 phone.
