@@ -1,0 +1,19 @@
+{
+  "version": "0.8.9",
+  "sha256": "778a4dece2d41b5dffeb9862e8e096a8486295ceaa8566029e7df9fd4f354553",
+  "apk_size": 2584243,
+  "report_url": "https://www.virustotal.com/gui/file/778a4dece2d41b5dffeb9862e8e096a8486295ceaa8566029e7df9fd4f354553/detection",
+  "recorded_at": "2026-10-29T18:55:09+00:00",
+  "status": "completed",
+  "source": "virustotal-api",
+  "stats": {
+    "malicious": 0,
+    "suspicious": 0,
+    "undetected": 68,
+    "harmless": 0,
+    "timeout": 0,
+    "confirmed-timeout": 0,
+    "failure": 0,
+    "type-unsupported": 7
+  }
+}
