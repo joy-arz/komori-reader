@@ -13,8 +13,8 @@ The original chapter-boundary variant failed earlier during setup: it requested 
 ## Implementation
 
 - Detect when newly resolved dimensions invalidate the offset inside the visible placeholder; retain the same chapter/page and start that unread image at its beginning.
-- Keep a logical pending page/strip anchor through layout changes; recalculate its flat index from current chapter and strip counts rather than assuming fixed one-item pages.
-- Publish progress, chapter-window paging and completion only after the requested layout is measured. A legitimate end-of-list clamp or subsequent user input must not leave a permanently pending anchor. Keep an intended anchor for an exit checkpoint only while the old layout remains current.
+- Keep a logical pending page/strip anchor through layout changes; recalculate its flat index from current chapter and strip counts rather than assuming fixed one-item pages. Retain its measured screen offset through late loads above an end-of-list clamp; discard that stabilization when the viewport moves or a new user scroll starts.
+- Serialize image metadata publication, chapter-window mutations and anchor requests on Main.immediate so remeasurement cannot observe half an update. Publish progress, chapter-window paging and completion only after the requested layout is measured. A legitimate end-of-list clamp or subsequent user input must not leave a permanently pending anchor. Keep an intended anchor for an exit checkpoint only while the old layout remains current.
 - Keep valid offsets for taller images and preserve bounded strip decoding/cache pins, retries, scrolling/zoom, chapter ownership and speculative preload limits.
 - Hoist an optional LazyListState for deterministic layout acceptance; production uses the same default remembered state.
 
@@ -29,3 +29,9 @@ The original chapter-boundary variant failed earlier during setup: it requested 
 Local validation initially encountered a missing Gradle/plugin cache. The online dependency restore was stopped once cloud reproduction was available; this was not an app failure.
 
 The first fixed head afc803f passed all three targeted cases locally and full API 30/34/36 checks, but API 26 repeated the within-chapter assertion. The fixture now explicitly waits for initial restoration to finish before requesting its test position. A separate end-of-title case covers the legitimate list clamp; the guard acknowledges the next measured layout rather than requiring an impossible exact top alignment. Final validation must accept this head; earlier partial passes are not presented as final acceptance.
+
+## Controlled APK comparison
+
+On the same local API 30 emulator, the exact same updated test APK was run against the old 00bd441 reader implementation and the fixed implementation. The old APK failed three of four cases: an unread-page jump, last page to next chapter, and a short final image leaving the visible viewport; its tall-image offset control passed. The fixed APK passed all four in 26.180 seconds. The fixture explicitly awaits the measured placeholder key and offset before releasing the response, and includes a real swipe after the short-page correction.
+
+Temporary event tracing exposed metadata/anchor publication being interleaved with measurement under coroutine effect dispatching. Critical geometry mutations now explicitly run on Main.immediate. Temporary traces were removed before this commit; no production logging of reading identifiers was added. The final four-API acceptance remains required, including repeated boundary coverage; this local result is not a physical-phone or live-site pass.

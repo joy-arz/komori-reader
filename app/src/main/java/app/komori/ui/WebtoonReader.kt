@@ -107,6 +107,7 @@ fun WebtoonReader(
     val cacheOwner = remember { Any() }
     var restored by remember { mutableStateOf(false) }
     var pendingAnchor by remember { mutableStateOf<WebtoonAnchor?>(null) }
+    var retainedAnchor by remember { mutableStateOf<WebtoonAnchor?>(null) }
     fun anchorIndex(key: String): Int? {
         val pageKey = key.substringBeforeLast('|')
         val strip = key.substringAfterLast('|').toIntOrNull() ?: return null
@@ -124,12 +125,22 @@ fun WebtoonReader(
     }
     fun requestAnchor(anchor: WebtoonAnchor) {
         val index = anchorIndex(anchor.key) ?: return
+        retainedAnchor = anchor
         pendingAnchor = anchor.copy(beforeLayout = list.layoutInfo)
         list.requestScrollToItem(index, anchor.scrollOffset)
     }
+    fun retainedPosition(): WebtoonAnchor? {
+        val target = retainedAnchor ?: return null
+        val item = list.layoutInfo.visibleItemsInfo.firstOrNull { it.key == target.key }
+        if (list.isScrollInProgress || item == null || item.offset != -target.scrollOffset) {
+            retainedAnchor = null
+            return null
+        }
+        return target
+    }
     fun updateWindow(value: List<Release>) {
         window = value
-        pendingAnchor?.let(::requestAnchor)
+        (pendingAnchor ?: retainedPosition())?.let(::requestAnchor)
     }
     var nextError by remember { mutableStateOf<Exception?>(null) }
     var nextLoading by remember { mutableStateOf(false) }
@@ -171,7 +182,9 @@ fun WebtoonReader(
         nextLoading = true
         try {
             val resolved = vm.resolveChapter(next)
-            if (window.none { it.id == resolved.id }) updateWindow(window + resolved)
+            withContext(Dispatchers.Main.immediate) {
+                if (window.none { it.id == resolved.id }) updateWindow(window + resolved)
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -190,7 +203,9 @@ fun WebtoonReader(
         previousLoading = true
         try {
             val resolved = vm.resolveChapter(previous)
-            if (window.none { it.id == resolved.id }) updateWindow(listOf(resolved) + window)
+            withContext(Dispatchers.Main.immediate) {
+                if (window.none { it.id == resolved.id }) updateWindow(listOf(resolved) + window)
+            }
         } catch (e: CancellationException) { throw e }
         catch (e: Exception) { previousError = e }
         finally { previousLoading = false }
@@ -210,7 +225,7 @@ fun WebtoonReader(
         val widthPixels = with(LocalDensity.current) { maxWidth.toPx() }
         val currentWidth by rememberUpdatedState(widthPixels)
         fun publishImage(key: String, image: ScrollImage) {
-            val anchor = pendingAnchor ?: list.layoutInfo.visibleItemsInfo.firstOrNull()?.let {
+            val anchor = pendingAnchor ?: retainedPosition() ?: list.layoutInfo.visibleItemsInfo.firstOrNull()?.let {
                 WebtoonAnchor(it.key.toString(), (-it.offset).coerceAtLeast(0), list.layoutInfo)
             }
             val displayedHeight = (image.height.toFloat() * currentWidth / image.width).coerceAtLeast(1f)
@@ -218,7 +233,7 @@ fun WebtoonReader(
                 pendingAnchor = anchor.copy(scrollOffset = 0)
             }
             images[key] = image
-            pendingAnchor?.let(::requestAnchor)
+            (pendingAnchor ?: retainedPosition())?.let(::requestAnchor)
         }
         fun position(flushPending: Boolean = false): Triple<Release, Int, Float>? {
             val pending = pendingAnchor
@@ -246,19 +261,40 @@ fun WebtoonReader(
                 pendingAnchor?.takeIf {
                     list.layoutInfo !== it.beforeLayout
                 }
-            }.filterNotNull().collect { if (pendingAnchor == it) pendingAnchor = null }
+            }.filterNotNull().collect { target ->
+                withContext(Dispatchers.Main.immediate) {
+                    if (pendingAnchor == target) {
+                        retainedAnchor = list.layoutInfo.visibleItemsInfo.firstOrNull { it.key == target.key }?.let {
+                            target.copy(scrollOffset = -it.offset, beforeLayout = list.layoutInfo)
+                        }
+                        pendingAnchor = null
+                    }
+                }
+            }
+        }
+        LaunchedEffect(list) {
+            snapshotFlow { list.isScrollInProgress }.filter { it }.collect {
+                withContext(Dispatchers.Main.immediate) {
+                    if (list.isScrollInProgress) {
+                        retainedAnchor = null
+                        pendingAnchor = null
+                    }
+                }
+            }
         }
         LaunchedEffect(images["${initialChapter.id}|$initialPage"], widthPixels) {
             val image = images["${initialChapter.id}|$initialPage"] ?: return@LaunchedEffect
-            if (!restored) {
-                val sourceY = (initialFraction * image.height).toInt().coerceIn(0, image.height - 1)
-                val preceding =
-                    (0 until initialPage).sumOf { images["${initialChapter.id}|$it"]?.strips ?: 1 }
-                list.scrollToItem(
-                    1 + preceding + sourceY / STRIP_HEIGHT,
-                    ((sourceY % STRIP_HEIGHT) * widthPixels / image.width).toInt(),
-                )
-                restored = true
+            withContext(Dispatchers.Main.immediate) {
+                if (!restored) {
+                    val sourceY = (initialFraction * image.height).toInt().coerceIn(0, image.height - 1)
+                    val preceding =
+                        (0 until initialPage).sumOf { images["${initialChapter.id}|$it"]?.strips ?: 1 }
+                    list.scrollToItem(
+                        1 + preceding + sourceY / STRIP_HEIGHT,
+                        ((sourceY % STRIP_HEIGHT) * widthPixels / image.width).toInt(),
+                    )
+                    restored = true
+                }
             }
         }
         LaunchedEffect(restored) {
@@ -268,15 +304,17 @@ fun WebtoonReader(
                     .distinctUntilChanged()
                     .debounce(150)
                     .collect { (release, page, fraction) ->
-                        if (pendingAnchor != null) return@collect
-                        vm.scrollChapterPosition(release, page, fraction, session)
-                        val index = window.indexOfFirst { it.id == release.id }
-                        if (index > 1 || window.size > 3) {
-                            updateWindow(window.drop((index - 1).coerceAtLeast(0)).take(3))
-                            val retained = window.map { it.id }.toSet()
-                            images.keys
-                                .filter { it.substringBefore('|') !in retained }
-                                .forEach { images.remove(it) }
+                        withContext(Dispatchers.Main.immediate) {
+                            if (pendingAnchor != null) return@withContext
+                            vm.scrollChapterPosition(release, page, fraction, session)
+                            val index = window.indexOfFirst { it.id == release.id }
+                            if (index > 1 || window.size > 3) {
+                                updateWindow(window.drop((index - 1).coerceAtLeast(0)).take(3))
+                                val retained = window.map { it.id }.toSet()
+                                images.keys
+                                    .filter { it.substringBefore('|') !in retained }
+                                    .forEach { images.remove(it) }
+                            }
                         }
                     }
         }
@@ -360,7 +398,7 @@ fun WebtoonReader(
                                                 )
                                             ScrollImage(file, bounds.outWidth, bounds.outHeight)
                                         }
-                                    publishImage(imageKey, image)
+                                    withContext(Dispatchers.Main.immediate) { publishImage(imageKey, image) }
                                 } catch (e: CancellationException) {
                                     throw e
                                 } catch (e: Exception) {

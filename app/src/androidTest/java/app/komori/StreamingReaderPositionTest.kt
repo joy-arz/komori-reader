@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.dp
@@ -79,7 +80,7 @@ class StreamingReaderPositionTest {
                 vm.chapters.value = if (withNext) listOf(chapter, next) else listOf(chapter)
                 vm.read(chapter, requestedPage = 0)
                 compose.activity.setContent { MaterialTheme {
-                    Box(Modifier.width(300.dp).height(400.dp)) { WebtoonReader(vm, chapter, state = list) }
+                    Box(Modifier.width(300.dp).height(400.dp).testTag("streaming-viewport")) { WebtoonReader(vm, chapter, state = list) }
                 } }
             }
             compose.waitUntil(10000) { compose.onAllNodesWithContentDescription("Ch. 1, page 1, part 1 of 2").fetchSemanticsNodes().isNotEmpty() }
@@ -101,6 +102,9 @@ class StreamingReaderPositionTest {
                 }
                 compose.waitUntil(5000) { list.firstVisibleItemScrollOffset == offset }
             }
+            compose.waitUntil(5000) {
+                list.layoutInfo.visibleItemsInfo.firstOrNull()?.let { it.key == key && it.offset == -offset } == true
+            }
             assertEquals(offset, list.firstVisibleItemScrollOffset)
             val placeholderHeight = list.layoutInfo.visibleItemsInfo.first().size
             deliver.countDown()
@@ -114,6 +118,10 @@ class StreamingReaderPositionTest {
                 assertEquals("Short pages must start at the beginning; tall pages retain their offset",
                     if (deliveredHeight == 80) 0 else offset, list.firstVisibleItemScrollOffset)
                 compose.waitUntil(5000) { vm.reader.value?.id == chapter.id && vm.readerPage.value == shrinkingPage }
+                if (shrinkingPage == 1 && deliveredHeight == 80) {
+                    compose.onNodeWithTag("streaming-viewport").performTouchInput { swipeUp(durationMillis = 600) }
+                    compose.waitUntil(5000) { vm.reader.value?.id != chapter.id || vm.readerPage.value > shrinkingPage }
+                }
             } else {
                 val visible = list.layoutInfo.visibleItemsInfo.single { it.key == key }
                 assertTrue("The final short image must remain entirely visible", visible.offset >= 0 &&
