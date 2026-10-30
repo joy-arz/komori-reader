@@ -210,5 +210,5 @@ Released repair work: durable per-page repair markers, Needs repair counts, part
 
 - [x] Confirm provisional 420 dp placeholders/strip counts remain for completed offline chapters in 0.8.9.
 - [x] Prepare valid completed-download image headers before chapter insertion, retaining lazy bitmap decoding and streaming anchors.
-- [ ] Accept five-chapter multi-page offline coverage, concurrent-writer reading and the full device/build matrix.
-- [ ] Verify sustained downloaded continuous reading near chapter boundaries on the affected Android 14 handset; the exact reported skip is not yet reproduced on physical hardware.
+- [x] Accept five-chapter multi-page offline coverage, current-page/pixel retention during next-chapter preparation, concurrent-writer reading and the full API 26/30/34/36 matrix (93 tests each). Signed 0.8.11 published and verified after exact merged-commit acceptance.
+- [ ] Verify sustained downloaded continuous reading near chapter boundaries on the affected Android 14 handset; the reported landing is further ahead in the same chapter, and the exact skip is not yet reproduced on physical hardware.

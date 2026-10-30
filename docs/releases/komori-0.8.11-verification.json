@@ -1,0 +1,68 @@
+{
+  "status": "PASS",
+  "version": "0.8.11",
+  "releaseCommit": "3ae8dbc9be386d40cbcfea92cf57e110fe24152d",
+  "versionCode": 134,
+  "package": "app.komori.reader",
+  "bytes": 2584243,
+  "sha256": "3734c29e002f5c82fd54772648756c655ed6949b050034511c00494077879f8f",
+  "signingCertificateSha256": "0f654f439d6059cf8caea9fa1d5403342cc47b1b5a8228bf90e2858ec423d5fd",
+  "minimumAndroidApi": 26,
+  "targetAndroidApi": 36,
+  "fullNotesPublished": true,
+  "readerHeaderPreparationInReleaseMapping": true,
+  "fixtureMarkersAbsentFromReleaseDex": true,
+  "readmeUpdated": true,
+  "virusTotalEvidence": "docs/security/virustotal/0.8.11.json",
+  "release": "https://github.com/joy-arz/komori-reader/releases/tag/v0.8.11",
+  "implementationPr": "https://github.com/joy-arz/komori-reader/pull/7",
+  "acceptancePr": "https://github.com/joy-arz/komori-reader/pull/8",
+  "prHead": "26818795968568b1ee123b6f4bede1a13478d214",
+  "prBuild": 40995810934,
+  "prDevices": 40995810923,
+  "prDeviceAttempt": 1,
+  "prSelectionStress": 40995811294,
+  "selectionStressPassed": 5,
+  "mergeBuild": 40996932560,
+  "mergeDevices": 40996932569,
+  "mergeDeviceAttempt": 1,
+  "releaseRun": 40996996725,
+  "releaseAttempt": 1,
+  "instrumentedPerApi": {
+    "26": 93,
+    "30": 93,
+    "34": 93,
+    "36": 93
+  },
+  "jvm": {
+    "total": 202,
+    "passed": 196,
+    "optionalLiveNetworkSkipped": 6
+  },
+  "lintDebug": {
+    "errors": 0,
+    "warnings": 50,
+    "sameWarningMessagesAs089": true
+  },
+  "localFinalCombined": {
+    "androidApi": 30,
+    "passed": 10,
+    "seconds": 50.175
+  },
+  "additionalLocalAuthorsPasses": 4,
+  "pythonCasesPassed": 10,
+  "blockedCandidate": {
+    "version": "0.8.10",
+    "published": false,
+    "commit": "0edeef3ac4f0740aa785d194f2e3befe74f75751",
+    "mergeDevices": 40991099751,
+    "releaseRun": 40991118495,
+    "attempts": 2,
+    "reason": "Unchanged native Authors acceptance fixture failed; exact-commit gate preserved. Tag retained and no third rerun."
+  },
+  "limitations": [
+    "The exact reported handset skip was not reproduced; provisional saved-page geometry was demonstrated and fixed viewport/geometry verified with network-blocked file fixtures.",
+    "Sustained downloaded DemonicScans reading on the affected physical Android 14 handset remains pending.",
+    "No new live-source, OEM battery, TalkBack or physical low-memory/storage performance pass is claimed."
+  ]
+}

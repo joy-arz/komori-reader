@@ -1,6 +1,6 @@
-## Install on Android
+# Unpublished 0.8.10 candidate
 
-Download **komori-0.8.10.apk** from Assets below. Android 8.0 or newer. Install over your existing app to preserve your Library, progress and downloads.
+No APK was published for this candidate. Its exact-commit release checks rejected an existing Authors acceptance fixture twice. The immutable tag remains as failure evidence. Version 0.8.11 carries the same reader fix with corrected acceptance tests and complete release notes.
 
 ## Komori 0.8.10
 
