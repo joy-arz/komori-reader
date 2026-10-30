@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.ViewModelProvider
@@ -63,9 +64,13 @@ class ManualRefreshTest {
         val original = pageFile(app, id, 1).readBytes()
         val activity = compose.activity
         fun shown(description: String): androidx.test.uiautomator.UiObject2 {
-            compose.waitForIdle()
-            return device.wait(Until.findObject(By.desc(description)), 10_000)
-                ?: throw AssertionError("Missing $description")
+            var target: androidx.test.uiautomator.UiObject2? = null
+            compose.waitUntil(10_000) {
+                val rendered = compose.onAllNodesWithContentDescription(description).fetchSemanticsNodes().isNotEmpty()
+                target = if (rendered) device.findObject(By.desc(description)) else null
+                target != null
+            }
+            return checkNotNull(target) { "Missing $description" }
         }
         suspend fun settled(condition: () -> Boolean) = withTimeout(15_000) { while (!condition()) delay(50) }
         try {

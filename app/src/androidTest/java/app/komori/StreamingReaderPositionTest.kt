@@ -145,11 +145,21 @@ class StreamingReaderPositionTest {
                 if (holdScroll && number == 3) {
                     val releaseScroll = CompletableDeferred<Unit>()
                     val scroll = withContext(Dispatchers.Main) {
-                        vm.viewModelScope.launch { list.scroll { scrollBy(100000f); releaseScroll.await() } }
+                        vm.viewModelScope.launch {
+                            list.scroll(androidx.compose.foundation.MutatePriority.UserInput) {
+                                val last = list.layoutInfo.visibleItemsInfo.first { it.key == "${chapters[number - 2].id}|5|0" }
+                                scrollBy((last.size + last.offset).toFloat())
+                                val separator = list.layoutInfo.visibleItemsInfo.first { it.key == "chapter-${chapter.id}" }
+                                scrollBy((separator.size + separator.offset).toFloat())
+                                releaseScroll.await()
+                            }
+                        }
                     }
                     try {
-                        compose.waitUntil(5000) { vm.reader.value?.id == chapter.id && vm.readerPage.value == 5 }
+                        compose.waitUntil(5000) { vm.reader.value?.id == chapter.id && vm.readerPage.value == 0 }
                         compose.waitForIdle()
+                        assertEquals("The chapter-counter transition must enter the first image", "${chapter.id}|0|0",
+                            list.layoutInfo.visibleItemsInfo.first { it.key.toString().split('|').size == 3 }.key)
                         assertTrue("The synthetic gesture must still own scrolling", list.isScrollInProgress)
                         assertEquals("Do not remove chapter rows while a gesture or fling is active", 37, list.layoutInfo.totalItemsCount)
                         val anchor = list.layoutInfo.visibleItemsInfo.first { it.key.toString().split('|').size == 3 }
@@ -302,11 +312,19 @@ class StreamingReaderPositionTest {
             assertTrue("The delayed page must really use the HTTP transport", arrived.await(5, TimeUnit.SECONDS))
             if (shrinkingPage == 3 && withNext) {
                 compose.waitUntil(5000) { list.layoutInfo.totalItemsCount > initialCount }
-                compose.runOnIdle {
-                    val index = list.layoutInfo.visibleItemsInfo.first { it.key == key }.index
-                    list.requestScrollToItem(index, offset)
+                val releaseGesture = CompletableDeferred<Unit>()
+                val gesture = withContext(Dispatchers.Main) {
+                    vm.viewModelScope.launch {
+                        list.scroll(androidx.compose.foundation.MutatePriority.UserInput) {
+                            scrollBy((offset - list.firstVisibleItemScrollOffset).toFloat())
+                            releaseGesture.await()
+                        }
+                    }
                 }
-                compose.waitUntil(5000) { list.firstVisibleItemScrollOffset == offset }
+                try {
+                    compose.waitUntil(5000) { list.isScrollInProgress && list.firstVisibleItemScrollOffset == offset }
+                    compose.waitForIdle()
+                } finally { releaseGesture.complete(Unit); gesture.join() }
             }
             compose.waitUntil(5000) {
                 list.layoutInfo.visibleItemsInfo.firstOrNull()?.let { it.key == key && it.offset == -offset } == true
