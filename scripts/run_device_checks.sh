@@ -14,6 +14,10 @@ adb shell dumpsys window > device-diagnostics/windows-before.txt
 test_status=0
 ./gradlew connectedDebugAndroidTest --no-daemon || test_status=$?
 # Preserve UI failure captures before restart probes clear fixture application data.
+if [[ "$test_status" != 0 ]]; then
+    adb root >/dev/null 2>&1 || true
+    adb wait-for-device
+fi
 adb pull /sdcard/Android/data/app.komori.reader.debug/files/ device-diagnostics/app-captures/ || true
 if [[ "${KOMORI_DISPOSABLE_EMULATOR:-0}" == 1 ]]; then
     probe_status=0

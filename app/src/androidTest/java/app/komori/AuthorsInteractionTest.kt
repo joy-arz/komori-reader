@@ -3,6 +3,9 @@ package app.komori
 import android.content.Intent
 import androidx.activity.compose.setContent
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.longClick
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.platform.app.InstrumentationRegistry
@@ -154,7 +157,7 @@ class AuthorsInteractionTest {
             sortBy("Latest")
             assertTrue(waitForNative(Until.hasObject(By.text("Catalog 1 page 0")), 5000))
             assertFalse(hasNative(By.text("Select")))
-            device.findObject(By.desc("Catalog 0 page 0")).longClick()
+            compose.onNodeWithContentDescription("Catalog 0 page 0").performTouchInput { longClick() }
             assertTrue(waitForNative(Until.hasObject(By.text("1 selected")), 5000))
             device.findObject(By.text("Done")).click()
             assertFalse(hasNative(By.text("Select")))
