@@ -63,19 +63,19 @@ class StreamingReaderPositionTest {
         val book = Manga(token, "Offline position fixture", "", "")
         val chapters = (1..5).map { number -> Release("$token-$number", book.id, "$number", null, "", "en", emptyList(), "", 6, local = true) }
         val previous = app.settings.flow.first()
+        app.settings.number("preloadPages", 0)
+        app.settings.set("continuousChapters", true)
+        app.settings.set("resume", true)
         val client = OkHttpClient.Builder().addInterceptor { throw AssertionError("Downloaded reader must not use the network") }.build()
         val vm = withContext(Dispatchers.Main) { ReaderViewModel(app, Sources(client, client)) }
         val list = LazyListState(initialPage + 1)
         try {
-            app.settings.number("preloadPages", 0)
-            app.settings.set("continuousChapters", true)
             app.dao.putManga(book)
             for (chapter in chapters) {
                 chapterDirectory(app, chapter.id).mkdirs()
                 for (page in 0 until chapter.pages) pageFile(app, chapter.id, page).writeBytes(image(if (page == 5) 800 else 1800))
                 app.dao.putDownload(Download(chapter.id, book.id, chapter.label, 6, 6, "Complete"))
             }
-            app.settings.set("resume", true)
             if (continueButton || enterByScrolling) app.dao.putProgress(Progress(chapters[1].id, book.id, chapters[1].key, 5, false, .95f))
             compose.waitUntil(5000) { vm.settings.value.let { it.preloadPages == 0 && it.continuousChapters && it.resume } }
             compose.runOnUiThread {
@@ -181,6 +181,7 @@ class StreamingReaderPositionTest {
                 }
             }
         } catch (error: Throwable) {
+            android.util.Log.e("KomoriOffline", "storedPreload=${app.settings.flow.first().preloadPages} scopeActive=${vm.viewModelScope.isActive} sources=${vm.settings.value.enabledSources}")
             android.util.Log.e("KomoriOffline", "first=${list.firstVisibleItemIndex}:${list.firstVisibleItemScrollOffset} total=${list.layoutInfo.totalItemsCount} settings=${vm.settings.value.preloadPages}/${vm.settings.value.continuousChapters}/${vm.settings.value.resume} visible=${list.layoutInfo.visibleItemsInfo.map { Triple(it.key, it.offset, it.size) }}", error)
             throw error
         } finally {
