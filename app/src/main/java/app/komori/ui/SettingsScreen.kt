@@ -95,6 +95,14 @@ internal fun Toggle(title: String, detail: String, checked: Boolean, change: (Bo
 @Composable
 internal fun SettingsScreen(vm: ReaderViewModel, settings: Settings) {
     var section by rememberSaveable { mutableStateOf("Reading") }
+    val pendingAdultSource by vm.pendingAdultSource.collectAsStateWithLifecycle()
+    if (pendingAdultSource != null) AlertDialog(
+        onDismissRequest = vm::dismissAdultSource,
+        title = { Text("Adults only · 18+") },
+        text = { Text("Adult sources contain sexually explicit material intended only for people aged 18 or older. Are you 18 or older? Your confirmation applies to all adult sources.") },
+        confirmButton = { TextButton(onClick = { vm.confirmAdultSource() }) { Text("I am 18 or older") } },
+        dismissButton = { TextButton(onClick = vm::dismissAdultSource) { Text("No, keep disabled") } },
+    )
     Column(Modifier.fillMaxSize()) {
         Row(
             Modifier.fillMaxWidth()

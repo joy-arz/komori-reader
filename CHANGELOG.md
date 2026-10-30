@@ -1,5 +1,12 @@
 # Komori changelog
 
+## 0.8.12
+
+- Start fresh installations with DemonicScans and WeebCentral enabled. MangaDex and the five dedicated adult sources start disabled.
+- Ask whether the user is 18 or older before enabling the first adult source. Declining or dismissing leaves it disabled; accepting enables that source and saves one confirmation for all adult sources. MangaDex can be enabled without the adult warning.
+- Preserve existing source choices during upgrades, including sources previously enabled under the old defaults. Existing adult-source users keep access without a new launch prompt, and the confirmation remains saved after disabling and re-enabling sources.
+- Add real preference migration and UI coverage for defaults, declined confirmation, atomic enablement, persistence and later source switches. Keep existing Library, progress, downloads, package and signing identity.
+
 ## 0.8.11
 
 - Stabilize downloaded continuous-reader chapter transitions by reading saved image dimensions before displaying the first chapter or adding the next/previous chapter. Valid completed downloads enter with their final page heights and strip counts, instead of changing from loading placeholders during scrolling.
