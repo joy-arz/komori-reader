@@ -13,6 +13,8 @@ adb shell dumpsys window > device-diagnostics/windows-before.txt
 
 test_status=0
 ./gradlew connectedDebugAndroidTest --no-daemon || test_status=$?
+# Preserve UI failure captures before restart probes clear fixture application data.
+adb pull /sdcard/Android/data/app.komori.reader.debug/files/ device-diagnostics/app-captures/ || true
 if [[ "${KOMORI_DISPOSABLE_EMULATOR:-0}" == 1 ]]; then
     probe_status=0
     for attempt in 1 2 3; do
@@ -39,7 +41,6 @@ for capture in download-maintenance scheduled-backup-settings reader-manual-refr
     adb pull "/data/local/tmp/komori-$capture.png" "device-diagnostics/$capture.png" || true
 done
 adb pull /data/local/tmp/komori-author-filter-failure.json device-diagnostics/author-filter-failure.json || true
-adb pull /sdcard/Android/data/app.komori.reader.debug/files/ device-diagnostics/app-captures/ || true
 adb pull /data/local/tmp/komori-batch-failure.png device-diagnostics/batch-failure.png || true
 adb shell dumpsys power > device-diagnostics/power-after.txt || true
 adb shell dumpsys window > device-diagnostics/windows-after.txt || true
