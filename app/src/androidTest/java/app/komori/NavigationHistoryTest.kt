@@ -1,6 +1,7 @@
 package app.komori
 
 import android.content.Intent
+import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.platform.app.InstrumentationRegistry
@@ -13,8 +14,10 @@ import app.komori.ui.ReaderViewModel
 import app.komori.ui.UpdateViewModel
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.Rule
 
 class NavigationHistoryTest {
+    @get:Rule val compose = createEmptyComposeRule()
     @Test
     fun leavingReaderRestoresChapterListPixelOffset() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
@@ -48,6 +51,7 @@ class NavigationHistoryTest {
         }
         try {
             assertTrue(device.wait(Until.hasObject(By.text("Title details")), 8000))
+            compose.waitForIdle()
             repeat(3) {
                 device.swipe(
                     device.displayWidth / 2,
@@ -57,6 +61,7 @@ class NavigationHistoryTest {
                     30,
                 )
             }
+            compose.waitForIdle()
             device.waitForIdle()
             val (label, bounds) = device.findObjects(By.textStartsWith("Ch. ")).firstNotNullOf { row ->
                 try {
@@ -72,8 +77,13 @@ class NavigationHistoryTest {
             assertTrue("Reader start: tapped=$label reader=${vm.reader.value?.id} error=${vm.readerError.value}", vm.readerReady.value)
             instrumentation.runOnMainSync { vm.closeReader() }
             assertTrue(device.wait(Until.hasObject(By.text(label)), 5000))
+            compose.waitForIdle()
             device.waitForIdle()
             assertEquals(bounds, device.findObject(By.text(label)).visibleBounds)
+        } catch (error: Throwable) {
+            runCatching { device.takeScreenshot(java.io.File(app.getExternalFilesDir(null), "reader-entry-failure.png")) }
+            runCatching { device.dumpWindowHierarchy(java.io.File(app.getExternalFilesDir(null), "reader-entry-failure.xml")) }
+            throw error
         } finally {
             instrumentation.runOnMainSync { vm.closeReader(); vm.viewModelScope.coroutineContext[kotlinx.coroutines.Job]?.cancel(); activity.finish() }
             kotlinx.coroutines.runBlocking { vm.viewModelScope.coroutineContext[kotlinx.coroutines.Job]?.join() }
