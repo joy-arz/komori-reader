@@ -46,7 +46,11 @@ class StreamingReaderPositionTest {
 
     @Test fun shortFinalPageCanSettleAtTheEndOfTheTitle() = delayedShortPage(3, withNext = false)
 
-    @Test fun downloadedChapterAppendKeepsLastPageVisible() = runBlocking<Unit> {
+    @Test fun downloadedChapterAppendKeepsLastPageVisible() = downloadedChapterBoundary(5)
+
+    @Test fun downloadedChapterAppendKeepsPenultimatePageVisible() = downloadedChapterBoundary(4)
+
+    private fun downloadedChapterBoundary(initialPage: Int) = runBlocking<Unit> {
         val app = compose.activity.application as KomoriApp
         val token = "offline-position-${UUID.randomUUID()}"
         val book = Manga(token, "Offline position fixture", "", "")
@@ -54,7 +58,7 @@ class StreamingReaderPositionTest {
         val previous = app.settings.flow.first()
         val client = OkHttpClient.Builder().addInterceptor { throw AssertionError("Downloaded reader must not use the network") }.build()
         val vm = withContext(Dispatchers.Main) { ReaderViewModel(app, Sources(client, client)) }
-        val list = LazyListState(6)
+        val list = LazyListState(initialPage + 1)
         try {
             app.settings.number("preloadPages", 0)
             app.settings.set("continuousChapters", true)
@@ -68,7 +72,7 @@ class StreamingReaderPositionTest {
             compose.runOnUiThread {
                 vm.selected.value = book
                 vm.chapters.value = listOf(chapters.first())
-                vm.read(chapters.first(), requestedPage = 5)
+                vm.read(chapters.first(), requestedPage = initialPage)
             }
             compose.waitUntil(5000) { vm.readerReady.value }
             compose.runOnUiThread { compose.activity.setContent { MaterialTheme {
@@ -76,12 +80,19 @@ class StreamingReaderPositionTest {
                     WebtoonReader(vm, chapters.first(), state = list)
                 }
             } } }
-            val key = "${chapters.first().id}|5|0"
+            val key = "${chapters.first().id}|$initialPage|0"
             compose.waitUntil(10000) {
                 list.layoutInfo.visibleItemsInfo.firstOrNull()?.let { it.key == key && it.size != (420 * compose.activity.resources.displayMetrics.density).toInt() } == true
             }
             compose.waitForIdle()
             assertEquals("Completed downloads must publish all page geometry before reading", 13, list.layoutInfo.totalItemsCount)
+            if (initialPage == 4) {
+                val offset = (100 * compose.activity.resources.displayMetrics.density).toInt()
+                compose.runOnIdle { list.requestScrollToItem(list.firstVisibleItemIndex, offset) }
+                compose.waitUntil(5000) {
+                    list.layoutInfo.visibleItemsInfo.firstOrNull()?.let { it.key == key && it.offset == -offset } == true
+                }
+            }
             val before = list.layoutInfo.visibleItemsInfo.first { it.key == key }.offset
             compose.runOnIdle { vm.chapters.value = chapters.take(2) }
             compose.waitUntil(5000) { list.layoutInfo.totalItemsCount >= 15 }
