@@ -74,7 +74,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 - Brightness, artwork dimming, orientation lock, optional volume-key navigation, and adjustable preload/cache choices. Images load sequentially up to ten pages ahead in paged and webtoon reading, including continuous chapter boundaries; speculative loading never advances reading progress. Cache hits reuse displayed images without forcing reloads during scrolling.
 - **Settings → Reading → Clear cached pages** removes temporary reader images while keeping downloads and imported comics. Close the reader first.
 - Webtoon pinch zoom and opt-in tall-page detection; Smart Chapter explanations, alternate releases and per-title language.
-- Immersive reading. A center or image tap hides controls, and a floating page counter brings them back.
+- Immersive reading starts with controls hidden. Tap the middle of the screen to show or hide them; scrolling leaves them hidden.
 - Direction-aware edge taps and swipes in paged mode.
 - Tiled pinch and double-tap zoom, plus optional keep-screen-awake.
 - Dismissible **Continue reading** banner (restore it in Settings) and direct **Read offline** from Downloads.
@@ -153,7 +153,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 
 ## <img src="https://api.iconify.design/lucide/library.svg?color=%23A3E635" width="26" height="26" align="absmiddle"> Sources
 
-Reorderable source tabs: DemonicScans, WeebCentral, MangaDex, HentaiZap, ImHentai, Nhentai, Manhwa18.com and Manhwa18.cc. Custom enabled-source choices are retained; enable the new sources in Settings → Sources if needed.
+Reorderable source tabs: DemonicScans, WeebCentral, MangaDex, HentaiZap, ImHentai, Nhentai, Manhwa18.com and Manhwa18.cc. Fresh installations enable DemonicScans and WeebCentral only. Enable MangaDex or other sources in **Settings → Sources**. Enabling the first dedicated adult source asks for an affirmative 18+ confirmation, saved once for later adult-source toggles. Upgrades retain existing choices.
 
 | Source | Status | Highlights |
 |---|---|---|

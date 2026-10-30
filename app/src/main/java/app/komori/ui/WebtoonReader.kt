@@ -171,8 +171,12 @@ fun WebtoonReader(
         return target
     }
     fun updateWindow(value: List<Release>) {
+        val anchor = pendingAnchor ?: retainedPosition() ?: if (!list.isScrollInProgress)
+            list.layoutInfo.visibleItemsInfo.firstOrNull { it.key.toString().split('|').size == 3 }?.let {
+                WebtoonAnchor(it.key.toString(), -it.offset, list.layoutInfo)
+            } else null
         window = value
-        (pendingAnchor ?: retainedPosition())?.let(::requestAnchor)
+        anchor?.let(::requestAnchor)
     }
     var nextError by remember { mutableStateOf<Exception?>(null) }
     var nextLoading by remember { mutableStateOf(false) }
@@ -204,7 +208,7 @@ fun WebtoonReader(
         snapshotFlow {
                 val visible = list.layoutInfo.visibleItemsInfo
                 val current = visible.firstOrNull { it.key.toString().split('|').size == 3 }
-                pendingAnchor == null && current?.key?.toString()?.substringBefore('|') == tail.id && visible.any {
+                window.size < 4 && pendingAnchor == null && current?.key?.toString()?.substringBefore('|') == tail.id && visible.any {
                     val parts = it.key.toString().split('|')
                     parts.size == 3 && parts[0] == tail.id &&
                         (parts[1].toIntOrNull() ?: -1) >= tail.pages - 2
@@ -215,6 +219,7 @@ fun WebtoonReader(
         try {
             val resolved = vm.resolveChapter(next)
             val saved = savedScrollImages(vm, resolved)
+            snapshotFlow { window.size < 4 }.first { it }
             withContext(Dispatchers.Main.immediate) {
                 if (window.none { it.id == resolved.id }) {
                     images.putAll(saved)
@@ -233,13 +238,14 @@ fun WebtoonReader(
     LaunchedEffect(head.id, previous?.id, settings.continuousChapters, previousAttempt, restored) {
         previousError = null
         if (!restored || !settings.continuousChapters || previous == null) return@LaunchedEffect
-        snapshotFlow { pendingAnchor == null && list.firstVisibleItemIndex <= 2 }.first { it }
+        snapshotFlow { window.size < 4 && pendingAnchor == null && !list.isScrollInProgress && list.firstVisibleItemIndex <= 2 }.first { it }
         if (settings.gapWarnings && ReaderContinuity.gap(previous, head) != null && previous.id !in allowedGaps)
             return@LaunchedEffect
         previousLoading = true
         try {
             val resolved = vm.resolveChapter(previous)
             val saved = savedScrollImages(vm, resolved)
+            snapshotFlow { window.size < 4 && !list.isScrollInProgress }.first { it }
             withContext(Dispatchers.Main.immediate) {
                 if (window.none { it.id == resolved.id }) {
                     images.putAll(saved)
@@ -339,16 +345,17 @@ fun WebtoonReader(
         }
         LaunchedEffect(restored) {
             if (restored)
-                snapshotFlow { position() }
+                snapshotFlow { position()?.let { it to list.isScrollInProgress } }
                     .filterNotNull()
                     .distinctUntilChanged()
                     .debounce(150)
-                    .collect { (release, page, fraction) ->
+                    .collect { (position, scrolling) ->
+                        val (release, page, fraction) = position
                         withContext(Dispatchers.Main.immediate) {
                             if (pendingAnchor != null) return@withContext
                             vm.scrollChapterPosition(release, page, fraction, session)
                             val index = window.indexOfFirst { it.id == release.id }
-                            if (index > 1 || window.size > 3) {
+                            if (!scrolling && !list.isScrollInProgress && (index > 1 || window.size > 3)) {
                                 updateWindow(window.drop((index - 1).coerceAtLeast(0)).take(3))
                                 val retained = window.map { it.id }.toSet()
                                 images.keys
