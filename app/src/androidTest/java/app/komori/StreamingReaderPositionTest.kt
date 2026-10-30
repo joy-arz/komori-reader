@@ -3,6 +3,7 @@ package app.komori
 import android.graphics.Bitmap
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Modifier
@@ -50,31 +51,55 @@ class StreamingReaderPositionTest {
 
     @Test fun downloadedChapterAppendKeepsPenultimatePageVisible() = downloadedChapterBoundary(4)
 
-    private fun downloadedChapterBoundary(initialPage: Int) = runBlocking<Unit> {
+    @Test fun continuingToNextChapterIgnoresItsOldUnfinishedPosition() = downloadedChapterBoundary(5, continueButton = true)
+
+    @Test fun scrollingIntoNextChapterIgnoresItsOldUnfinishedPosition() = downloadedChapterBoundary(5, enterByScrolling = true)
+
+    @Test fun chapterWindowDoesNotReindexDuringActiveScroll() = downloadedChapterBoundary(5, holdScroll = true)
+
+    private fun downloadedChapterBoundary(initialPage: Int, continueButton: Boolean = false, enterByScrolling: Boolean = false, holdScroll: Boolean = false) = runBlocking<Unit> {
         val app = compose.activity.application as KomoriApp
         val token = "offline-position-${UUID.randomUUID()}"
         val book = Manga(token, "Offline position fixture", "", "")
         val chapters = (1..5).map { number -> Release("$token-$number", book.id, "$number", null, "", "en", emptyList(), "", 6, local = true) }
         val previous = app.settings.flow.first()
+        app.settings.number("preloadPages", 0)
+        app.settings.set("continuousChapters", true)
+        app.settings.set("resume", true)
         val client = OkHttpClient.Builder().addInterceptor { throw AssertionError("Downloaded reader must not use the network") }.build()
         val vm = withContext(Dispatchers.Main) { ReaderViewModel(app, Sources(client, client)) }
         val list = LazyListState(initialPage + 1)
         try {
-            app.settings.number("preloadPages", 0)
-            app.settings.set("continuousChapters", true)
             app.dao.putManga(book)
             for (chapter in chapters) {
                 chapterDirectory(app, chapter.id).mkdirs()
                 for (page in 0 until chapter.pages) pageFile(app, chapter.id, page).writeBytes(image(if (page == 5) 800 else 1800))
                 app.dao.putDownload(Download(chapter.id, book.id, chapter.label, 6, 6, "Complete"))
             }
-            withTimeout(5000) { vm.settings.first { it.preloadPages == 0 && it.continuousChapters } }
+            if (continueButton || enterByScrolling) app.dao.putProgress(Progress(chapters[1].id, book.id, chapters[1].key, 5, false, .95f))
+            compose.waitUntil(5000) { vm.settings.value.let { it.preloadPages == 0 && it.continuousChapters && it.resume } }
             compose.runOnUiThread {
                 vm.selected.value = book
                 vm.chapters.value = listOf(chapters.first())
                 vm.read(chapters.first(), requestedPage = initialPage)
             }
             compose.waitUntil(5000) { vm.readerReady.value }
+            if (continueButton) {
+                compose.runOnIdle {
+                    vm.chapters.value = chapters.take(2)
+                    vm.read(chapters[1])
+                }
+                compose.waitUntil(5000) { vm.readerReady.value && vm.reader.value?.id == chapters[1].id }
+                assertEquals("Opening a chapter directly must still resume its saved position", 5, vm.readerPage.value)
+                assertEquals(.95f, vm.readerScroll.value, 0f)
+                compose.runOnIdle { vm.read(chapters[0], requestedPage = initialPage) }
+                compose.waitUntil(5000) { vm.readerReady.value && vm.reader.value?.id == chapters[0].id }
+                withContext(Dispatchers.Main) { vm.finishChapter() }.join()
+                compose.waitUntil(5000) { vm.readerReady.value && vm.reader.value?.id == chapters[1].id }
+                assertEquals("Forward continuation must begin at the first image, not resume old destination progress", 0, vm.readerPage.value)
+                assertEquals(0f, vm.readerScroll.value, 0f)
+                return@runBlocking
+            }
             compose.runOnUiThread { compose.activity.setContent { MaterialTheme {
                 Box(Modifier.width(300.dp).height(400.dp).testTag("offline-viewport")) {
                     WebtoonReader(vm, chapters.first(), state = list)
@@ -100,9 +125,54 @@ class StreamingReaderPositionTest {
             assertEquals("The next download must enter with its final strip count", 25, list.layoutInfo.totalItemsCount)
             assertEquals("Appending a downloaded chapter must keep the current page", key, list.layoutInfo.visibleItemsInfo.firstOrNull()?.key)
             assertEquals("Appending must keep the current image pixel position", before, list.layoutInfo.visibleItemsInfo.first { it.key == key }.offset)
+            if (enterByScrolling) {
+                repeat(6) {
+                    if (vm.reader.value?.id != chapters[1].id) {
+                        compose.onNodeWithTag("offline-viewport").performTouchInput {
+                            swipe(start = center.copy(y = height * .75f), end = center.copy(y = height * .4f), durationMillis = 600)
+                        }
+                        compose.waitForIdle()
+                    }
+                }
+                compose.waitUntil(5000) { vm.reader.value?.id == chapters[1].id }
+                assertEquals("Continuous handoff must enter page one even with old destination progress near the end", 0, vm.readerPage.value)
+                assertEquals("The viewport must remain on the first image of the next chapter", "${chapters[1].id}|0|0", list.layoutInfo.visibleItemsInfo.firstOrNull { it.key.toString().split('|').size == 3 }?.key)
+                return@runBlocking
+            }
             for (number in 2..5) {
                 val chapter = chapters[number - 1]
                 val lastKey = "${chapter.id}|5|0"
+                if (holdScroll && number == 3) {
+                    val releaseScroll = CompletableDeferred<Unit>()
+                    val scroll = withContext(Dispatchers.Main) {
+                        vm.viewModelScope.launch {
+                            list.scroll(androidx.compose.foundation.MutatePriority.UserInput) {
+                                val last = list.layoutInfo.visibleItemsInfo.first { it.key == "${chapters[number - 2].id}|5|0" }
+                                scrollBy((last.size + last.offset).toFloat())
+                                val separator = list.layoutInfo.visibleItemsInfo.first { it.key == "chapter-${chapter.id}" }
+                                scrollBy((separator.size + separator.offset).toFloat())
+                                releaseScroll.await()
+                            }
+                        }
+                    }
+                    try {
+                        compose.waitUntil(5000) { vm.reader.value?.id == chapter.id && vm.readerPage.value == 0 }
+                        compose.waitForIdle()
+                        assertEquals("The chapter-counter transition must enter the first image", "${chapter.id}|0|0",
+                            list.layoutInfo.visibleItemsInfo.first { it.key.toString().split('|').size == 3 }.key)
+                        assertTrue("The synthetic gesture must still own scrolling", list.isScrollInProgress)
+                        assertEquals("Do not remove chapter rows while a gesture or fling is active", 37, list.layoutInfo.totalItemsCount)
+                        val anchor = list.layoutInfo.visibleItemsInfo.first { it.key.toString().split('|').size == 3 }
+                        releaseScroll.complete(Unit)
+                        scroll.join()
+                        compose.waitUntil(5000) { list.layoutInfo.totalItemsCount == 25 }
+                        compose.waitForIdle()
+                        val retained = list.layoutInfo.visibleItemsInfo.first { it.key.toString().split('|').size == 3 }
+                        assertEquals("Settled trimming retains the exact page and strip", anchor.key, retained.key)
+                        assertEquals("Settled trimming retains its pixel position", anchor.offset, retained.offset)
+                        return@runBlocking
+                    } finally { releaseScroll.complete(Unit); scroll.cancelAndJoin() }
+                }
                 compose.runOnIdle { list.requestScrollToItem(list.layoutInfo.totalItemsCount - 2) }
                 compose.waitUntil(10000) {
                     list.layoutInfo.visibleItemsInfo.firstOrNull()?.let { it.key == lastKey && kotlin.math.abs(it.size - (600 * compose.activity.resources.displayMetrics.density).toInt()) <= 1 } == true
@@ -121,7 +191,8 @@ class StreamingReaderPositionTest {
                 }
             }
         } catch (error: Throwable) {
-            android.util.Log.e("KomoriOffline", "first=${list.firstVisibleItemIndex}:${list.firstVisibleItemScrollOffset} total=${list.layoutInfo.totalItemsCount} visible=${list.layoutInfo.visibleItemsInfo.map { Triple(it.key, it.offset, it.size) }}", error)
+            android.util.Log.e("KomoriOffline", "storedPreload=${app.settings.flow.first().preloadPages} scopeActive=${vm.viewModelScope.isActive} sources=${vm.settings.value.enabledSources}")
+            android.util.Log.e("KomoriOffline", "first=${list.firstVisibleItemIndex}:${list.firstVisibleItemScrollOffset} total=${list.layoutInfo.totalItemsCount} settings=${vm.settings.value.preloadPages}/${vm.settings.value.continuousChapters}/${vm.settings.value.resume} visible=${list.layoutInfo.visibleItemsInfo.map { Triple(it.key, it.offset, it.size) }}", error)
             throw error
         } finally {
             withContext(Dispatchers.Main) { vm.closeReader(); vm.viewModelScope.cancel() }
@@ -130,6 +201,7 @@ class StreamingReaderPositionTest {
             compose.waitForIdle()
             app.settings.number("preloadPages", previous.preloadPages)
             app.settings.set("continuousChapters", previous.continuousChapters)
+            app.settings.set("resume", previous.resume)
             chapters.forEach { chapterDirectory(app, it.id).deleteRecursively() }
             for (table in listOf("progress", "downloads", "shelf", "manga")) {
                 val column = if (table == "manga") "id" else "mangaId"
@@ -240,11 +312,19 @@ class StreamingReaderPositionTest {
             assertTrue("The delayed page must really use the HTTP transport", arrived.await(5, TimeUnit.SECONDS))
             if (shrinkingPage == 3 && withNext) {
                 compose.waitUntil(5000) { list.layoutInfo.totalItemsCount > initialCount }
-                compose.runOnIdle {
-                    val index = list.layoutInfo.visibleItemsInfo.first { it.key == key }.index
-                    list.requestScrollToItem(index, offset)
+                val releaseGesture = CompletableDeferred<Unit>()
+                val gesture = withContext(Dispatchers.Main) {
+                    vm.viewModelScope.launch {
+                        list.scroll(androidx.compose.foundation.MutatePriority.UserInput) {
+                            scrollBy((offset - list.firstVisibleItemScrollOffset).toFloat())
+                            releaseGesture.await()
+                        }
+                    }
                 }
-                compose.waitUntil(5000) { list.firstVisibleItemScrollOffset == offset }
+                try {
+                    compose.waitUntil(5000) { list.isScrollInProgress && list.firstVisibleItemScrollOffset == offset }
+                    compose.waitForIdle()
+                } finally { releaseGesture.complete(Unit); gesture.join() }
             }
             compose.waitUntil(5000) {
                 list.layoutInfo.visibleItemsInfo.firstOrNull()?.let { it.key == key && it.offset == -offset } == true
@@ -267,6 +347,14 @@ class StreamingReaderPositionTest {
                     compose.waitUntil(5000) { vm.reader.value?.id != chapter.id || vm.readerPage.value > shrinkingPage }
                 }
             } else {
+                val finalHeight = (300 * compose.activity.resources.displayMetrics.density * deliveredHeight / 400f).toInt()
+                compose.waitUntil(5000) {
+                    val items = list.layoutInfo.visibleItemsInfo
+                    val final = items.singleOrNull { it.key == key }
+                    final != null && kotlin.math.abs(final.size - finalHeight) <= 1 &&
+                        final.offset >= 0 && final.offset + final.size <= list.layoutInfo.viewportEndOffset &&
+                        items.any { it.key == "${chapter.id}|2|1" }
+                }
                 val visible = list.layoutInfo.visibleItemsInfo.single { it.key == key }
                 assertTrue("The final short image must remain entirely visible", visible.offset >= 0 &&
                     visible.offset + visible.size <= list.layoutInfo.viewportEndOffset)

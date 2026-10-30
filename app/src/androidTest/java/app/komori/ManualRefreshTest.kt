@@ -1,9 +1,13 @@
 package app.komori
 
-import android.content.Intent
 import android.graphics.Bitmap
 import android.os.SystemClock
 import androidx.activity.compose.setContent
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.platform.app.InstrumentationRegistry
@@ -23,8 +27,10 @@ import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.Rule
 
 class ManualRefreshTest {
+    @get:Rule val compose = createAndroidComposeRule<MainActivity>()
     @Test fun headersExposeRefreshAndOfflineReaderRefreshPreservesPageAndFiles() = runBlocking {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val app = instrumentation.targetContext.applicationContext as KomoriApp
@@ -56,9 +62,16 @@ class ManualRefreshTest {
             bitmap.recycle()
         }
         val original = pageFile(app, id, 1).readBytes()
-        val activity = instrumentation.startActivitySync(Intent(app, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
-        fun shown(description: String) = device.wait(Until.findObject(By.desc(description)), 10_000)
-            ?: throw AssertionError("Missing $description")
+        val activity = compose.activity
+        fun shown(description: String): androidx.test.uiautomator.UiObject2 {
+            var target: androidx.test.uiautomator.UiObject2? = null
+            compose.waitUntil(10_000) {
+                val rendered = compose.onAllNodesWithContentDescription(description).fetchSemanticsNodes().isNotEmpty()
+                target = if (rendered) device.findObject(By.desc(description)) else null
+                target != null
+            }
+            return checkNotNull(target) { "Missing $description" }
+        }
         suspend fun settled(condition: () -> Boolean) = withTimeout(15_000) { while (!condition()) delay(50) }
         try {
             instrumentation.runOnMainSync {
@@ -81,15 +94,20 @@ class ManualRefreshTest {
             instrumentation.runOnMainSync { vm.read(chapter.release(), requestedPage = 1) }
             settled { vm.readerReady.value && vm.readerPage.value == 1 }
             device.confirmFullscreenTutorial()
-            assertTrue("Restored page must be rendered before a center tap", device.wait(Until.hasObject(By.descContains(", page 2, part ")), 10_000))
+            compose.waitUntil(10_000) {
+                compose.onAllNodes(hasContentDescription(", page 2, part ", substring = true)).fetchSemanticsNodes().isNotEmpty()
+            }
             device.waitForIdle()
-            val readingArea = shown("Reading area")
+            shown("Reading area")
             assertFalse("Reading controls must start hidden", device.hasObject(By.desc("Refresh reading")))
-            device.click(readingArea.visibleBounds.centerX(), readingArea.visibleBounds.centerY())
+            val showControls = compose.onNodeWithContentDescription("Reading area").fetchSemanticsNode()
+                .config[SemanticsActions.CustomActions].single { it.label == "Show reader controls" }
+            compose.runOnIdle { assertTrue("The accessible Show reader controls action must succeed", showControls.action()) }
             shown("Refresh reading")
             val session = vm.readerSession.value
             shown("Refresh reading").click()
             settled { vm.readerSession.value > session && vm.readerReady.value }
+            compose.waitForIdle()
             assertEquals(id, vm.reader.value!!.id)
             assertEquals(1, vm.readerPage.value)
             assertArrayEquals(original, pageFile(app, id, 1).readBytes())
@@ -106,9 +124,10 @@ class ManualRefreshTest {
             assertFalse(cached.exists())
             assertArrayEquals(original, pageFile(app, id, 1).readBytes())
         } finally {
-            instrumentation.runOnMainSync { vm.closeReader(); vm.viewModelScope.cancel(); activity.finish() }
+            instrumentation.runOnMainSync { vm.closeReader(); vm.viewModelScope.cancel() }
             vm.viewModelScope.coroutineContext[Job]?.join()
-            instrumentation.waitForIdleSync()
+            compose.runOnUiThread { activity.setContent {} }
+            compose.waitForIdle()
             chapterDirectory(app, id).deleteRecursively()
             app.dao.removeDownload(id); app.dao.resetProgress(book.id); app.dao.removeCreator(creator.id)
             val db = app.database.openHelper.writableDatabase

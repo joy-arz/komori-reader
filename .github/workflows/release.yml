@@ -58,6 +58,13 @@ jobs:
           python3 scripts/update_manifest.py
           cd dist
           sha256sum *.apk > SHA256SUMS.txt
+      - name: Upload signed candidate for device testing
+        uses: actions/upload-artifact@v4
+        with:
+          name: komori-signed-candidate-${{ env.VERSION_NAME }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
       - name: Require build and device acceptance for this commit
         env:
           GH_TOKEN: ${{ github.token }}

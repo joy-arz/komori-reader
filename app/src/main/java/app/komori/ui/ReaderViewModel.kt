@@ -1435,7 +1435,7 @@ class ReaderViewModel(
                 .dropWhile { it.id != chapter.id }
                 .drop(1)
                 .firstOrNull { it.key != chapter.key && it.readable }
-        if (next != null) read(next)
+        if (next != null) read(next, restart = true)
         else {
             closeReader()
             notice.value = "You're caught up with the available chapters."
