@@ -1032,7 +1032,24 @@ class ReaderViewModel(
         open(title)
         if (update.kind == "chapter") dao.chapter(update.releaseId)?.release()?.let { read(it) }
     }
-    fun enableSource(key: String, enabled: Boolean) = task { app.settings.enableSource(key, enabled) }
+    val pendingAdultSource = MutableStateFlow<String?>(null)
+    private val sourceConsentMutation = Mutex()
+    fun enableSource(key: String, enabled: Boolean) = task {
+        sourceConsentMutation.withLock {
+            val current = app.settings.flow.first()
+            if (SourceConsentPolicy.needsConfirmation(key, enabled, current.adultSourcesConfirmed))
+                pendingAdultSource.value = key
+            else app.settings.enableSource(key, enabled)
+        }
+    }
+    fun dismissAdultSource() { pendingAdultSource.value = null }
+    fun confirmAdultSource() = task {
+        sourceConsentMutation.withLock {
+            val key = pendingAdultSource.value ?: return@withLock
+            app.settings.confirmAdultSource(key)
+            if (pendingAdultSource.value == key) pendingAdultSource.value = null
+        }
+    }
     fun choiceSetting(key: String, value: String) = task { app.settings.choice(key, value) }
 
     fun nextChapter(chapter: Release): Release? =

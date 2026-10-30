@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.emitAll
 
 private val Context.settingsStore by preferencesDataStore("settings")
 
@@ -42,7 +44,7 @@ data class Settings(
     val checkAuthors: Boolean = false,
     val notifyChapterUpdates: Boolean = false,
     val libraryCheckStatus: String = "Automatic checks are off. The first check establishes a baseline.",
-    val enabledSources: String = sourceNames.keys.joinToString(","),
+    val enabledSources: String = SourceConsentPolicy.defaultEnabled,
     val savedSearches: String = "[]",
     val exportFolder: String = "",
     val backupFolder: String = "",
@@ -50,11 +52,24 @@ data class Settings(
     val backupRetention: Int = 7,
     val backupStatus: String = "No automatic backup has run.",
     val backupLastSuccess: Long = 0,
+    val adultSourcesConfirmed: Boolean = false,
 )
 
-class SettingsStore(private val context: Context) {
-    val flow =
-        context.settingsStore.data.map { p ->
+class SettingsStore(context: Context, private val legacyInstall: Boolean = false,
+    private val preferences: androidx.datastore.core.DataStore<Preferences> = context.settingsStore) {
+    private suspend fun initializeSources() {
+        preferences.edit { p ->
+            if (p[intPreferencesKey("sourceConsentVersion")] == 1) return@edit
+            val initial = SourceConsentPolicy.initial(p[stringPreferencesKey("enabledSources")], legacyInstall,
+                p[booleanPreferencesKey("adultSourcesConfirmed")])
+            p[stringPreferencesKey("enabledSources")] = initial.enabled
+            p[booleanPreferencesKey("adultSourcesConfirmed")] = initial.confirmed
+            p[intPreferencesKey("sourceConsentVersion")] = 1
+        }
+    }
+    val flow = flow {
+        initializeSources()
+        emitAll(preferences.data.map { p ->
             Settings(
                 p[stringPreferencesKey("language")] ?: "en",
                 p[booleanPreferencesKey("smart")] ?: true,
@@ -92,7 +107,7 @@ class SettingsStore(private val context: Context) {
                 checkAuthors = p[booleanPreferencesKey("checkAuthors")] ?: false,
                 notifyChapterUpdates = p[booleanPreferencesKey("notifyChapterUpdates")] ?: false,
                 libraryCheckStatus = p[stringPreferencesKey("libraryCheckStatus")] ?: "Automatic checks are off. The first check establishes a baseline.",
-                enabledSources = p[stringPreferencesKey("enabledSources")] ?: sourceNames.keys.joinToString(","),
+                enabledSources = p[stringPreferencesKey("enabledSources")] ?: SourceConsentPolicy.defaultEnabled,
                 savedSearches = p[stringPreferencesKey("savedSearches")] ?: "[]",
                 exportFolder = p[stringPreferencesKey("exportFolder")] ?: "",
                 backupFolder = p[stringPreferencesKey("backupFolder")] ?: "",
@@ -100,11 +115,13 @@ class SettingsStore(private val context: Context) {
                 backupRetention = (p[intPreferencesKey("backupRetention")] ?: 7).takeIf { it in setOf(3, 7, 14) } ?: 7,
                 backupStatus = p[stringPreferencesKey("backupStatus")] ?: "No automatic backup has run.",
                 backupLastSuccess = p[longPreferencesKey("backupLastSuccess")] ?: 0,
+                adultSourcesConfirmed = p[booleanPreferencesKey("adultSourcesConfirmed")] ?: false,
             )
-        }
+        })
+    }
 
     suspend fun set(key: String, value: Boolean) {
-        context.settingsStore.edit { it[booleanPreferencesKey(key)] = value }
+        preferences.edit { it[booleanPreferencesKey(key)] = value }
     }
 
     suspend fun number(key: String, value: Int) {
@@ -117,7 +134,7 @@ class SettingsStore(private val context: Context) {
             else -> error("Unknown numeric preference")
         }
         require(value in range && (key != "libraryCheckHours" || value in listOf(0, 12, 24)))
-        context.settingsStore.edit { it[intPreferencesKey(key)] = value }
+        preferences.edit { it[intPreferencesKey(key)] = value }
     }
 
     suspend fun choice(key: String, value: String) {
@@ -127,13 +144,13 @@ class SettingsStore(private val context: Context) {
             else -> error("Unknown choice preference")
         }
         require(value in choices)
-        context.settingsStore.edit { it[stringPreferencesKey(key)] = value }
+        preferences.edit { it[stringPreferencesKey(key)] = value }
     }
 
     suspend fun configureBackup(folder: String, days: Int, retention: Int) {
         require(folder.isEmpty() || folder.startsWith("content://") && folder.length <= 4096)
         require(days in setOf(0, 1, 7) && retention in setOf(3, 7, 14))
-        context.settingsStore.edit {
+        preferences.edit {
             it[stringPreferencesKey("backupFolder")] = folder
             it[intPreferencesKey("backupDays")] = if (folder.isEmpty()) 0 else days
             it[intPreferencesKey("backupRetention")] = retention
@@ -141,7 +158,7 @@ class SettingsStore(private val context: Context) {
     }
 
     suspend fun backupResult(status: String, success: Long? = null) {
-        context.settingsStore.edit {
+        preferences.edit {
             it[stringPreferencesKey("backupStatus")] = status.take(2000)
             if (success != null) it[longPreferencesKey("backupLastSuccess")] = success
         }
@@ -149,44 +166,57 @@ class SettingsStore(private val context: Context) {
 
     suspend fun exportFolder(value: String) {
         require(value.isEmpty() || value.startsWith("content://") && value.length <= 4096)
-        context.settingsStore.edit { it[stringPreferencesKey("exportFolder")] = value }
+        preferences.edit { it[stringPreferencesKey("exportFolder")] = value }
     }
 
     suspend fun saveSearch(row: SavedSearch) {
-        context.settingsStore.edit { p ->
+        preferences.edit { p ->
             val rows = savedSearches(p[stringPreferencesKey("savedSearches")] ?: "[]")
             p[stringPreferencesKey("savedSearches")] = savedSearchJson(rows.filter { it.id != row.id } + row)
         }
     }
 
     suspend fun removeSearch(id: String) {
-        context.settingsStore.edit { p -> p[stringPreferencesKey("savedSearches")] = savedSearchJson(savedSearches(p[stringPreferencesKey("savedSearches")] ?: "[]").filter { it.id != id }) }
+        preferences.edit { p -> p[stringPreferencesKey("savedSearches")] = savedSearchJson(savedSearches(p[stringPreferencesKey("savedSearches")] ?: "[]").filter { it.id != id }) }
     }
 
     suspend fun checkStatus(value: String) {
-        context.settingsStore.edit { it[stringPreferencesKey("libraryCheckStatus")] = value.take(2000) }
+        preferences.edit { it[stringPreferencesKey("libraryCheckStatus")] = value.take(2000) }
     }
 
     suspend fun enableSource(key: String, enabled: Boolean) {
         require(key in sourceNames)
-        context.settingsStore.edit { p ->
-            val current = (p[stringPreferencesKey("enabledSources")] ?: sourceNames.keys.joinToString(",")).split(',').filter { it in sourceNames }.toMutableSet()
+        initializeSources()
+        preferences.edit { p ->
+            check(!SourceConsentPolicy.needsConfirmation(key, enabled,
+                p[booleanPreferencesKey("adultSourcesConfirmed")] == true)) { "Confirm you are 18 or older before enabling adult sources." }
+            val current = p[stringPreferencesKey("enabledSources")].orEmpty().split(',').filter { it in sourceNames }.toMutableSet()
             if (enabled) current.add(key) else current.remove(key)
+            p[stringPreferencesKey("enabledSources")] = sourceNames.keys.filter { it in current }.joinToString(",")
+        }
+    }
+
+    suspend fun confirmAdultSource(key: String) {
+        require(key in SourceConsentPolicy.adultSources)
+        initializeSources()
+        preferences.edit { p ->
+            val current = p[stringPreferencesKey("enabledSources")].orEmpty().split(',').toSet() + key
+            p[booleanPreferencesKey("adultSourcesConfirmed")] = true
             p[stringPreferencesKey("enabledSources")] = sourceNames.keys.filter { it in current }.joinToString(",")
         }
     }
 
     suspend fun retrySeconds(value: Int) {
         require(value in listOf(0, 3, 5, 10, 30))
-        context.settingsStore.edit { it[intPreferencesKey("retrySeconds")] = value }
+        preferences.edit { it[intPreferencesKey("retrySeconds")] = value }
     }
 
     suspend fun sources(value: String) {
-        context.settingsStore.edit { it[stringPreferencesKey("sources")] = value }
+        preferences.edit { it[stringPreferencesKey("sources")] = value }
     }
 
     suspend fun language(value: String) {
-        context.settingsStore.edit { it[stringPreferencesKey("language")] = value }
+        preferences.edit { it[stringPreferencesKey("language")] = value }
     }
 }
 

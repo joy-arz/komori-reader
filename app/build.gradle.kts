@@ -12,8 +12,8 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = providers.environmentVariable("VERSION_CODE").orNull?.toInt() ?: 1
-        versionName = providers.environmentVariable("VERSION_NAME").orNull ?: "0.8.11"
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        versionName = providers.environmentVariable("VERSION_NAME").orNull ?: "0.8.12"
+        testInstrumentationRunner = "app.komori.KomoriTestRunner"
     }
     signingConfigs {
         create("release") {

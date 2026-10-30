@@ -15,8 +15,13 @@ class KomoriApp : Application(), ImageLoaderFactory {
     internal var startupRecovery: kotlinx.coroutines.Job? = null
         private set
 
+    internal var legacySourceInstall = false
+        private set
+
     override fun onCreate() {
         super.onCreate()
+        legacySourceInstall = getDatabasePath("komori.db").exists() ||
+            java.io.File(filesDir, "datastore/settings.preferences_pb").exists()
         startupRecovery = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default).launch {
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 runCatching { AppUpdates.recoverTemporaryFiles(this@KomoriApp) }
@@ -38,7 +43,7 @@ class KomoriApp : Application(), ImageLoaderFactory {
     val dao
         get() = database.dao()
 
-    val settings by lazy { SettingsStore(this) }
+    val settings by lazy { SettingsStore(this, legacySourceInstall) }
     val sessions by lazy { SourceSessions(this) }
     val source by lazy { Sources(sessions.client(), MangaDex.client()) }
 
