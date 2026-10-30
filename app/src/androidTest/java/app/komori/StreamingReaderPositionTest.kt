@@ -46,6 +46,139 @@ class StreamingReaderPositionTest {
 
     @Test fun shortFinalPageCanSettleAtTheEndOfTheTitle() = delayedShortPage(3, withNext = false)
 
+    @Test fun downloadedChapterAppendKeepsLastPageVisible() = runBlocking<Unit> {
+        val app = compose.activity.application as KomoriApp
+        val token = "offline-position-${UUID.randomUUID()}"
+        val book = Manga(token, "Offline position fixture", "", "")
+        val chapters = (1..5).map { number -> Release("$token-$number", book.id, "$number", null, "", "en", emptyList(), "", 6, local = true) }
+        val previous = app.settings.flow.first()
+        val client = OkHttpClient.Builder().addInterceptor { throw AssertionError("Downloaded reader must not use the network") }.build()
+        val vm = withContext(Dispatchers.Main) { ReaderViewModel(app, Sources(client, client)) }
+        val list = LazyListState(6)
+        try {
+            app.settings.number("preloadPages", 0)
+            app.settings.set("continuousChapters", true)
+            app.dao.putManga(book)
+            for (chapter in chapters) {
+                chapterDirectory(app, chapter.id).mkdirs()
+                for (page in 0 until chapter.pages) pageFile(app, chapter.id, page).writeBytes(image(if (page == 5) 800 else 1800))
+                app.dao.putDownload(Download(chapter.id, book.id, chapter.label, 6, 6, "Complete"))
+            }
+            withTimeout(5000) { vm.settings.first { it.preloadPages == 0 && it.continuousChapters } }
+            compose.runOnUiThread {
+                vm.selected.value = book
+                vm.chapters.value = listOf(chapters.first())
+                vm.read(chapters.first(), requestedPage = 5)
+            }
+            compose.waitUntil(5000) { vm.readerReady.value }
+            compose.runOnUiThread { compose.activity.setContent { MaterialTheme {
+                Box(Modifier.width(300.dp).height(400.dp).testTag("offline-viewport")) {
+                    WebtoonReader(vm, chapters.first(), state = list)
+                }
+            } } }
+            val key = "${chapters.first().id}|5|0"
+            compose.waitUntil(10000) {
+                list.layoutInfo.visibleItemsInfo.firstOrNull()?.let { it.key == key && it.size != (420 * compose.activity.resources.displayMetrics.density).toInt() } == true
+            }
+            compose.waitForIdle()
+            assertEquals("Completed downloads must publish all page geometry before reading", 13, list.layoutInfo.totalItemsCount)
+            val before = list.layoutInfo.visibleItemsInfo.first { it.key == key }.offset
+            compose.runOnIdle { vm.chapters.value = chapters.take(2) }
+            compose.waitUntil(5000) { list.layoutInfo.totalItemsCount >= 15 }
+            compose.waitForIdle()
+            assertEquals("The next download must enter with its final strip count", 25, list.layoutInfo.totalItemsCount)
+            assertEquals("Appending a downloaded chapter must keep the current page", key, list.layoutInfo.visibleItemsInfo.firstOrNull()?.key)
+            assertEquals("Appending must keep the current image pixel position", before, list.layoutInfo.visibleItemsInfo.first { it.key == key }.offset)
+            for (number in 2..5) {
+                val chapter = chapters[number - 1]
+                val lastKey = "${chapter.id}|5|0"
+                compose.runOnIdle { list.requestScrollToItem(list.layoutInfo.totalItemsCount - 2) }
+                compose.waitUntil(10000) {
+                    list.layoutInfo.visibleItemsInfo.firstOrNull()?.let { it.key == lastKey && kotlin.math.abs(it.size - (600 * compose.activity.resources.displayMetrics.density).toInt()) <= 1 } == true
+                }
+                compose.waitUntil(5000) { vm.reader.value?.id == chapter.id && vm.readerPage.value == 5 }
+                compose.waitForIdle()
+                assertEquals("Trimming older downloaded chapters must not skip the visible page", lastKey, list.layoutInfo.visibleItemsInfo.firstOrNull()?.key)
+                if (number < 5) {
+                    val oldCount = list.layoutInfo.totalItemsCount
+                    val oldOffset = list.layoutInfo.visibleItemsInfo.first().offset
+                    compose.runOnIdle { vm.chapters.value = chapters.take(number + 1) }
+                    compose.waitUntil(5000) { list.layoutInfo.totalItemsCount >= oldCount + 7 }
+                    compose.waitForIdle()
+                    assertEquals("Downloaded boundary $number must retain the last page", lastKey, list.layoutInfo.visibleItemsInfo.firstOrNull()?.key)
+                    assertEquals(oldOffset, list.layoutInfo.visibleItemsInfo.first().offset)
+                }
+            }
+        } catch (error: Throwable) {
+            android.util.Log.e("KomoriOffline", "first=${list.firstVisibleItemIndex}:${list.firstVisibleItemScrollOffset} total=${list.layoutInfo.totalItemsCount} visible=${list.layoutInfo.visibleItemsInfo.map { Triple(it.key, it.offset, it.size) }}", error)
+            throw error
+        } finally {
+            withContext(Dispatchers.Main) { vm.closeReader(); vm.viewModelScope.cancel() }
+            vm.viewModelScope.coroutineContext[Job]?.join()
+            compose.runOnUiThread { compose.activity.setContent {} }
+            compose.waitForIdle()
+            app.settings.number("preloadPages", previous.preloadPages)
+            app.settings.set("continuousChapters", previous.continuousChapters)
+            chapters.forEach { chapterDirectory(app, it.id).deleteRecursively() }
+            for (table in listOf("progress", "downloads", "shelf", "manga")) {
+                val column = if (table == "manga") "id" else "mangaId"
+                app.database.openHelper.writableDatabase.execSQL("DELETE FROM $table WHERE $column = ?", arrayOf(book.id))
+            }
+            client.dispatcher.executorService.shutdown()
+            client.connectionPool.evictAll()
+        }
+    }
+
+    @Test fun cachedReadingDoesNotWaitForChapterWriter() = runBlocking<Unit> {
+        val app = compose.activity.application as KomoriApp
+        val token = "offline-writer-${UUID.randomUUID()}"
+        val book = Manga(token, "Offline writer fixture", "", "")
+        val chapter = Release("$token-1", book.id, "1", null, "", "en", emptyList(), "", 1, local = true)
+        val previous = app.settings.flow.first()
+        val client = OkHttpClient.Builder().addInterceptor { throw AssertionError("Cached reader must not use the network") }.build()
+        val vm = withContext(Dispatchers.Main) { ReaderViewModel(app, Sources(client, client)) }
+        val locked = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        var writer: Job? = null
+        try {
+            app.settings.number("preloadPages", 0)
+            app.dao.putManga(book)
+            chapterDirectory(app, chapter.id).mkdirs()
+            pageFile(app, chapter.id, 0).writeBytes(image(1800))
+            app.dao.putDownload(Download(chapter.id, book.id, chapter.label, 1, 1, "Complete"))
+            writer = launch(Dispatchers.IO) { ChapterFiles.locked(chapter.id) { locked.complete(Unit); release.await() } }
+            locked.await()
+            compose.runOnUiThread {
+                vm.selected.value = book
+                vm.chapters.value = listOf(chapter)
+                vm.read(chapter, requestedPage = 0)
+            }
+            compose.waitUntil(5000) { vm.readerReady.value }
+            compose.runOnUiThread { compose.activity.setContent { MaterialTheme {
+                Box(Modifier.width(300.dp).height(400.dp)) { WebtoonReader(vm, chapter) }
+            } } }
+            compose.waitUntil(5000) {
+                compose.onAllNodesWithContentDescription("Ch. 1, page 1, part 1 of 2").fetchSemanticsNodes().isNotEmpty()
+            }
+            assertTrue("Reading must complete while the chapter writer still holds the lock", writer.isActive)
+        } finally {
+            release.complete(Unit)
+            writer?.cancelAndJoin()
+            withContext(Dispatchers.Main) { vm.closeReader(); vm.viewModelScope.cancel() }
+            vm.viewModelScope.coroutineContext[Job]?.join()
+            compose.runOnUiThread { compose.activity.setContent {} }
+            compose.waitForIdle()
+            app.settings.number("preloadPages", previous.preloadPages)
+            chapterDirectory(app, chapter.id).deleteRecursively()
+            for (table in listOf("progress", "downloads", "shelf", "manga")) {
+                val column = if (table == "manga") "id" else "mangaId"
+                app.database.openHelper.writableDatabase.execSQL("DELETE FROM $table WHERE $column = ?", arrayOf(book.id))
+            }
+            client.dispatcher.executorService.shutdown()
+            client.connectionPool.evictAll()
+        }
+    }
+
     private fun delayedShortPage(shrinkingPage: Int, deliveredHeight: Int = 80, withNext: Boolean = true) = runBlocking<Unit> {
         val app = compose.activity.application as KomoriApp
         val token = UUID.randomUUID().toString()

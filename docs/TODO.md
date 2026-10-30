@@ -205,3 +205,10 @@ Released repair work: durable per-page repair markers, Needs repair counts, part
 - [x] Add a logical page anchor and delay progress/paging publication until the corrected viewport is measured.
 - [x] Accept delayed short/tall image and chapter-boundary fixtures plus the full API 26/30/34/36 device matrix (PR #6, 90 tests per API). Publish and verify signed 0.8.9 after exact merged-commit acceptance.
 - [ ] Verify sustained online DemonicScans reading on the affected Android 14 phone.
+
+### October 30 downloaded chapter geometry
+
+- [x] Confirm provisional 420 dp placeholders/strip counts remain for completed offline chapters in 0.8.9.
+- [x] Prepare valid completed-download image headers before chapter insertion, retaining lazy bitmap decoding and streaming anchors.
+- [ ] Accept five-chapter multi-page offline coverage, concurrent-writer reading and the full device/build matrix.
+- [ ] Verify sustained downloaded continuous reading near chapter boundaries on the affected Android 14 handset; the exact reported skip is not yet reproduced on physical hardware.

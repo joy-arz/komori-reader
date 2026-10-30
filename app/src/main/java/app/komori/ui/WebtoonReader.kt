@@ -31,6 +31,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.komori.data.ChapterFiles
+import app.komori.data.pageFile
+import app.komori.data.repairMarker
 import app.komori.data.ContentFailure
 import app.komori.data.automaticRetryAllowed
 import app.komori.data.connectionMessage
@@ -50,6 +53,27 @@ private data class ScrollImage(val file: File, val width: Int, val height: Int) 
     val strips
         get() = (height + STRIP_HEIGHT - 1) / STRIP_HEIGHT
 }
+
+private suspend fun savedScrollImages(vm: ReaderViewModel, chapter: Release): Map<String, ScrollImage> =
+    withContext(Dispatchers.IO) {
+        val saved = vm.app.dao.download(chapter.id)
+        if (saved?.state != "Complete" || saved.total != chapter.pages) return@withContext emptyMap()
+        ChapterFiles.tryLocked(chapter.id) {
+            val download = vm.app.dao.download(chapter.id)
+            if (download?.state != "Complete" || download.total != chapter.pages) return@tryLocked emptyMap()
+            buildMap {
+                for (page in 0 until chapter.pages) {
+                    currentCoroutineContext().ensureActive()
+                    if (repairMarker(vm.app, chapter.id, page).exists()) continue
+                    val file = pageFile(vm.app, chapter.id, page)
+                    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    BitmapFactory.decodeFile(file.path, bounds)
+                    if (bounds.outWidth > 0 && bounds.outHeight > 0)
+                        put("${chapter.id}|$page", ScrollImage(file, bounds.outWidth, bounds.outHeight))
+                }
+            }
+        } ?: emptyMap()
+    }
 
 @Composable
 internal fun ChapterSeparator(label: String) {
@@ -102,6 +126,14 @@ fun WebtoonReader(
     val initialFraction = remember { vm.readerScroll.value }
     var window by remember { mutableStateOf(listOf(chapter)) }
     val images = remember { mutableStateMapOf<String, ScrollImage>() }
+    var initialized by remember { mutableStateOf(false) }
+    LaunchedEffect(initialChapter.id, session) {
+        val saved = savedScrollImages(vm, initialChapter)
+        withContext(Dispatchers.Main.immediate) {
+            images.putAll(saved)
+            initialized = true
+        }
+    }
     val defaultList = remember { LazyListState(initialPage + 1) }
     val list = state ?: defaultList
     val cacheOwner = remember { Any() }
@@ -182,8 +214,12 @@ fun WebtoonReader(
         nextLoading = true
         try {
             val resolved = vm.resolveChapter(next)
+            val saved = savedScrollImages(vm, resolved)
             withContext(Dispatchers.Main.immediate) {
-                if (window.none { it.id == resolved.id }) updateWindow(window + resolved)
+                if (window.none { it.id == resolved.id }) {
+                    images.putAll(saved)
+                    updateWindow(window + resolved)
+                }
             }
         } catch (e: CancellationException) {
             throw e
@@ -203,8 +239,12 @@ fun WebtoonReader(
         previousLoading = true
         try {
             val resolved = vm.resolveChapter(previous)
+            val saved = savedScrollImages(vm, resolved)
             withContext(Dispatchers.Main.immediate) {
-                if (window.none { it.id == resolved.id }) updateWindow(listOf(resolved) + window)
+                if (window.none { it.id == resolved.id }) {
+                    images.putAll(saved)
+                    updateWindow(listOf(resolved) + window)
+                }
             }
         } catch (e: CancellationException) { throw e }
         catch (e: Exception) { previousError = e }
@@ -335,7 +375,7 @@ fun WebtoonReader(
                     }
             }
         }
-        LazyColumn(state = list, modifier = Modifier.fillMaxSize().background(Color.Black)
+        if (initialized) LazyColumn(state = list, modifier = Modifier.fillMaxSize().background(Color.Black)
             .graphicsLayer(scaleX = zoom, scaleY = zoom, translationX = pan.x, translationY = pan.y)
             .transformable(zoomState, canPan = { zoom > 1f })) {
             item(key = "previous-chapter") {
@@ -604,6 +644,7 @@ fun WebtoonReader(
                 }
             }
         }
+        if (!initialized) CircularProgressIndicator(Modifier.align(Alignment.Center))
         if (zoom > 1.01f) TextButton(onClick = { zoom = 1f; pan = Offset.Zero },
             modifier = Modifier.align(Alignment.TopEnd).background(Color.Black.copy(alpha = 0.9f))) {
             Text("Reset zoom", color = Color.White)
