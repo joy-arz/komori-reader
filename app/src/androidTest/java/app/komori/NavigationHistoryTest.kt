@@ -1,6 +1,7 @@
 package app.komori
 
 import android.content.Intent
+import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.platform.app.InstrumentationRegistry
@@ -13,8 +14,19 @@ import app.komori.ui.ReaderViewModel
 import app.komori.ui.UpdateViewModel
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.Rule
 
 class NavigationHistoryTest {
+    @get:Rule val compose = createEmptyComposeRule()
+    private fun waitForNative(device: UiDevice, condition: androidx.test.uiautomator.SearchCondition<Boolean>, timeout: Long): Boolean =
+        device.wait(object : androidx.test.uiautomator.Condition<UiDevice, Boolean> {
+            override fun apply(device: UiDevice): Boolean {
+                compose.waitForIdle()
+                if (android.os.Build.VERSION.SDK_INT >= 34)
+                    InstrumentationRegistry.getInstrumentation().uiAutomation.clearCache()
+                return condition.apply(device)
+            }
+        }, timeout)
     @Test
     fun leavingReaderRestoresChapterListPixelOffset() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
@@ -47,7 +59,8 @@ class NavigationHistoryTest {
             vm.chapters.value = releases
         }
         try {
-            assertTrue(device.wait(Until.hasObject(By.text("Title details")), 8000))
+            assertTrue(waitForNative(device, Until.hasObject(By.text("Title details")), 8000))
+            compose.waitForIdle()
             repeat(3) {
                 device.swipe(
                     device.displayWidth / 2,
@@ -57,6 +70,7 @@ class NavigationHistoryTest {
                     30,
                 )
             }
+            compose.waitForIdle()
             device.waitForIdle()
             val (label, bounds) = device.findObjects(By.textStartsWith("Ch. ")).firstNotNullOf { row ->
                 try {
@@ -65,15 +79,21 @@ class NavigationHistoryTest {
                 } catch (_: androidx.test.uiautomator.StaleObjectException) { null }
             }
             device.click(bounds.centerX(), bounds.centerY())
+            compose.waitForIdle()
             val deadline = android.os.SystemClock.uptimeMillis() + 8000
             while (
                 !vm.readerReady.value && android.os.SystemClock.uptimeMillis() < deadline
             ) android.os.SystemClock.sleep(50)
             assertTrue("Reader start: tapped=$label reader=${vm.reader.value?.id} error=${vm.readerError.value}", vm.readerReady.value)
             instrumentation.runOnMainSync { vm.closeReader() }
-            assertTrue(device.wait(Until.hasObject(By.text(label)), 5000))
+            assertTrue(waitForNative(device, Until.hasObject(By.text(label)), 5000))
+            compose.waitForIdle()
             device.waitForIdle()
             assertEquals(bounds, device.findObject(By.text(label)).visibleBounds)
+        } catch (error: Throwable) {
+            runCatching { device.takeScreenshot(java.io.File(app.getExternalFilesDir(null), "reader-entry-failure.png")) }
+            runCatching { device.dumpWindowHierarchy(java.io.File(app.getExternalFilesDir(null), "reader-entry-failure.xml")) }
+            throw error
         } finally {
             instrumentation.runOnMainSync { vm.closeReader(); vm.viewModelScope.coroutineContext[kotlinx.coroutines.Job]?.cancel(); activity.finish() }
             kotlinx.coroutines.runBlocking { vm.viewModelScope.coroutineContext[kotlinx.coroutines.Job]?.join() }
@@ -105,7 +125,7 @@ class NavigationHistoryTest {
                 (1..80).map { Manga("demonic:history-$it", "History title $it", "Fixture", "") }
         }
         try {
-            assertTrue(device.wait(Until.hasObject(By.desc("History title 1")), 8000))
+            assertTrue(waitForNative(device, Until.hasObject(By.desc("History title 1")), 8000))
             device.swipe(
                 device.displayWidth / 2,
                 device.displayHeight * 3 / 4,
@@ -113,6 +133,7 @@ class NavigationHistoryTest {
                 device.displayHeight / 3,
                 30,
             )
+            compose.waitForIdle()
             device.waitForIdle()
             val cover =
                 device.findObjects(By.descStartsWith("History title ")).first {
@@ -122,9 +143,9 @@ class NavigationHistoryTest {
             val description = cover.contentDescription
             val bounds = cover.visibleBounds
             cover.click()
-            assertTrue(device.wait(Until.hasObject(By.text("Title details")), 5000))
+            assertTrue(waitForNative(device, Until.hasObject(By.text("Title details")), 5000))
             device.findObject(By.desc("Back")).click()
-            assertTrue(device.wait(Until.hasObject(By.desc(description)), 5000))
+            assertTrue(waitForNative(device, Until.hasObject(By.desc(description)), 5000))
             assertEquals(
                 "Returning from a title must retain the exact pixel offset",
                 bounds,
@@ -146,18 +167,18 @@ class NavigationHistoryTest {
                 vm.back()
                 assertEquals("", vm.searchQuery.value)
             }
-            assertTrue(device.wait(Until.hasObject(By.desc(description)), 5000))
+            assertTrue(waitForNative(device, Until.hasObject(By.desc(description)), 5000))
             assertEquals(bounds, device.findObject(By.desc(description)).visibleBounds)
             device.findObject(By.desc(description)).click()
-            assertTrue(device.wait(Until.hasObject(By.text("Title details")), 5000))
+            assertTrue(waitForNative(device, Until.hasObject(By.text("Title details")), 5000))
             val title = vm.selected.value!!
             instrumentation.runOnMainSync { vm.browseTag(title, SourceTag("action", "Action")) }
-            assertTrue(device.wait(Until.hasObject(By.desc("Open search")), 5000))
+            assertTrue(waitForNative(device, Until.hasObject(By.desc("Open search")), 5000))
             device.pressBack()
-            assertTrue(device.wait(Until.hasObject(By.text("Title details")), 5000))
+            assertTrue(waitForNative(device, Until.hasObject(By.text("Title details")), 5000))
             assertEquals(title.id, vm.selected.value?.id)
             device.findObject(By.desc("Back")).click()
-            assertTrue(device.wait(Until.hasObject(By.desc(description)), 5000))
+            assertTrue(waitForNative(device, Until.hasObject(By.desc(description)), 5000))
             assertEquals(bounds, device.findObject(By.desc(description)).visibleBounds)
         } catch (error: Throwable) {
             device.executeShellCommand("screencap -p /data/local/tmp/komori-navigation-failure.png")
