@@ -16,6 +16,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyListLayoutInfo
+import androidx.compose.foundation.lazy.LazyListItemInfo
+import kotlin.math.abs
+import kotlin.math.roundToInt
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -270,6 +273,19 @@ fun WebtoonReader(
         }
         val widthPixels = with(LocalDensity.current) { maxWidth.toPx() }
         val currentWidth by rememberUpdatedState(widthPixels)
+        val placeholderPixels = with(LocalDensity.current) { 420.dp.roundToPx() }
+        fun measuredAnchor(target: WebtoonAnchor): LazyListItemInfo? {
+            val index = anchorIndex(target.key) ?: return null
+            val strip = target.key.substringAfterLast('|').toIntOrNull() ?: return null
+            val image = images[target.key.substringBeforeLast('|')]
+            val expectedHeight = image?.let {
+                (minOf(STRIP_HEIGHT, it.height - strip * STRIP_HEIGHT) * currentWidth / it.width).roundToInt()
+            } ?: placeholderPixels
+            return list.layoutInfo.visibleItemsInfo.firstOrNull {
+                it.key == target.key && it.index == index && abs(it.size - expectedHeight) <= 1 &&
+                    (it.offset == -target.scrollOffset || !list.canScrollForward || !list.canScrollBackward)
+            }
+        }
         fun publishImage(key: String, image: ScrollImage) {
             val anchor = pendingAnchor ?: retainedPosition() ?: list.layoutInfo.visibleItemsInfo.firstOrNull()?.let {
                 WebtoonAnchor(it.key.toString(), (-it.offset).coerceAtLeast(0), list.layoutInfo)
@@ -305,15 +321,15 @@ fun WebtoonReader(
         LaunchedEffect(list) {
             snapshotFlow {
                 pendingAnchor?.takeIf {
-                    list.layoutInfo !== it.beforeLayout
+                    list.layoutInfo !== it.beforeLayout && measuredAnchor(it) != null
                 }
             }.filterNotNull().collect { target ->
                 withContext(Dispatchers.Main.immediate) {
                     if (pendingAnchor == target) {
-                        retainedAnchor = list.layoutInfo.visibleItemsInfo.firstOrNull { it.key == target.key }?.let {
-                            target.copy(scrollOffset = -it.offset, beforeLayout = list.layoutInfo)
+                        measuredAnchor(target)?.let {
+                            retainedAnchor = target.copy(scrollOffset = -it.offset, beforeLayout = list.layoutInfo)
+                            pendingAnchor = null
                         }
-                        pendingAnchor = null
                     }
                 }
             }

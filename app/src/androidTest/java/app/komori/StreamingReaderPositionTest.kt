@@ -329,6 +329,14 @@ class StreamingReaderPositionTest {
                     compose.waitUntil(5000) { vm.reader.value?.id != chapter.id || vm.readerPage.value > shrinkingPage }
                 }
             } else {
+                val finalHeight = (300 * compose.activity.resources.displayMetrics.density * deliveredHeight / 400f).toInt()
+                compose.waitUntil(5000) {
+                    val items = list.layoutInfo.visibleItemsInfo
+                    val final = items.singleOrNull { it.key == key }
+                    final != null && kotlin.math.abs(final.size - finalHeight) <= 1 &&
+                        final.offset >= 0 && final.offset + final.size <= list.layoutInfo.viewportEndOffset &&
+                        items.any { it.key == "${chapter.id}|2|1" }
+                }
                 val visible = list.layoutInfo.visibleItemsInfo.single { it.key == key }
                 assertTrue("The final short image must remain entirely visible", visible.offset >= 0 &&
                     visible.offset + visible.size <= list.layoutInfo.viewportEndOffset)

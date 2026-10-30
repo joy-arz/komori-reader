@@ -14,6 +14,14 @@ Trimming now waits for scrolling to settle. Scroll activity is part of the obser
 
 The regression verifies no chapter removal during the held gesture, then verifies the exact visible strip and pixel offset after idle cleanup. Existing streaming-placeholder and downloaded-geometry tests remain in place.
 
+## Layout acknowledgement and CI follow-up
+
+On candidate ac38d6b, API 30 and 36 passed all 98 instrumented cases. API 26 caught the final short-page case sampling a layout where the preceding tall image had expanded and the expected end image was no longer in the visible item list. The previous pending-anchor acknowledgement accepted any new layout object, including an intermediate layout before the intended key/index/geometry had been measured.
+
+Restoration now requires the actual target key, current index, strip height (one-pixel rounding tolerance), and requested offset or a legitimate start/end clamp. A subsequent layout is not sufficient on its own. The final-short-page regression waits for the real short-image size, the preceding image's final strip, and full viewport containment before asserting completion.
+
+API 34 also failed the manual-refresh test while revealing reader controls through a native tap. That test now uses the existing accessible Show reader controls action and explicit Compose rendering synchronization. ReaderControlsTest and ReaderGestureTest retain physical center-tap and drag coverage. Refresh still uses the real visible action and checks session renewal, page/file preservation and active-cache ownership. Timeout limits are unchanged. The final combined API 30 run passed 12/12 reader and manual-refresh cases in 63.105 seconds; all ten release-script Python tests also passed.
+
 ## Separate confirmed Continue defect
 
 Store incomplete progress for chapter 2 at zero-based page 5 of 6, scroll fraction 0.95. Open chapter 1 and use `finishChapter()`, the handler for Continue/Next chapter and accepted gap prompts. Before the fix, this test failed in 13.742 seconds: expected page 0, actual page 5. Normal resume semantics incorrectly applied to forward navigation.
