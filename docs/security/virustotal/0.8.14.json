@@ -1,0 +1,10 @@
+{
+  "version": "0.8.14",
+  "sha256": "9bd8a2b58227b51c1afacd82ebde0d7f94d427720f80d08872ae0f5d5fa10b1d",
+  "apk_size": 2600627,
+  "report_url": "https://www.virustotal.com/gui/file/9bd8a2b58227b51c1afacd82ebde0d7f94d427720f80d08872ae0f5d5fa10b1d/detection",
+  "recorded_at": "2026-10-31T17:55:35.785443+00:00",
+  "status": "pending",
+  "source": "not-scanned",
+  "message": "Fresh API check unavailable (HTTP 404); existing same-hash evidence is retained, otherwise scan is pending."
+}
