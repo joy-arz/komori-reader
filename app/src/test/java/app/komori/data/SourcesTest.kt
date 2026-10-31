@@ -137,6 +137,29 @@ class SourcesTest {
     }
 
     @Test
+    fun weebFileChaptersUseNumericReadingOrder() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(
+                MockResponse()
+                    .setBody(
+                        """<div x-data="{}"><a href="/chapters/A"><span class="flex"><span>File 10</span></span></a></div>
+                           <div x-data="{}"><a href="/chapters/B"><span class="flex"><span>File 2.5</span></span></a></div>
+                           <div x-data="{}"><a href="/chapters/C"><span class="flex"><span>File 2</span></span></a></div>"""
+                    )
+            )
+            val source =
+                WebSource("weeb", server.url("/").toString().trimEnd('/'), MangaDex.client())
+            val chapters = source.chapters(sourceId("weeb", "/series/ID/Title")).map { it.release() }
+            assertEquals(listOf("10", "2.5", "2"), chapters.map { it.number })
+            assertEquals(
+                listOf("2", "2.5", "10"),
+                app.komori.domain.ChapterPolicy.select(chapters, app.komori.domain.ChapterPreferences())
+                    .map { it.number },
+            )
+        }
+    }
+
+    @Test
     fun blockedResponseDoesNotReplaceCachedChaptersWithEmptyList() = runBlocking {
         MockWebServer().use { server ->
             server.enqueue(MockResponse().setBody("<title>Just a moment...</title>"))

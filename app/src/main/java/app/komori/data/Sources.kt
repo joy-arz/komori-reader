@@ -756,7 +756,10 @@ class WebSource(
                 val number =
                     if (key == "demonic") url.toHttpUrl().queryParameter("chapter")
                     else
-                        Regex("(?i)(?:chapter|ch\\.)\\s*(\\d+(?:\\.\\d+)?)")
+                        Regex(
+                                if (key == "weeb") "(?i)(?:chapter|ch\\.|file)\\s*(\\d+(?:\\.\\d+)?)"
+                                else "(?i)(?:chapter|ch\\.)\\s*(\\d+(?:\\.\\d+)?)"
+                            )
                             .find(title)
                             ?.groupValues
                             ?.get(1)
