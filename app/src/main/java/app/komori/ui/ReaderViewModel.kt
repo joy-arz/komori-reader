@@ -258,7 +258,7 @@ class ReaderViewModel(
         authorCatalog =
             AuthorCatalog(creators, sort, workFilter, enrich = { if (authorPage == null) app.source.details(it) else it }) { creator, page ->
                 val key = sourceKey(creator.id)
-                require(key in setOf("mangadex", "zap", "nhentai", "imhentai")) {
+                require(key in setOf("mangadex", "zap", "nhentai", "imhentai", "asura", "atsu", "atsuadult")) {
                     "This source does not provide a creator catalog."
                 }
                 val filter = authorBrowseFilter(key, sort, workFilter)

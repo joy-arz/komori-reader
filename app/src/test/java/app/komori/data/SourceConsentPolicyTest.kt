@@ -6,7 +6,7 @@ import org.junit.Test
 class SourceConsentPolicyTest {
     @Test fun freshInstallsEnableOnlyGeneralSources() {
         val initial = SourceConsentPolicy.initial(null, false, null)
-        assertEquals("asura,hive,demonic,weeb", initial.enabled)
+        assertEquals("asura,hive,demonic,weeb,atsu", initial.enabled)
         assertFalse(initial.confirmed)
         assertTrue(SourceConsentPolicy.adultSources.none { it in initial.enabled.split(',') })
     }

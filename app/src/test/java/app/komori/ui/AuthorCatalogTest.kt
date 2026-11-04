@@ -72,6 +72,11 @@ class AuthorCatalogTest {
             AuthorSort.LATEST.sourceSort(key),
         )
         assertEquals("Popularity", AuthorSort.POPULAR.sourceSort("mangadex"))
+        assertEquals("Latest updates", AuthorSort.LATEST.sourceSort("asura"))
+        for (key in listOf("asura", "atsu", "atsuadult"))
+            assertEquals("Popularity", AuthorSort.POPULAR.sourceSort(key))
+        for (key in listOf("atsu", "atsuadult"))
+            assertEquals("Recently added", AuthorSort.LATEST.sourceSort(key))
         assertEquals("Popular all time", AuthorSort.POPULAR.sourceSort("nhentai"))
         assertEquals("Popular", AuthorSort.POPULAR.sourceSort("zap"))
         assertEquals("Popular", AuthorSort.POPULAR.sourceSort("imhentai"))

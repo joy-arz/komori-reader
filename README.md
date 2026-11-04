@@ -39,7 +39,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 | <img src="https://api.iconify.design/lucide/layout-dashboard.svg?color=%23A3E635" width="18" height="18" align="absmiddle">&nbsp; **Design** | Black and lime, Outfit typography, floating navigation |
 | <img src="https://api.iconify.design/lucide/book-open.svg?color=%23A3E635" width="18" height="18" align="absmiddle">&nbsp; **Reading** | Paged and Webtoon modes, zoom, immersive controls |
 | <img src="https://api.iconify.design/lucide/download.svg?color=%23A3E635" width="18" height="18" align="absmiddle">&nbsp; **Offline** | Persistent downloads with integrity checks and repair |
-| <img src="https://api.iconify.design/lucide/search.svg?color=%23A3E635" width="18" height="18" align="absmiddle">&nbsp; **Discover** | Ten sources, language/category/genre filters and author browsing where supported |
+| <img src="https://api.iconify.design/lucide/search.svg?color=%23A3E635" width="18" height="18" align="absmiddle">&nbsp; **Discover** | Twelve source catalogs, language/category/genre filters and author browsing where supported |
 | <img src="https://api.iconify.design/lucide/refresh-cw.svg?color=%23A3E635" width="18" height="18" align="absmiddle">&nbsp; **Updates** | Verified in-app updates from GitHub releases |
 | <img src="https://api.iconify.design/lucide/lock.svg?color=%23A3E635" width="18" height="18" align="absmiddle">&nbsp; **Private** | No account, no ads, no analytics. Library and reading progress stay on your device |
 
@@ -156,7 +156,9 @@ Built with Kotlin and Compose. Native online and offline reading.
 
 ## <img src="https://api.iconify.design/lucide/library.svg?color=%23A3E635" width="26" height="26" align="absmiddle"> Sources
 
-Reorderable source tabs: AsuraScans, HiveToons, DemonicScans, WeebCentral, MangaDex, HentaiZap, ImHentai, Nhentai, Manhwa18.com and Manhwa18.cc. Asura and Hive lead the default order and are enabled alongside DemonicScans and WeebCentral on fresh installations. Newly introduced tabs precede existing sources while preserving their relative order; once arranged, the full custom order is retained. Enable MangaDex or other sources in **Settings → Sources**. Enabling the first dedicated adult source asks for an affirmative 18+ confirmation, saved once for later adult-source toggles. Upgrades retain existing choices.
+Bundled website icons use green circular frames in Discover, Settings, Authors filters and cover badges. Icons remain available offline. Original artwork and provenance are listed in [source icon credits](docs/images/source-icons/README.md).
+
+Reorderable source tabs: AsuraScans, HiveToons, DemonicScans, WeebCentral, Atsumaru, Atsumaru 18+, MangaDex, HentaiZap, ImHentai, Nhentai, Manhwa18.com and Manhwa18.cc. Asura and Hive lead the default order and are enabled alongside DemonicScans, WeebCentral and regular Atsumaru on fresh installations. Atsumaru follows WeebCentral; its separate 18+ catalog stays disabled until enabled through the shared age confirmation. Newly introduced tabs precede existing sources while preserving their relative order; once arranged, the full custom order is retained. Enable MangaDex or other sources in **Settings → Sources**. Enabling the first dedicated adult source asks for an affirmative 18+ confirmation, saved once for later adult-source toggles. Upgrades retain existing choices.
 
 | Source | Status | Highlights |
 |---|---|---|
@@ -164,6 +166,8 @@ Reorderable source tabs: AsuraScans, HiveToons, DemonicScans, WeebCentral, Manga
 | **HiveToons** | Native | Title search, latest/popular browsing, genres, full server-rendered chapter lists, reading and downloads. Locked chapters stay unavailable. |
 | **DemonicScans** | Native | Reading and downloads. Views, new and title browsing, genre selection. Genre refinement also works during title search. |
 | **WeebCentral** | Experimental | Native paged and webtoon reader. Parser and request routing have fixture coverage. |
+| **Atsumaru** | Native | Regular English comics. Title/author search, genres, category/status filters, popularity/rating/alphabetical/new sorting, complete chapter lists and alternate groups. |
+| **Atsumaru 18+** | Optional · 18+ | Separate adult catalog; disabled initially and protected by the shared one-time age confirmation. |
 | **MangaDex** | Native | Search, popularity, rating, update and title sorting, genre, language/origin, publication-status and content-rating filters. |
 | **HentaiZap** | Native | Popular, Top Rated and Downloaded sorting. Tag, parody, language and category filters. |
 | **ImHentai** | Native | Tag, parody, language and category filter combinations in title browsing. |

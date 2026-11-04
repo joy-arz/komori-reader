@@ -2,6 +2,14 @@
 
 Updated October 27, 2026 for the 0.8.5 reliability and Authors-filter pass. Published delivery is listed separately below. Checkboxes record implemented features with local checks; device/network acceptance that remains unverified stays open. See [the pass log](BACKLOG_PASS.md) for exact results and release gates. Tracking is deferred by the user until core acceptance.
 
+## November 5: source icons and Atsumaru
+
+- [x] Bundle the real website artwork and render consistent green circular badges in source selectors and cover badges.
+- [x] Add regular Atsumaru after WeebCentral, with normal comic browsing, full chapters, alternate releases and CDN page handling.
+- [x] Add Atsumaru 18+ as a separate disabled-by-default catalog using the existing shared age confirmation.
+- [x] Include Asura/Atsumaru followed creators in Authors and map native sort names.
+- [ ] Complete 0.8.16 exact-revision release checks and phone/live-reading acceptance. Local API/fixture and emulator results are recorded in the release review report.
+
 ## November 4: sources, offline opening and custom libraries
 
 - [x] Add AsuraScans comics and HiveToons with default-leading source order; enable both for fresh installations while preserving upgrade enable/consent choices.

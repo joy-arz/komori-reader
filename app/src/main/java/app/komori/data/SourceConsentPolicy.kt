@@ -1,8 +1,8 @@
 package app.komori.data
 
 object SourceConsentPolicy {
-    val adultSources = setOf("zap", "imhentai", "nhentai", "manhwa18", "manhwa18cc")
-    const val defaultEnabled = "asura,hive,demonic,weeb"
+    val adultSources = setOf("zap", "imhentai", "nhentai", "manhwa18", "manhwa18cc", "atsuadult")
+    const val defaultEnabled = "asura,hive,demonic,weeb,atsu"
     const val legacyEnabled = "demonic,weeb,mangadex,zap,imhentai,nhentai,manhwa18,manhwa18cc"
 
     data class Initial(val enabled: String, val confirmed: Boolean)

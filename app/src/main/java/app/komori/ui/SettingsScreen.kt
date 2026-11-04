@@ -146,6 +146,8 @@ internal fun SettingsScreen(vm: ReaderViewModel, settings: Settings) {
                                     .padding(start = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
+                                SourceIcon(key)
+                                Spacer(Modifier.width(8.dp))
                                 Text(
                                     "${index + 1}. ${sourceNames.getValue(key)}${if(key == enabledSourceOrder(settings).firstOrNull()) " · Default" else ""}",
                                     Modifier.weight(1f),

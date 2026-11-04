@@ -1,0 +1,91 @@
+{
+  "asura": {
+    "url": "https://asurascans.com/images/logo.webp",
+    "bytes": 66266,
+    "sha256": "d480155b57a5a68d2848a26691b1ae7feaf51409293e32457a220570bbc75106",
+    "originalSha256": "d480155b57a5a68d2848a26691b1ae7feaf51409293e32457a220570bbc75106",
+    "asset": "app/src/main/res/drawable-nodpi/source_asura.webp",
+    "assetSha256": "d480155b57a5a68d2848a26691b1ae7feaf51409293e32457a220570bbc75106"
+  },
+  "hive": {
+    "url": "https://hivetoons.org/apple-touch-icon.png",
+    "bytes": 34575,
+    "sha256": "555dc570e1de3dfb4fb3dae8d8b3d54e7ecf26a81b9a0b78d5dee027d31557d1",
+    "originalSha256": "555dc570e1de3dfb4fb3dae8d8b3d54e7ecf26a81b9a0b78d5dee027d31557d1",
+    "asset": "app/src/main/res/drawable-nodpi/source_hive.png",
+    "assetSha256": "555dc570e1de3dfb4fb3dae8d8b3d54e7ecf26a81b9a0b78d5dee027d31557d1"
+  },
+  "demonic": {
+    "url": "https://demonicscans.org/img/logo.png",
+    "bytes": 150643,
+    "sha256": "40aa69eac65b2959ebf5ce68c7937d2efa5f7c919eb2eccb23b4e456e2275470",
+    "originalSha256": "40aa69eac65b2959ebf5ce68c7937d2efa5f7c919eb2eccb23b4e456e2275470",
+    "asset": "app/src/main/res/drawable-nodpi/source_demonic.png",
+    "assetSha256": "40aa69eac65b2959ebf5ce68c7937d2efa5f7c919eb2eccb23b4e456e2275470"
+  },
+  "weeb": {
+    "url": "https://weebcentral.com/static/images/apple-touch-icon.png",
+    "bytes": 13785,
+    "sha256": "a4df29ea8216c95f85d89ba29d31010ebdb9874bf8df26e2d7dd26e999c2b8d9",
+    "originalSha256": "a4df29ea8216c95f85d89ba29d31010ebdb9874bf8df26e2d7dd26e999c2b8d9",
+    "asset": "app/src/main/res/drawable-nodpi/source_weeb.png",
+    "assetSha256": "a4df29ea8216c95f85d89ba29d31010ebdb9874bf8df26e2d7dd26e999c2b8d9"
+  },
+  "atsu": {
+    "url": "https://atsu.moe/favicon/apple-touch-icon.png",
+    "bytes": 4745,
+    "sha256": "eb0b7b54812be53d9ab8554182c5bb6e5467b19033964f87dfb6a395d17a89b4",
+    "originalSha256": "eb0b7b54812be53d9ab8554182c5bb6e5467b19033964f87dfb6a395d17a89b4",
+    "asset": "app/src/main/res/drawable-nodpi/source_atsu.png",
+    "assetSha256": "eb0b7b54812be53d9ab8554182c5bb6e5467b19033964f87dfb6a395d17a89b4"
+  },
+  "mangadex": {
+    "url": "https://mangadex.org/favicon.ico",
+    "asset": "app/src/main/res/drawable-nodpi/source_mangadex.png",
+    "assetSha256": "0428799d605dbff053373840f05e64dab57378d9cf5a953f215d1de125beeecd",
+    "normalization": "Website ICO converted losslessly to PNG for Android resource decoding."
+  },
+  "zap": {
+    "asset": "app/src/main/res/drawable-nodpi/source_zap.png",
+    "assetSha256": "53a62b8944dc5c5942cb5c9cb3fe90da789d294471d82aa2b72c931b1f258253",
+    "normalization": "Website ICO converted losslessly to PNG for Android resource decoding.",
+    "url": "https://hentaizap.com/favicon.ico",
+    "originalSha256": "64b72ecfd14286d318a397fac785ee522b5be16269c45780b7162809576c247a"
+  },
+  "imhentai": {
+    "asset": "app/src/main/res/drawable-nodpi/source_imhentai.png",
+    "assetSha256": "785f910b4879d09aca1e3d9237a20607f85f8e5939e34bd7422ecf1388ba2f8f",
+    "normalization": "Website ICO converted losslessly to PNG for Android resource decoding.",
+    "url": "https://imhentai.xxx/favicon.ico",
+    "originalSha256": "e46b959e271dff6e6708c8629195e2cc245b39bd6348d5140b4458de8d9df607"
+  },
+  "nhentai": {
+    "url": "https://nhentai.net/favicon.png",
+    "asset": "app/src/main/res/drawable-nodpi/source_nhentai.png",
+    "assetSha256": "d8c2c1c235f52a8491011299df0e7d8ff71b8db4804cb412687b57540c6f59a0"
+  },
+  "manhwa18": {
+    "asset": "app/src/main/res/drawable-nodpi/source_manhwa18.png",
+    "assetSha256": "d0303be27c0b5ebdb49a6a0fc1bd591c51af09adcb05420b499c1031660efeed",
+    "normalization": "Website ICO converted losslessly to PNG for Android resource decoding.",
+    "url": "https://manhwa18.com/favicon1.ico",
+    "originalSha256": "46a0607ddba4a662fc225d251f96340afcb18681d323e7d3895796596f11d767"
+  },
+  "manhwa18cc": {
+    "url": "https://manhwa18.cc/images/favicon-160x160.png",
+    "bytes": 3315,
+    "sha256": "8c21dbb9f738257d9f7c4f280847b348bdfb8593a793f191750f833fb2bd5118",
+    "originalSha256": "8c21dbb9f738257d9f7c4f280847b348bdfb8593a793f191750f833fb2bd5118",
+    "asset": "app/src/main/res/drawable-nodpi/source_manhwa18cc.png",
+    "assetSha256": "8c21dbb9f738257d9f7c4f280847b348bdfb8593a793f191750f833fb2bd5118"
+  },
+  "atsuadult": {
+    "url": "https://atsu.moe/favicon/apple-touch-icon.png",
+    "bytes": 4745,
+    "sha256": "eb0b7b54812be53d9ab8554182c5bb6e5467b19033964f87dfb6a395d17a89b4",
+    "originalSha256": "eb0b7b54812be53d9ab8554182c5bb6e5467b19033964f87dfb6a395d17a89b4",
+    "asset": "app/src/main/res/drawable-nodpi/source_atsu.png",
+    "assetSha256": "eb0b7b54812be53d9ab8554182c5bb6e5467b19033964f87dfb6a395d17a89b4",
+    "note": "Shares the Atsumaru website icon; adult catalog remains opt-in."
+  }
+}
