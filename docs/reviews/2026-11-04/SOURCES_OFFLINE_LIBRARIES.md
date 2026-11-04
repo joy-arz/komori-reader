@@ -54,3 +54,9 @@ PR #11, initial head `5d4ad0f`: Android build/release packaging passed (run 4184
 Local release/R8 packaging completed successfully. Normal cloud JVM execution passed 207 tests with seven optional skips; the extra skip is the captured-public-HTML test that was enabled locally. Live public search also returned Overgeared on Asura and Lookism on Hive. Final follow-up checks are tracked on the PR.
 
 The synchronized offline/library cases passed locally again: 2/2 in 3.310 seconds. The disposable-emulator script passed `bash -n`; no production application code changed in this CI follow-up.
+
+## Consent UI synchronization follow-up
+
+At `c86371b`, build/release packaging and repeated API 36 selection passed again. Full API 30 and 34 suites passed. API 26 and 36 each passed 100/101 cases; their only failure was the existing consent UI test's five-second coroutine wait after touch injection. The Messages overlay no longer caused failures on API 26.
+
+The consent UI test now pumps Compose frames while awaiting the view model's committed setting, then separately checks the DataStore value and actual switch semantics. It retains decline/confirm/one-time confirmation/model-recreation assertions and the original five-second limit. Five consecutive local executions of that consent flow passed. This follow-up changes only instrumentation synchronization, with no production application change.

@@ -67,6 +67,10 @@ class SourceConsentTest {
         try {
             sourceNames.keys.forEach { app.settings.enableSource(it, it in setOf("demonic", "weeb")) }
             app.settings.set("adultSourcesConfirmed", false)
+            fun awaitSettings(predicate: (Settings) -> Boolean) {
+                compose.waitUntil(5000) { vm?.settings?.value?.let(predicate) == true }
+                assertTrue("The UI state must also be committed to storage", runBlocking { predicate(app.settings.flow.first()) })
+            }
             fun show() {
                 compose.runOnUiThread {
                     val model = ReaderViewModel(app); vm = model
@@ -87,15 +91,18 @@ class SourceConsentTest {
             compose.onNodeWithContentDescription("Enable Nhentai").performClick()
             compose.waitUntil(5000) { compose.onAllNodesWithText("Adults only · 18+").fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithText("I am 18 or older").performClick()
-            withTimeout(5000) { app.settings.flow.first { it.adultSourcesConfirmed && "nhentai" in it.enabledSources.split(',') } }
+            awaitSettings { it.adultSourcesConfirmed && "nhentai" in it.enabledSources.split(',') }
+            compose.onNodeWithContentDescription("Enable Nhentai").assertIsOn()
             compose.waitUntil(5000) { vm!!.pendingAdultSource.value == null }
             compose.onNodeWithContentDescription("Enable HentaiZap").performScrollTo().performClick()
-            withTimeout(5000) { app.settings.flow.first { "zap" in it.enabledSources.split(',') } }
+            awaitSettings { "zap" in it.enabledSources.split(',') }
+            compose.onNodeWithContentDescription("Enable HentaiZap").assertIsOn()
             compose.onNodeWithText("Adults only · 18+").assertDoesNotExist()
             withContext(Dispatchers.Main) { vm!!.viewModelScope.cancel() }
             show()
             compose.onNodeWithContentDescription("Enable ImHentai").performScrollTo().performClick()
-            withTimeout(5000) { app.settings.flow.first { "imhentai" in it.enabledSources.split(',') } }
+            awaitSettings { "imhentai" in it.enabledSources.split(',') }
+            compose.onNodeWithContentDescription("Enable ImHentai").assertIsOn()
             compose.onNodeWithText("Adults only · 18+").assertDoesNotExist()
         } finally {
             withContext(Dispatchers.Main) { vm?.viewModelScope?.cancel() }
