@@ -86,6 +86,14 @@ internal fun Library(vm: ReaderViewModel, discover: () -> Unit) {
     var status by rememberSaveable { mutableStateOf("") }
     var unreadOnly by rememberSaveable { mutableStateOf(false) }
     var showLibraryFilters by remember { mutableStateOf(false) }
+    var manageLibraries by remember { mutableStateOf(false) }
+    if (manageLibraries) CategoryManagerDialog(vm) { manageLibraries = false }
+    var knownLibraries by remember { mutableStateOf(emptySet<String>()) }
+    LaunchedEffect(categoryNames) {
+        val current = categoryNames.map { it.id }.toSet()
+        if (category in knownLibraries && category !in current) category = ""
+        knownLibraries = current
+    }
     if (showLibraryFilters) LibraryFilterDialog(vm, category, status, unreadOnly,
         { selectedCategory, selectedStatus, unread -> category = selectedCategory; status = selectedStatus; unreadOnly = unread },
         { showLibraryFilters = false })
@@ -129,7 +137,7 @@ internal fun Library(vm: ReaderViewModel, discover: () -> Unit) {
         }
         val recent = shelf.firstOrNull { it.lastRelease != null }
         val book = manga.find { it.id == recent?.mangaId }
-        if (book != null && settings.showContinue && query.isEmpty() && filter == "Saved") {
+        if (book != null && settings.showContinue && query.isEmpty() && filter == "Saved" && category.isEmpty()) {
             Card(
                 onClick = { vm.open(book, true) },
                 modifier = Modifier.fillMaxWidth().padding(20.dp, 0.dp, 20.dp, 16.dp),
@@ -220,6 +228,13 @@ internal fun Library(vm: ReaderViewModel, discover: () -> Unit) {
                     )
                 }
             }
+        }
+        LazyRow(Modifier.fillMaxWidth().padding(horizontal = 18.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            item { FilterChip(selected = category.isEmpty(), onClick = { category = "" }, label = { Text("All libraries") }) }
+            items(categoryNames, key = { it.id }) { library ->
+                FilterChip(selected = category == library.id, onClick = { category = library.id }, label = { Text(library.name) })
+            }
+            item { TextButton(onClick = { manageLibraries = true }) { Text("Manage libraries") } }
         }
         run {
             val entries =

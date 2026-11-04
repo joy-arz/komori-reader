@@ -2,6 +2,15 @@
 
 Updated October 27, 2026 for the 0.8.5 reliability and Authors-filter pass. Published delivery is listed separately below. Checkboxes record implemented features with local checks; device/network acceptance that remains unverified stays open. See [the pass log](BACKLOG_PASS.md) for exact results and release gates. Tracking is deferred by the user until core acceptance.
 
+## November 4: sources, offline opening and custom libraries
+
+- [x] Add AsuraScans comics and HiveToons with default-leading source order; enable both for fresh installations while preserving upgrade enable/consent choices.
+- [x] Parse complete public chapter metadata, including Hive chapters absent from the initial 25 rendered rows. Keep locked chapters unavailable and exclude Asura novels.
+- [x] Start downloaded reading from saved metadata without waiting for refresh; restrict automatic offline entry to complete downloaded chapters.
+- [x] Retain download-owned covers outside the temporary image cache; clean them after the last chapter download is removed. Keep pages usable if a cover request fails.
+- [x] Expose named library tabs with creation, assignment, rename, deletion and persistent manual order; preserve old categories and metadata backups.
+- [ ] Complete cloud API 26/30/34/36 checks and phone/live-site acceptance. See the scoped implementation report for measured local results.
+
 ## October 28 reader controls follow-up
 
 - [x] Start each reader session with controls hidden; reserve a two-dimensional center region for deliberate control taps.

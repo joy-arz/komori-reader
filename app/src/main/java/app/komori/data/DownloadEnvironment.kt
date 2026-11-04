@@ -20,6 +20,12 @@ import kotlinx.coroutines.launch
 
 data class DownloadEnvironment(val connected: Boolean = false, val unmetered: Boolean = false, val lowStorage: Boolean = false)
 
+fun hasInternetConnection(context: Context): Boolean {
+    val manager = context.getSystemService(ConnectivityManager::class.java)
+    return manager.activeNetwork?.let { manager.getNetworkCapabilities(it) }
+        ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+}
+
 fun downloadEnvironment(context: Context) = callbackFlow {
     val app = context.applicationContext
     val manager = app.getSystemService(ConnectivityManager::class.java)

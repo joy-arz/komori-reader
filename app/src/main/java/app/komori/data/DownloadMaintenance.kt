@@ -119,6 +119,7 @@ class DownloadMaintenance(private val app: KomoriApp) {
                     val directory = chapterDirectory(app, row.releaseId)
                     if (directory.exists() && !directory.deleteRecursively()) throw IOException("Could not delete ${row.label}. Retry after checking storage.")
                     app.dao.removeDownload(row.releaseId)
+                    OfflineTitleAssets.removeIfUnused(app, row.mangaId)
                     deleted++
                 }
             }

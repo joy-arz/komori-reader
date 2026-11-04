@@ -13,7 +13,7 @@ private const val COVER_MANGA = "komori.cover.manga"
 
 internal fun coverImageRequest(context: Context, manga: Manga): ImageRequest =
     ImageRequest.Builder(context)
-        .data(manga.cover.ifBlank {
+        .data(OfflineTitleAssets.cover(context, manga.id).takeIf { it.isFile && it.length() > 0 } ?: manga.cover.ifBlank {
             if (sourceKey(manga.id) == "local") {
                 val token = sourcePath(manga.id).trim('/').substringAfterLast('/')
                 Uri.fromFile(pageFile(context, sourceId("local", "/chapter/$token/"), 0)).toString()

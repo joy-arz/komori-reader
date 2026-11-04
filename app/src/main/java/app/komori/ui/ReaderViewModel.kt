@@ -23,12 +23,13 @@ class ReaderViewModel(
     private val authorPage: (suspend (Creator, Int, BrowseFilter) -> BrowsePage)?,
     private val savedState: SavedStateHandle,
     private val pageSource: Sources? = null,
+    private val online: () -> Boolean = { hasInternetConnection(application) },
 ) : AndroidViewModel(application) {
     constructor(application: Application) : this(application, null, SavedStateHandle())
     constructor(application: Application, savedState: SavedStateHandle) : this(application, null, savedState)
     constructor(application: Application, authorPage: (suspend (Creator, Int, BrowseFilter) -> BrowsePage)?) : this(application, authorPage, SavedStateHandle())
 
-    internal constructor(application: Application, source: Sources) : this(application, null, SavedStateHandle(), source)
+    internal constructor(application: Application, source: Sources, online: () -> Boolean = { hasInternetConnection(application) }) : this(application, null, SavedStateHandle(), source, online)
 
     val app = application as KomoriApp
     private val dao = app.dao
@@ -544,6 +545,7 @@ class ReaderViewModel(
         chapterStatus.value = "Loading complete chapter list…"
         detailJob = task {
             loading.value = true
+            val source = pageSource ?: app.source
             try {
                 val language = sourceReadingLanguage(manga.id, app.settings.flow.first().language, dao.titlePreferences(manga.id)?.language.orEmpty())
                 dao.markUpdatesSeen(manga.id)
@@ -583,16 +585,25 @@ class ReaderViewModel(
                     if (immediately) startReading()
                     return@task
                 }
-                // Only resume a known complete snapshot early; a new start waits for
-                // the full feed so a partial legacy cache cannot choose a late chapter.
+                if (!online() && completedDownloads.isNotEmpty()) {
+                    val available = retainDownloadedChapters(emptyList(), cachedRows.map { it.release() }, completedDownloads)
+                    chapters.value = available
+                    offlineLanguage = language.takeIf { it == "*" || available.any { row -> row.language == it } } ?: "*"
+                    chapterStatus.value = "Downloaded chapters · Offline"
+                    sourceLanguages.value = available.map { it.language }.distinct()
+                    if (immediately) startReading()
+                    return@task
+                }
+                // Saved downloads can start without a fresh feed. Other first starts wait
+                // for the full catalog rather than treating a partial legacy cache as complete.
+                loading.value = cached.isEmpty()
                 val resumed =
                     immediately &&
-                        snapshot != null &&
                         cached.isNotEmpty() &&
-                        dao.shelf(manga.id)?.lastRelease != null
+                        (completedDownloads.isNotEmpty() || snapshot != null && dao.shelf(manga.id)?.lastRelease != null)
                 if (resumed) startReading()
                 try {
-                    val fresh = app.source.chapters(manga.id, language)
+                    val fresh = source.chapters(manga.id, language)
                     dao.saveFeed(manga.id, language, fresh)
                     chapters.value =
                         retainDownloadedChapters(
@@ -613,10 +624,11 @@ class ReaderViewModel(
                 // Metadata language hints can be stale; never treat them as proof that
                 // a readable chapter exists. Failure here must not discard a good feed.
                 try {
-                    sourceLanguages.value = app.source.languages(manga.id)
-                    val details = app.source.details(baseManga)
+                    sourceLanguages.value = source.languages(manga.id)
+                    val details = source.details(baseManga)
                     dao.putManga(details)
                     selected.value = details
+                    try { OfflineTitleAssets.retain(app, details, source) } catch (_: IOException) { }
                 } catch (e: IOException) {
                     notice.value = "Metadata refresh failed. ${connectionMessage(e)}"
                 }
@@ -831,18 +843,42 @@ class ReaderViewModel(
             val existing = dao.backupCategories()
             require(existing.none { it.id != id && it.name.equals(clean, true) }) { "A category with this name already exists." }
             require(id != null || existing.size < 1000) { "The category limit is 1,000." }
-            dao.putCategory(LibraryCategory(id ?: java.util.UUID.randomUUID().toString(), clean))
+            dao.putCategory(LibraryCategory(id ?: java.util.UUID.randomUUID().toString(), clean,
+                existing.find { it.id == id }?.position ?: ((existing.maxOfOrNull { it.position } ?: -1) + 1)))
+        }
+    }
+
+    fun moveCategory(id: String, step: Int) = task {
+        mutation.withLock {
+            app.database.withTransaction {
+                val rows = dao.backupCategories().toMutableList()
+                val index = rows.indexOfFirst { it.id == id }
+                if (index < 0) return@withTransaction
+                val destination = (index + step).coerceIn(0, rows.lastIndex)
+                rows.add(destination, rows.removeAt(index))
+                rows.forEachIndexed { rank, row -> dao.putCategory(row.copy(position = rank)) }
+            }
         }
     }
 
     fun deleteCategory(id: String) = task { dao.deleteCategory(id) }
 
-    fun changeCategories(ids: List<String>, changes: Map<String, Boolean>) = task {
+    fun changeCategories(ids: List<String>, changes: Map<String, Boolean>, titles: List<Manga> = emptyList()) = task {
         mutation.withLock {
-            val known = dao.backupCategories().map { it.id }.toSet()
-            for (id in ids.distinct()) for ((category, add) in changes) {
-                require(category in known) { "This category no longer exists." }
-                if (add) dao.putMembership(CategoryMembership(id, category)) else dao.removeMembership(id, category)
+            app.database.withTransaction {
+                val known = dao.backupCategories().map { it.id }.toSet()
+                require(changes.keys.all { it in known }) { "This library no longer exists." }
+                for (id in ids.distinct()) {
+                    if (changes.values.any { it }) {
+                        val title = dao.manga(id) ?: titles.find { it.id == id }
+                            ?: throw IllegalArgumentException("This title is no longer available. Refresh and try again.")
+                        dao.putManga(title)
+                        dao.putShelf((dao.shelf(id) ?: Shelf(id)).copy(saved = true))
+                    }
+                    for ((category, add) in changes) {
+                        if (add) dao.putMembership(CategoryMembership(id, category)) else dao.removeMembership(id, category)
+                    }
+                }
             }
         }
     }
@@ -918,9 +954,9 @@ class ReaderViewModel(
         if (!chapter.readable) {
             notice.value =
                 if (chapter.unavailable)
-                    "MangaDex marks this chapter unavailable. Its pages cannot be fetched."
+                    "${sourceName(chapter.id)} marks this chapter unavailable. Open its source page for access information."
                 else
-                    "This chapter has no MangaDex pages. Open its external link from the chapter row if available."
+                    "This chapter has no native reader pages. Open its external link from the chapter row if available."
             return
         }
         if (offlineLanguage != null) offlineLanguage = chapter.language

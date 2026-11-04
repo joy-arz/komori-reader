@@ -35,11 +35,11 @@ class SourceConsentTest {
         }
         withStore(false, emptyMap()) { store ->
             val fresh = store.flow.first()
-            assertEquals("demonic,weeb", fresh.enabledSources)
+            assertEquals("asura,hive,demonic,weeb", fresh.enabledSources)
             assertFalse(fresh.adultSourcesConfirmed)
             assertFalse("MangaDex is non-adult and disabled initially", "mangadex" in fresh.enabledSources.split(','))
             assertTrue(runCatching { store.enableSource("nhentai", true) }.isFailure)
-            assertEquals("demonic,weeb", store.flow.first().enabledSources)
+            assertEquals("asura,hive,demonic,weeb", store.flow.first().enabledSources)
             store.confirmAdultSource("nhentai")
             store.enableSource("zap", true)
             store.enableSource("nhentai", false)
@@ -50,7 +50,7 @@ class SourceConsentTest {
             assertTrue("mangadex" in store.flow.first().enabledSources.split(','))
         }
         withStore(true, emptyMap()) { store ->
-            assertEquals(sourceNames.keys.joinToString(","), store.flow.first().enabledSources)
+            assertEquals(SourceConsentPolicy.legacyEnabled, store.flow.first().enabledSources)
             assertTrue(store.flow.first().adultSourcesConfirmed)
         }
         for (choices in listOf("", "weeb", "mangadex,zap")) withStore(true, mapOf("enabledSources" to choices)) { store ->
@@ -67,6 +67,10 @@ class SourceConsentTest {
         try {
             sourceNames.keys.forEach { app.settings.enableSource(it, it in setOf("demonic", "weeb")) }
             app.settings.set("adultSourcesConfirmed", false)
+            fun awaitSettings(predicate: (Settings) -> Boolean) {
+                compose.waitUntil(5000) { vm?.settings?.value?.let(predicate) == true }
+                assertTrue("The UI state must also be committed to storage", runBlocking { predicate(app.settings.flow.first()) })
+            }
             fun show() {
                 compose.runOnUiThread {
                     val model = ReaderViewModel(app); vm = model
@@ -87,15 +91,18 @@ class SourceConsentTest {
             compose.onNodeWithContentDescription("Enable Nhentai").performClick()
             compose.waitUntil(5000) { compose.onAllNodesWithText("Adults only · 18+").fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithText("I am 18 or older").performClick()
-            withTimeout(5000) { app.settings.flow.first { it.adultSourcesConfirmed && "nhentai" in it.enabledSources.split(',') } }
+            awaitSettings { it.adultSourcesConfirmed && "nhentai" in it.enabledSources.split(',') }
+            compose.onNodeWithContentDescription("Enable Nhentai").assertIsOn()
             compose.waitUntil(5000) { vm!!.pendingAdultSource.value == null }
             compose.onNodeWithContentDescription("Enable HentaiZap").performScrollTo().performClick()
-            withTimeout(5000) { app.settings.flow.first { "zap" in it.enabledSources.split(',') } }
+            awaitSettings { "zap" in it.enabledSources.split(',') }
+            compose.onNodeWithContentDescription("Enable HentaiZap").assertIsOn()
             compose.onNodeWithText("Adults only · 18+").assertDoesNotExist()
             withContext(Dispatchers.Main) { vm!!.viewModelScope.cancel() }
             show()
             compose.onNodeWithContentDescription("Enable ImHentai").performScrollTo().performClick()
-            withTimeout(5000) { app.settings.flow.first { "imhentai" in it.enabledSources.split(',') } }
+            awaitSettings { "imhentai" in it.enabledSources.split(',') }
+            compose.onNodeWithContentDescription("Enable ImHentai").assertIsOn()
             compose.onNodeWithText("Adults only · 18+").assertDoesNotExist()
         } finally {
             withContext(Dispatchers.Main) { vm?.viewModelScope?.cancel() }

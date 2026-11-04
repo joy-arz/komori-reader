@@ -80,7 +80,7 @@ class MigrationTest {
                     LibraryDatabase::class.java,
                     "reader-mode-test",
                 )
-                .addMigrations(app.komori.data.FEED_MIGRATION, app.komori.data.METADATA_MIGRATION, app.komori.data.ORGANIZATION_MIGRATION)
+                .addMigrations(app.komori.data.FEED_MIGRATION, app.komori.data.METADATA_MIGRATION, app.komori.data.ORGANIZATION_MIGRATION, app.komori.data.LIBRARY_ORDER_MIGRATION)
                 .build()
         try {
             val pref = kotlinx.coroutines.runBlocking { db.dao().titlePreferences("manga") }
@@ -181,6 +181,23 @@ class MigrationTest {
             db.query("SELECT page,completed,scroll FROM progress WHERE releaseId='release'").use {
                 assertTrue(it.moveToFirst()); assertEquals(3,it.getInt(0)); assertEquals(1,it.getInt(1)); assertEquals(0.5f,it.getFloat(2),0f)
             }
+        }
+    }
+
+    @Test fun libraryOrderUpgradePreservesNamesMembershipsAndProgress() {
+        helper.createDatabase("library-order-test", 6).apply {
+            execSQL("INSERT INTO library_categories(id,name) VALUES('z','Zebra'),('a','Alpha')")
+            execSQL("INSERT INTO category_memberships(mangaId,categoryId) VALUES('book','z')")
+            execSQL("INSERT INTO progress(releaseId,mangaId,chapterKey,page,completed,scroll) VALUES('release','book','key',4,0,0.25)")
+            close()
+        }
+        helper.runMigrationsAndValidate("library-order-test", 7, true, app.komori.data.LIBRARY_ORDER_MIGRATION).use { db ->
+            db.query("SELECT id,position FROM library_categories ORDER BY position").use {
+                assertTrue(it.moveToFirst()); assertEquals("a", it.getString(0)); assertEquals(0, it.getInt(1))
+                assertTrue(it.moveToNext()); assertEquals("z", it.getString(0)); assertEquals(1, it.getInt(1))
+            }
+            db.query("SELECT categoryId FROM category_memberships WHERE mangaId='book'").use { assertTrue(it.moveToFirst()); assertEquals("z", it.getString(0)) }
+            db.query("SELECT page,scroll FROM progress WHERE releaseId='release'").use { assertTrue(it.moveToFirst()); assertEquals(4, it.getInt(0)); assertEquals(0.25f, it.getFloat(1), 0f) }
         }
     }
 

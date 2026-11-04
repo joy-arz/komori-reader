@@ -28,7 +28,7 @@ data class Settings(
     val showContinue: Boolean = true,
     val continuousChapters: Boolean = true,
     val retrySeconds: Int = 3,
-    val sources: String = "demonic,weeb,mangadex,zap,imhentai,nhentai",
+    val sources: String = sourceNames.keys.joinToString(","),
     val theme: String = "legacy",
     val compact: Boolean = true,
     val brightness: Int = -1,
@@ -91,7 +91,7 @@ class SettingsStore(context: Context, private val legacyInstall: Boolean = false
                 (p[intPreferencesKey("retrySeconds")] ?: 3).let {
                     if (it in listOf(0, 3, 5, 10, 30)) it else 3
                 },
-                p[stringPreferencesKey("sources")] ?: "demonic,weeb,mangadex,zap,imhentai,nhentai",
+                p[stringPreferencesKey("sources")] ?: sourceNames.keys.joinToString(","),
                 theme = p[stringPreferencesKey("theme")]?.takeIf { it in listOf("legacy", "system", "light", "dark") } ?: "legacy",
                 compact = p[booleanPreferencesKey("compact")] ?: true,
                 brightness = (p[intPreferencesKey("brightness")] ?: -1).coerceIn(-1, 100),

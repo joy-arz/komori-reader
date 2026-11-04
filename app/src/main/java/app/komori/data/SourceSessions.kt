@@ -15,6 +15,8 @@ import okhttp3.OkHttpClient
 
 val sourceOrigins =
     linkedMapOf(
+        "asura" to "https://asurascans.com",
+        "hive" to "https://hivetoons.org",
         "demonic" to "https://demonicscans.org",
         "weeb" to "https://weebcentral.com",
         "zap" to "https://hentaizap.com",

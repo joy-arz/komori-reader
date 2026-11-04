@@ -8,6 +8,16 @@ adb shell input keyevent KEYCODE_WAKEUP
 adb shell wm dismiss-keyguard || true
 adb shell input keyevent 82
 mkdir -p device-diagnostics
+
+# The API 26 Google image's unused RCS service crashes during boot and its modal
+# covers unrelated app tests. Isolate only that package, only on disposable CI AVDs.
+if [[ "${KOMORI_DISPOSABLE_EMULATOR:-0}" == 1 ]]; then
+    messaging_packages="$(adb shell pm list packages com.google.android.apps.messaging)"
+    if [[ "$messaging_packages" == *"package:com.google.android.apps.messaging"* ]]; then
+        adb shell am force-stop com.google.android.apps.messaging
+        adb shell pm disable-user --user 0 com.google.android.apps.messaging > device-diagnostics/emulator-system-apps.txt
+    fi
+fi
 adb shell dumpsys power > device-diagnostics/power-before.txt
 adb shell dumpsys window > device-diagnostics/windows-before.txt
 
