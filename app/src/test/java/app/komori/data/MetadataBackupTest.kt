@@ -246,4 +246,12 @@ class MetadataBackupTest {
         }
     }
 
+    @Test fun libraryOrderSurvivesBackupWithoutChangingTheBackupFormat() {
+        val original = fixture().copy(categories = listOf(LibraryCategory("second", "Zebra", 0), LibraryCategory("first", "Alpha", 1)),
+            memberships = listOf(CategoryMembership("title-1", "first")))
+        val restored = BackupCodec.decode(BackupCodec.encode(original))
+        assertEquals(original.categories, restored.categories)
+        assertEquals(original.memberships, restored.memberships)
+    }
+
 }

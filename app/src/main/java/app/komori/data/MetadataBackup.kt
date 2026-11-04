@@ -149,8 +149,8 @@ object BackupCodec {
                     progress,
                     creators,
                     preferences,
-                    if (version >= 2) root.rows("categories", 1000).map { o ->
-                        o.fields("id", "name"); LibraryCategory(o.id("id"), o.text("name", 100, false))
+                    if (version >= 2) root.rows("categories", 1000).mapIndexed { position, o ->
+                        o.fields("id", "name"); LibraryCategory(o.id("id"), o.text("name", 100, false), position)
                     } else emptyList(),
                     if (version >= 2) root.rows("memberships", 50000).map { o ->
                         o.fields("mangaId", "categoryId"); CategoryMembership(o.id("mangaId"), o.id("categoryId"))

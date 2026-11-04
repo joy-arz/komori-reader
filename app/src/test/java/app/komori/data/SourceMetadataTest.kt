@@ -111,7 +111,7 @@ class SourceMetadataTest {
     @Test fun removedComixIsDiscardedFromExistingSourcePreferences() {
         assertFalse("comix" in sourceNames)
         assertFalse("comix" in sourceOrder("comix,weeb,comix,mangadex"))
-        assertEquals("weeb", sourceOrder("comix,weeb,comix,mangadex").first())
+        assertEquals(listOf("weeb", "mangadex"), sourceOrder("comix,weeb,comix,mangadex").filter { it in setOf("weeb", "mangadex") })
     }
 
     @Test fun cookieJarIsIsolatedToHttpsSourceHosts() {

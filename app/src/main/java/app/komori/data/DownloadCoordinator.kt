@@ -43,6 +43,7 @@ internal class DownloadCoordinator(private val app: KomoriApp) {
                     val directory = chapterDirectory(app, download.releaseId)
                     if (directory.exists() && !directory.deleteRecursively()) throw IOException("Could not delete the downloaded chapter. Please retry.")
                     app.dao.removeDownload(download.releaseId)
+                    OfflineTitleAssets.removeIfUnused(app, download.mangaId)
                 }
             }
         }

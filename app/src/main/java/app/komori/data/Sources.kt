@@ -19,6 +19,8 @@ import org.jsoup.nodes.Document
 
 val sourceNames =
     linkedMapOf(
+        "asura" to "AsuraScans",
+        "hive" to "HiveToons",
         "demonic" to "DemonicScans",
         "weeb" to "WeebCentral",
         "mangadex" to "MangaDex",
@@ -46,6 +48,7 @@ fun sourceReadingLanguage(id: String, global: String, override: String = ""): St
 
 fun sourcePageUrl(id: String): String =
     when (sourceKey(id)) {
+        "asura", "hive" -> sourceOrigins.getValue(sourceKey(id)) + sourcePath(id)
         "demonic" -> "https://demonicscans.org" + sourcePath(id)
         "weeb" -> "https://weebcentral.com" + sourcePath(id)
         "zap" -> "https://hentaizap.com" + sourcePath(id)
@@ -59,7 +62,7 @@ fun sourcePageUrl(id: String): String =
 fun sourceName(id: String) = if (sourceKey(id) == "local") "Local" else sourceNames[sourceKey(id)] ?: "Unknown source"
 
 fun sourceOrder(value: String) =
-    (value.split(',').filter { it in sourceNames } + sourceNames.keys).distinct()
+    (scanlationSources.filter { it !in value.split(',') } + value.split(',').filter { it in sourceNames } + sourceNames.keys).distinct()
 
 fun sourceId(source: String, path: String) =
     "$source:" +
@@ -106,7 +109,7 @@ fun sourceSearchTypes(key: String): List<String> =
 fun sourceBrowseLanguages(key: String): List<SourceTag> = when (key) {
     "mangadex" -> listOf("en" to "English", "ja" to "Japanese", "ko" to "Korean", "zh" to "Chinese", "zh-hk" to "Traditional Chinese", "id" to "Indonesian", "es" to "Spanish", "es-la" to "Latin American Spanish", "fr" to "French", "de" to "German", "pt-br" to "Brazilian Portuguese", "ru" to "Russian", "vi" to "Vietnamese", "th" to "Thai")
     "manhwa18", "manhwa18cc" -> listOf("en" to "English", "ko" to "Korean raw")
-    "demonic", "weeb" -> listOf("en" to "English")
+    "asura", "hive", "demonic", "weeb" -> listOf("en" to "English")
     "zap", "imhentai" -> listOf("en" to "English", "jp" to "Japanese", "es" to "Spanish",
         "fr" to "French", "kr" to "Korean", "de" to "German", "ru" to "Russian")
     "nhentai" -> listOf("english" to "English", "japanese" to "Japanese", "chinese" to "Chinese")
@@ -140,6 +143,7 @@ data class BrowsePage(
 class Sources(val client: OkHttpClient, apiClient: OkHttpClient = client) {
     val coverRecovery = CoverRecovery(::details)
     private val dex = MangaDex(apiClient)
+    private val scans = scanlationSources.associateWith { ScanlationSource(it, sourceOrigins.getValue(it), client) }
     private val manhwa = ManhwaSource("manhwa18", "https://manhwa18.com", client)
     private val manhwaCc = ManhwaSource("manhwa18cc", "https://manhwa18.cc", client)
     private fun manhwa(key: String) = if (key == "manhwa18") manhwa else manhwaCc
@@ -187,6 +191,8 @@ class Sources(val client: OkHttpClient, apiClient: OkHttpClient = client) {
         if (key == "zap" && facetBrowse) listOf("Latest", "Popular") else when (key) {
             "manhwa18" -> listOf("Latest updates", "Recently added", "Views", "Likes", "Title")
             "manhwa18cc" -> listOf("Latest updates", "Recently added", "Popularity", "Rating", "Title")
+            "asura" -> listOf("Latest updates", "Popularity", "Title")
+            "hive" -> listOf("Latest updates", "Popularity")
             "demonic" -> listOf("Views", "Recently added", "Title")
             "weeb" ->
                 listOf("Popularity", "Subscribers", "Latest Updates", "Recently Added", "Alphabet")
@@ -208,6 +214,9 @@ class Sources(val client: OkHttpClient, apiClient: OkHttpClient = client) {
             dex.browse(query, (page - 1) * 30, creator, filter).let {
                 BrowsePage(it, it.size == 30)
             }
+        else if (key in scanlationSources) {
+            scans.getValue(key).browse(query, page, filter, creator)
+        }
         else if (key in manhwaSources) {
             require(creator == null) { "This source does not expose a verified author catalog. Use title search or genre filters." }
             manhwa(key).browse(query, page, filter)
@@ -216,17 +225,19 @@ class Sources(val client: OkHttpClient, apiClient: OkHttpClient = client) {
     }
 
     suspend fun tags(key: String): List<SourceTag> = sourceRequest(key, SourceStage.FILTERS) {
-        if (key == "mangadex") dex.tags() else if (key in manhwaSources) manhwa(key).tags() else web(key).tags()
+        if (key in scanlationSources) scans.getValue(key).tags() else if (key == "mangadex") dex.tags() else if (key in manhwaSources) manhwa(key).tags() else web(key).tags()
     }
 
     suspend fun details(manga: Manga): Manga = sourceRequest(sourceKey(manga.id), SourceStage.DETAILS) {
         if (sourceKey(manga.id) in setOf("mangadex", "local")) manga
+        else if (sourceKey(manga.id) in scanlationSources) scans.getValue(sourceKey(manga.id)).details(manga)
         else if (sourceKey(manga.id) in manhwaSources) manhwa(sourceKey(manga.id)).details(manga)
         else web(sourceKey(manga.id)).details(manga)
     }
 
     suspend fun chapters(id: String, language: String) = sourceRequest(sourceKey(id), SourceStage.CHAPTERS) {
         if (sourceKey(id) == "mangadex") dex.chapters(id, language)
+        else if (sourceKey(id) in scanlationSources) scans.getValue(sourceKey(id)).chapters(id)
         else if (sourceKey(id) in manhwaSources) manhwa(sourceKey(id)).chapters(id)
         else web(sourceKey(id)).chapters(id)
     }
@@ -237,6 +248,7 @@ class Sources(val client: OkHttpClient, apiClient: OkHttpClient = client) {
 
     suspend fun pages(id: String, saver: Boolean) = sourceRequest(sourceKey(id), SourceStage.MANIFEST) {
         if (sourceKey(id) == "mangadex") dex.pages(id, saver)
+        else if (sourceKey(id) in scanlationSources) scans.getValue(sourceKey(id)).pages(id)
         else if (sourceKey(id) in manhwaSources) manhwa(sourceKey(id)).pages(id)
         else web(sourceKey(id)).pages(id)
     }
@@ -250,7 +262,7 @@ class Sources(val client: OkHttpClient, apiClient: OkHttpClient = client) {
                         header("Referer", "https://mangadex.org/")
                         header("User-Agent", "Komori/${app.komori.BuildConfig.VERSION_NAME} (Android reader)")
                     }
-                    "manhwa18", "manhwa18cc" -> header("Referer", "${sourceOrigins[sourceKey(id)]}/")
+                    "asura", "hive", "manhwa18", "manhwa18cc" -> header("Referer", "${sourceOrigins[sourceKey(id)]}/")
                     "demonic" -> header("Referer", "https://demonicscans.org/")
                     "weeb" -> header("Referer", "https://weebcentral.com/")
                     "zap" -> header("Referer", "https://hentaizap.com/")

@@ -39,7 +39,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 | <img src="https://api.iconify.design/lucide/layout-dashboard.svg?color=%23A3E635" width="18" height="18" align="absmiddle">&nbsp; **Design** | Black and lime, Outfit typography, floating navigation |
 | <img src="https://api.iconify.design/lucide/book-open.svg?color=%23A3E635" width="18" height="18" align="absmiddle">&nbsp; **Reading** | Paged and Webtoon modes, zoom, immersive controls |
 | <img src="https://api.iconify.design/lucide/download.svg?color=%23A3E635" width="18" height="18" align="absmiddle">&nbsp; **Offline** | Persistent downloads with integrity checks and repair |
-| <img src="https://api.iconify.design/lucide/search.svg?color=%23A3E635" width="18" height="18" align="absmiddle">&nbsp; **Discover** | Eight sources, language/category/genre filters and author browsing where supported |
+| <img src="https://api.iconify.design/lucide/search.svg?color=%23A3E635" width="18" height="18" align="absmiddle">&nbsp; **Discover** | Ten sources, language/category/genre filters and author browsing where supported |
 | <img src="https://api.iconify.design/lucide/refresh-cw.svg?color=%23A3E635" width="18" height="18" align="absmiddle">&nbsp; **Updates** | Verified in-app updates from GitHub releases |
 | <img src="https://api.iconify.design/lucide/lock.svg?color=%23A3E635" width="18" height="18" align="absmiddle">&nbsp; **Private** | No account, no ads, no analytics. Library and reading progress stay on your device |
 
@@ -85,6 +85,9 @@ Built with Kotlin and Compose. Native online and offline reading.
 - Opt-in daily/12-hour chapter checks, grouped Updates, and optional notifications. Author checks rotate through up to three follows per cycle, checking their latest source page; the first check establishes a baseline.
 - Reviewed source/edition transfer with explicit chapter mapping. Number, volume and language must agree for automatic suggestions; originals and progress remain available.
 - The **Downloaded** collection includes titles with saved pages and opens their offline chapter list.
+- Downloaded titles open from saved descriptions and chapter metadata without waiting for a network refresh. With no connection, only complete downloaded chapters are offered for automatic reading. Online refresh failures retain the saved information.
+- Download covers are stored in app files rather than the evictable image cache. Removing the last download for a title cleans its downloaded cover while retaining Library metadata and reading progress. A failed cover fetch does not discard readable chapter pages; refresh the title online to retry.
+- Create multiple named libraries from **Library → Manage libraries**. Use **Move earlier / Move later** to arrange their tabs, rename them, and assign selected titles through **Set libraries**. Existing categories become libraries without losing membership. Deleting a library keeps its titles, progress and downloads. Library order is included in metadata backups.
 - Long-press a title, chapter, download or followed creator to select it. Batch controls appear only during selection; browsing has no idle Select bar.
 - Bulk actions: save, like, download, read-state changes, pause, resume, and confirmed deletion or unfollow. Select all applies to loaded or filtered items.
 - Possible-duplicate warnings for normalized matching titles already saved from another source. Titles are never merged automatically.
@@ -153,10 +156,12 @@ Built with Kotlin and Compose. Native online and offline reading.
 
 ## <img src="https://api.iconify.design/lucide/library.svg?color=%23A3E635" width="26" height="26" align="absmiddle"> Sources
 
-Reorderable source tabs: DemonicScans, WeebCentral, MangaDex, HentaiZap, ImHentai, Nhentai, Manhwa18.com and Manhwa18.cc. Fresh installations enable DemonicScans and WeebCentral only. Enable MangaDex or other sources in **Settings → Sources**. Enabling the first dedicated adult source asks for an affirmative 18+ confirmation, saved once for later adult-source toggles. Upgrades retain existing choices.
+Reorderable source tabs: AsuraScans, HiveToons, DemonicScans, WeebCentral, MangaDex, HentaiZap, ImHentai, Nhentai, Manhwa18.com and Manhwa18.cc. Asura and Hive lead the default order and are enabled alongside DemonicScans and WeebCentral on fresh installations. Newly introduced tabs precede existing sources while preserving their relative order; once arranged, the full custom order is retained. Enable MangaDex or other sources in **Settings → Sources**. Enabling the first dedicated adult source asks for an affirmative 18+ confirmation, saved once for later adult-source toggles. Upgrades retain existing choices.
 
 | Source | Status | Highlights |
 |---|---|---|
+| **AsuraScans** | Native | Comics only; no novels. Title search, latest/popular/alphabetical browsing, genres, full chapter lists, reading and downloads. Locked chapters stay unavailable. |
+| **HiveToons** | Native | Title search, latest/popular browsing, genres, full server-rendered chapter lists, reading and downloads. Locked chapters stay unavailable. |
 | **DemonicScans** | Native | Reading and downloads. Views, new and title browsing, genre selection. Genre refinement also works during title search. |
 | **WeebCentral** | Experimental | Native paged and webtoon reader. Parser and request routing have fixture coverage. |
 | **MangaDex** | Native | Search, popularity, rating, update and title sorting, genre, language/origin, publication-status and content-rating filters. |

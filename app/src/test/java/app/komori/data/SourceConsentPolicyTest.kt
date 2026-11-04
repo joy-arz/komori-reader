@@ -6,13 +6,13 @@ import org.junit.Test
 class SourceConsentPolicyTest {
     @Test fun freshInstallsEnableOnlyGeneralSources() {
         val initial = SourceConsentPolicy.initial(null, false, null)
-        assertEquals("demonic,weeb", initial.enabled)
+        assertEquals("asura,hive,demonic,weeb", initial.enabled)
         assertFalse(initial.confirmed)
         assertTrue(SourceConsentPolicy.adultSources.none { it in initial.enabled.split(',') })
     }
     @Test fun implicitLegacyDefaultsStayEnabledOnUpgrade() {
         val initial = SourceConsentPolicy.initial(null, true, null)
-        assertEquals(sourceNames.keys.joinToString(","), initial.enabled)
+        assertEquals(SourceConsentPolicy.legacyEnabled, initial.enabled)
         assertTrue(initial.confirmed)
     }
     @Test fun explicitUpgradeChoicesAreNeverReplacedByDefaults() {

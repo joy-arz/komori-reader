@@ -6,6 +6,7 @@ import androidx.room.withTransaction
 import app.komori.domain.DownloadPolicy
 import app.komori.KomoriApp
 import java.io.File
+import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -151,6 +152,12 @@ class ChapterDownloadWorker(context: Context, params: WorkerParameters) :
                         record = record.copy(state = "Downloading", error = "")
                         app.dao.putDownload(record)
                         DownloadTransfers.report(id, DownloadTransfer(resolving = true))
+                        try {
+                            app.dao.manga(record.mangaId)?.takeUnless { validImage(OfflineTitleAssets.cover(app, it.id)) }?.let { stored ->
+                                val metadata = try { source.details(stored).also { app.dao.putManga(it) } } catch (_: IOException) { stored }
+                                OfflineTitleAssets.retain(app, metadata, source)
+                            }
+                        } catch (_: IOException) { /* A missing cover must not prevent saving readable pages. */ }
                         val urls = source.pages(id, record.dataSaver)
                         if (urls.isEmpty())
                             throw ContentFailure("This release has no downloadable pages.")

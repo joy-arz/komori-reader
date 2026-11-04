@@ -35,11 +35,11 @@ class SourceConsentTest {
         }
         withStore(false, emptyMap()) { store ->
             val fresh = store.flow.first()
-            assertEquals("demonic,weeb", fresh.enabledSources)
+            assertEquals("asura,hive,demonic,weeb", fresh.enabledSources)
             assertFalse(fresh.adultSourcesConfirmed)
             assertFalse("MangaDex is non-adult and disabled initially", "mangadex" in fresh.enabledSources.split(','))
             assertTrue(runCatching { store.enableSource("nhentai", true) }.isFailure)
-            assertEquals("demonic,weeb", store.flow.first().enabledSources)
+            assertEquals("asura,hive,demonic,weeb", store.flow.first().enabledSources)
             store.confirmAdultSource("nhentai")
             store.enableSource("zap", true)
             store.enableSource("nhentai", false)
@@ -50,7 +50,7 @@ class SourceConsentTest {
             assertTrue("mangadex" in store.flow.first().enabledSources.split(','))
         }
         withStore(true, emptyMap()) { store ->
-            assertEquals(sourceNames.keys.joinToString(","), store.flow.first().enabledSources)
+            assertEquals(SourceConsentPolicy.legacyEnabled, store.flow.first().enabledSources)
             assertTrue(store.flow.first().adultSourcesConfirmed)
         }
         for (choices in listOf("", "weeb", "mangadex,zap")) withStore(true, mapOf("enabledSources" to choices)) { store ->

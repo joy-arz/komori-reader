@@ -1,11 +1,12 @@
 package app.komori.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
 @Entity(tableName = "library_categories")
-data class LibraryCategory(@PrimaryKey val id: String, val name: String)
+data class LibraryCategory(@PrimaryKey val id: String, val name: String, @ColumnInfo(defaultValue = "0") val position: Int = 0)
 
 @Entity(tableName = "category_memberships", primaryKeys = ["mangaId", "categoryId"], indices = [Index("categoryId")])
 data class CategoryMembership(val mangaId: String, val categoryId: String)

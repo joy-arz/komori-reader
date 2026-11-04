@@ -37,7 +37,7 @@ class KomoriApp : Application(), ImageLoaderFactory {
 
     val database by lazy {
         Room.databaseBuilder(this, LibraryDatabase::class.java, "komori.db")
-            .addMigrations(SCROLL_MIGRATION, READER_MODE_MIGRATION, FEED_MIGRATION, METADATA_MIGRATION, ORGANIZATION_MIGRATION)
+            .addMigrations(SCROLL_MIGRATION, READER_MODE_MIGRATION, FEED_MIGRATION, METADATA_MIGRATION, ORGANIZATION_MIGRATION, LIBRARY_ORDER_MIGRATION)
             .build()
     }
     val dao

@@ -390,7 +390,7 @@ internal fun Details(
                             style = MaterialTheme.typography.labelSmall,
                         )
                     else if (chapter.unavailable)
-                        Text("Unavailable on MangaDex", style = MaterialTheme.typography.labelSmall)
+                        Text("Unavailable on ${sourceName(chapter.id)}", style = MaterialTheme.typography.labelSmall)
                     else if (chapter.externalUrl != null)
                         Text("Open external source", style = MaterialTheme.typography.labelSmall)
                     if (downloaded != null && downloaded.state != "Complete")

@@ -122,6 +122,8 @@ interface LibraryDao {
 
     @Query("SELECT * FROM creators ORDER BY name") fun observeCreators(): Flow<List<Creator>>
 
+    @Query("SELECT EXISTS(SELECT 1 FROM downloads WHERE mangaId = :id)") suspend fun hasDownloads(id: String): Boolean
+
     @Query("SELECT * FROM downloads ORDER BY queuePosition, releaseId") fun observeDownloads(): Flow<List<Download>>
     @Query("SELECT * FROM downloads WHERE state IN ('Queued','Downloading','Retrying','Waiting for storage') ORDER BY queuePosition, releaseId")
     suspend fun orderedQueue(): List<Download>
@@ -159,7 +161,7 @@ interface LibraryDao {
     @Query("""SELECT (SELECT COUNT(*) FROM library_categories) <= 1000 AND
         (SELECT COUNT(*) FROM category_memberships) <= 50000 AND (SELECT COUNT(*) FROM migration_links) <= 10000""")
     suspend fun backupOrganizationWithinLimits(): Boolean
-    @Query("SELECT * FROM library_categories ORDER BY name COLLATE NOCASE") fun observeCategories(): Flow<List<LibraryCategory>>
+    @Query("SELECT * FROM library_categories ORDER BY position, name COLLATE NOCASE, id") fun observeCategories(): Flow<List<LibraryCategory>>
     @Query("SELECT * FROM category_memberships") fun observeMemberships(): Flow<List<CategoryMembership>>
     @Upsert suspend fun putCategory(category: LibraryCategory)
     @Upsert suspend fun putMembership(membership: CategoryMembership)
@@ -167,7 +169,7 @@ interface LibraryDao {
     @Query("DELETE FROM category_memberships WHERE categoryId = :id") suspend fun removeCategoryMemberships(id: String)
     @Query("DELETE FROM library_categories WHERE id = :id") suspend fun removeCategoryRow(id: String)
     @Transaction suspend fun deleteCategory(id: String) { removeCategoryMemberships(id); removeCategoryRow(id) }
-    @Query("SELECT * FROM library_categories ORDER BY id") suspend fun backupCategories(): List<LibraryCategory>
+    @Query("SELECT * FROM library_categories ORDER BY position, name COLLATE NOCASE, id") suspend fun backupCategories(): List<LibraryCategory>
     @Query("SELECT * FROM category_memberships ORDER BY mangaId, categoryId") suspend fun backupMemberships(): List<CategoryMembership>
     @Query("SELECT * FROM migration_links ORDER BY fromId, toId") suspend fun backupLinks(): List<MigrationLink>
     @Query("SELECT * FROM migration_links") fun observeMigrationLinks(): Flow<List<MigrationLink>>
@@ -259,7 +261,7 @@ interface LibraryDao {
             CreatorSnapshot::class,
             MigrationLink::class,
         ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 abstract class LibraryDatabase : RoomDatabase() {
@@ -356,5 +358,12 @@ val ORGANIZATION_MIGRATION = object : androidx.room.migration.Migration(5, 6) {
                     arrayOf(rows.getString(0), rows.getString(1), release.key, release.language, if (release.readable) 1 else 0))
             }
         }
+    }
+}
+
+val LIBRARY_ORDER_MIGRATION = object : androidx.room.migration.Migration(6, 7) {
+    override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE library_categories ADD COLUMN position INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("UPDATE library_categories SET position = (SELECT COUNT(*) FROM library_categories AS preceding WHERE preceding.name COLLATE NOCASE < library_categories.name COLLATE NOCASE OR (preceding.name COLLATE NOCASE = library_categories.name COLLATE NOCASE AND preceding.id < library_categories.id))")
     }
 }

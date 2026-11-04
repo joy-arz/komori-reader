@@ -290,7 +290,7 @@ internal fun MangaCover(
             else { Icon(KomoriIcons.MenuBook, "No cover available", Modifier.size(26.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
         if (showSource) Text(
-            when (sourceKey(manga.id)) { "mangadex" -> "MD"; "demonic" -> "DS"; "weeb" -> "WC"; "zap" -> "HZ"; "imhentai" -> "IM"; "nhentai" -> "NH"; "manhwa18" -> "M18"; "manhwa18cc" -> "18C"; "local" -> "Local"; else -> "?" },
+            when (sourceKey(manga.id)) { "asura" -> "AS"; "hive" -> "HT"; "mangadex" -> "MD"; "demonic" -> "DS"; "weeb" -> "WC"; "zap" -> "HZ"; "imhentai" -> "IM"; "nhentai" -> "NH"; "manhwa18" -> "M18"; "manhwa18cc" -> "18C"; "local" -> "Local"; else -> "?" },
             Modifier.align(Alignment.TopEnd).padding(6.dp).clip(RoundedCornerShape(5.dp))
                 .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)).padding(horizontal = 6.dp, vertical = 3.dp)
                 .semantics { contentDescription = "Source: ${sourceName(manga.id)}" },
@@ -644,7 +644,7 @@ internal fun MangaGrid(
             }
         } +
             listOf(
-                BatchAction("Set categories") { categorySelection = it },
+                BatchAction("Set libraries") { categorySelection = it },
                 BatchAction("Download all chapters") { ids ->
                     vm.downloadTitles(manga.filter { it.id in ids }, false)
                 },
@@ -658,7 +658,7 @@ internal fun MangaGrid(
                     )
                 },
             )
-    categorySelection?.let { ids -> CategoryAssignmentDialog(vm, ids) { categorySelection = null } }
+    categorySelection?.let { ids -> CategoryAssignmentDialog(vm, ids, manga.filter { it.id in ids }) { categorySelection = null } }
     Column(Modifier.fillMaxSize()) {
         SelectionBar(selection, available, actions)
         LazyVerticalGrid(

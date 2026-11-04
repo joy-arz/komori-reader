@@ -3,6 +3,7 @@ package app.komori.ui
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -13,6 +14,7 @@ import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.komori.data.LibraryCategory
+import app.komori.data.Manga
 
 @Composable
 internal fun CategoryManagerDialog(vm: ReaderViewModel, dismiss: () -> Unit) {
@@ -20,17 +22,21 @@ internal fun CategoryManagerDialog(vm: ReaderViewModel, dismiss: () -> Unit) {
     var name by remember { mutableStateOf("") }
     var editing by remember { mutableStateOf<LibraryCategory?>(null) }
     var deleting by remember { mutableStateOf<LibraryCategory?>(null) }
-    AlertDialog(onDismissRequest = dismiss, title = { Text("Library categories") }, text = {
+    AlertDialog(onDismissRequest = dismiss, title = { Text("Your libraries") }, text = {
         Column {
-            OutlinedTextField(name, { name = it.take(100) }, label = { Text(if (editing == null) "New category" else "Rename category") }, singleLine = true)
+            OutlinedTextField(name, { name = it.take(100) }, label = { Text(if (editing == null) "New library" else "Rename library") }, singleLine = true)
             Row {
                 TextButton(enabled = name.isNotBlank(), onClick = { vm.saveCategory(name, editing?.id); name = ""; editing = null }) { Text(if (editing == null) "Add" else "Save name") }
                 if (editing != null) TextButton(onClick = { name = ""; editing = null }) { Text("Cancel edit") }
             }
             LazyColumn(Modifier.heightIn(max = 320.dp)) {
-                items(categories, key = { it.id }) { category ->
+                itemsIndexed(categories, key = { _, it -> it.id }) { index, category ->
                     ListItem(headlineContent = { Text(category.name) }, modifier = Modifier.clickable { editing = category; name = category.name },
-                        trailingContent = { TextButton(onClick = { deleting = category }) { Text("Delete") } })
+                        supportingContent = { FlowRow {
+                            TextButton(enabled = index > 0, onClick = { vm.moveCategory(category.id, -1) }) { Text("Move earlier") }
+                            TextButton(enabled = index < categories.lastIndex, onClick = { vm.moveCategory(category.id, 1) }) { Text("Move later") }
+                            TextButton(onClick = { deleting = category }) { Text("Delete") }
+                        } })
                 }
             }
         }
@@ -38,20 +44,20 @@ internal fun CategoryManagerDialog(vm: ReaderViewModel, dismiss: () -> Unit) {
     deleting?.let { category ->
         AlertDialog(onDismissRequest = { deleting = null }, title = { Text("Delete ${category.name}?") },
             text = { Text("Titles, downloads and reading progress are kept.") },
-            confirmButton = { TextButton(onClick = { vm.deleteCategory(category.id); deleting = null }) { Text("Delete category") } },
+            confirmButton = { TextButton(onClick = { vm.deleteCategory(category.id); deleting = null }) { Text("Delete library") } },
             dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancel") } })
     }
 }
 
 @Composable
-internal fun CategoryAssignmentDialog(vm: ReaderViewModel, ids: List<String>, dismiss: () -> Unit) {
+internal fun CategoryAssignmentDialog(vm: ReaderViewModel, ids: List<String>, titles: List<Manga> = emptyList(), dismiss: () -> Unit) {
     val categories by vm.categories.collectAsStateWithLifecycle()
     val memberships by vm.memberships.collectAsStateWithLifecycle()
     val changes = remember { mutableStateMapOf<String, Boolean>() }
     var manage by remember { mutableStateOf(false) }
-    AlertDialog(onDismissRequest = dismiss, title = { Text("Categories · ${ids.size} titles") }, text = {
+    AlertDialog(onDismissRequest = dismiss, title = { Text("Libraries · ${ids.size} titles") }, text = {
         Column {
-            if (categories.isEmpty()) Text("Create a category to organize your Library.")
+            if (categories.isEmpty()) Text("Create a library to organize your titles.")
             LazyColumn(Modifier.heightIn(max = 320.dp)) {
                 items(categories, key = { it.id }) { category ->
                     val count = memberships.count { it.mangaId in ids && it.categoryId == category.id }
@@ -63,9 +69,9 @@ internal fun CategoryAssignmentDialog(vm: ReaderViewModel, ids: List<String>, di
                     }, modifier = Modifier.clickable { changes[category.id] = state != ToggleableState.On })
                 }
             }
-            TextButton(onClick = { manage = true }) { Text("Manage categories") }
+            TextButton(onClick = { manage = true }) { Text("Manage libraries") }
         }
-    }, confirmButton = { TextButton(onClick = { vm.changeCategories(ids, changes.toMap()); dismiss() }) { Text("Apply") } },
+    }, confirmButton = { TextButton(onClick = { vm.changeCategories(ids, changes.toMap(), titles); dismiss() }) { Text("Apply") } },
         dismissButton = { TextButton(onClick = dismiss) { Text("Cancel") } })
     if (manage) CategoryManagerDialog(vm) { manage = false }
 }
@@ -87,13 +93,13 @@ internal fun LibraryFilterDialog(vm: ReaderViewModel, category: String, status: 
                     RadioButton(statusChoice == key, { statusChoice = key }); Text(label, Modifier.padding(top = 12.dp))
                 }
             }
-            item { Text("Category", style = MaterialTheme.typography.titleSmall) }
-            items(listOf("" to "All categories", "uncategorized" to "Uncategorized") + categories.map { it.id to it.name }) { (key, label) ->
+            item { Text("Library", style = MaterialTheme.typography.titleSmall) }
+            items(listOf("" to "All libraries", "uncategorized" to "Uncategorized") + categories.map { it.id to it.name }) { (key, label) ->
                 Row(Modifier.fillMaxWidth().clickable { categoryChoice = key }) {
                     RadioButton(categoryChoice == key, { categoryChoice = key }); Text(label, Modifier.padding(top = 12.dp))
                 }
             }
-            item { TextButton(onClick = { manage = true }) { Text("Manage categories") } }
+            item { TextButton(onClick = { manage = true }) { Text("Manage libraries") } }
         }
     }, confirmButton = { TextButton(onClick = { apply(categoryChoice, statusChoice, unreadChoice); dismiss() }) { Text("Apply") } },
         dismissButton = { Row {
