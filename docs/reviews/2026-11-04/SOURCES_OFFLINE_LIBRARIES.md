@@ -43,3 +43,14 @@ Results and CI links are recorded below after execution. Real-phone and site-acc
 - Release/changelog Python checks: 10 passed.
 - Android lint: zero errors, 50 warnings, matching the existing warning count. Debug app and instrumentation APKs compiled successfully. Release Kotlin compilation passed; final R8 packaging and cloud build/device results are tracked in the PR checks.
 - Existing unrelated local files were not staged. CI/publication use the original signing setup; no new release/tag or package/version change is included in this PR.
+
+## First cloud run and focused follow-up
+
+PR #11, initial head `5d4ad0f`: Android build/release packaging passed (run 41843883607); repeated API 36 selection passed (41843883602). Full API 30 and 36 suites passed. API 26 and 34 failed in run 41843883938:
+
+- API 26: 13 UI failures followed a boot-time `com.google.android.apps.messaging:rcs` crash (`NullPointerException` in RCS provisioning). The captured screenshot shows the **Messages has stopped** system modal covering the author filter. No Komori crash caused that overlay. The disposable-emulator script now force-stops/disables only the unrelated Messages package when present. This is gated by `KOMORI_DISPOSABLE_EMULATOR=1` and does not affect phones, app code, or crash reporting for Komori.
+- API 34: 100/101 tests passed; the new offline-opening test accepted the previous session's `readerReady=true` while the new `reader` was still null. It now synchronizes exact chapter ID, readiness and a newer reader-session identity before asserting. The five-second deadline and original behavior assertions remain intact. Production behavior did not change for this follow-up.
+
+Local release/R8 packaging completed successfully. Normal cloud JVM execution passed 207 tests with seven optional skips; the extra skip is the captured-public-HTML test that was enabled locally. Live public search also returned Overgeared on Asura and Lookism on Hive. Final follow-up checks are tracked on the PR.
+
+The synchronized offline/library cases passed locally again: 2/2 in 3.310 seconds. The disposable-emulator script passed `bash -n`; no production application code changed in this CI follow-up.

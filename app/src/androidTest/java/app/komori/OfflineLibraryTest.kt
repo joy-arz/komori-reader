@@ -15,7 +15,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.combine
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import okhttp3.Protocol
@@ -67,15 +67,17 @@ class OfflineLibraryTest {
             app.imageLoader.memoryCache?.clear()
             assertEquals(OfflineTitleAssets.cover(app, book.id), coverImageRequest(app, book).data)
             withContext(Dispatchers.Main) { vm.open(book, immediately = true) }
-            withTimeout(5000) { vm.reader.filterNotNull().first() }
-            withTimeout(5000) { vm.readerReady.first { it } }
+            withTimeout(5000) { combine(vm.reader, vm.readerReady) { chapter, ready -> chapter?.id == chapterId && ready }.first { it } }
             assertEquals(chapterId, vm.reader.value?.id)
             assertEquals("Saved complete synopsis", vm.selected.value?.description)
             assertEquals(1, calls.get())
             assertTrue(pageFile(app, chapterId, 0).isFile)
+            val previousSession = vm.readerSession.value
             withContext(Dispatchers.Main) { vm.closeReader(); connected = true; vm.open(book, immediately = true) }
             assertTrue(withContext(Dispatchers.IO) { catalogEntered.await(5, TimeUnit.SECONDS) })
-            withTimeout(5000) { vm.readerReady.first { it } }
+            withTimeout(5000) { combine(vm.reader, vm.readerReady, vm.readerSession) { chapter, ready, session ->
+                chapter?.id == chapterId && ready && session > previousSession
+            }.first { it } }
             assertEquals("Downloaded reading does not wait for the catalog", chapterId, vm.reader.value?.id)
             releaseCatalog.countDown()
             withTimeout(5000) { vm.chapterStatus.first { it.contains("Refresh failed") } }
