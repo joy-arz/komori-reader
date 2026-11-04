@@ -9,7 +9,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 
 <br>
 
-[![Release](https://img.shields.io/badge/release-0.8.15-A3E635?style=for-the-badge&labelColor=0A0A0A)](https://github.com/joy-arz/komori-reader/releases/latest)
+[![Release](https://img.shields.io/badge/release-0.8.16-A3E635?style=for-the-badge&labelColor=0A0A0A)](https://github.com/joy-arz/komori-reader/releases/latest)
 [![Android](https://img.shields.io/badge/Android-8.0%2B-A3E635?style=for-the-badge&logo=android&logoColor=A3E635&labelColor=0A0A0A)](#install)
 [![Kotlin](https://img.shields.io/badge/Kotlin-Compose-A3E635?style=for-the-badge&logo=kotlin&logoColor=A3E635&labelColor=0A0A0A)](#build)
 [![No ads](https://img.shields.io/badge/no%20ads-no%20analytics-A3E635?style=for-the-badge&labelColor=0A0A0A)](#features)
@@ -28,7 +28,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 
 <br>
 
-> **Komori 0.8.15 is available.** Android 8.0 and newer. Install the signed APK over your existing app to preserve your Library, progress, and downloads.
+> **Komori 0.8.16 is available.** Android 8.0 and newer. Install the signed APK over your existing app to preserve your Library, progress, and downloads.
 
 ---
 
@@ -187,7 +187,7 @@ MangaDex and scanlation groups are credited in the application. This is an indep
 
 <div align="center">
 
-### [Download komori-0.8.15.apk](https://github.com/joy-arz/komori-reader/releases/download/v0.8.15/komori-0.8.15.apk)
+### [Download komori-0.8.16.apk](https://github.com/joy-arz/komori-reader/releases/download/v0.8.16/komori-0.8.16.apk)
 
 </div>
 
@@ -196,13 +196,13 @@ Or open [GitHub Releases](https://github.com/joy-arz/komori-reader/releases) and
 Full releases and earlier alpha builds use the same private release key. Install over your existing app to keep your Library, downloads and reading progress.
 
 <!-- VIRUSTOTAL:START -->
-### VirusTotal scan · 0.8.15
+### VirusTotal scan · 0.8.16
 
-[![VirusTotal result for Komori 0.8.15](docs/security/virustotal/0.8.15.svg)](https://www.virustotal.com/gui/file/33e8ca67e4edb0fb4bbe34e70b08f8d9ba50a657c13e70e8fb1b16ab226be286/detection)
+[![VirusTotal result for Komori 0.8.16](docs/security/virustotal/0.8.16.svg)](https://www.virustotal.com/gui/file/69b0bbeae59551aa3f51cf6b8ae01eaba6bb9d259e757385c8aac7a7b6f67c39/detection)
 
-**0 malicious · 0 suspicious · 68 undetected.** [Open this APK’s VirusTotal report](https://www.virustotal.com/gui/file/33e8ca67e4edb0fb4bbe34e70b08f8d9ba50a657c13e70e8fb1b16ab226be286/detection).
+**0 malicious · 0 suspicious · 68 undetected.** [Open this APK’s VirusTotal report](https://www.virustotal.com/gui/file/69b0bbeae59551aa3f51cf6b8ae01eaba6bb9d259e757385c8aac7a7b6f67c39/detection).
 
-APK: `komori-0.8.15.apk` · SHA-256: `33e8ca67e4edb0fb4bbe34e70b08f8d9ba50a657c13e70e8fb1b16ab226be286`.
+APK: `komori-0.8.16.apk` · SHA-256: `69b0bbeae59551aa3f51cf6b8ae01eaba6bb9d259e757385c8aac7a7b6f67c39`.
 
 This is a point-in-time result for this exact APK, separate from Google Play Protect’s installation checks.
 <!-- VIRUSTOTAL:END -->
