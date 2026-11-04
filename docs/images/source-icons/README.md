@@ -4,4 +4,4 @@ Website favicons/logos are bundled unchanged, with lossless ICO-to-PNG normaliza
 
 See provenance.json for direct website URLs and asset hashes. Artwork remains the property of its respective website. No tracking or runtime favicon service is used.
 
-The icon-set preview, when present, is an instrumentation fixture on an API 30 emulator, not a screenshot of the actual Settings or Discover layout.
+The [icon-set preview](preview-api30.png) is an instrumentation fixture on an API 30 emulator, not a screenshot of the actual Settings or Discover layout.

@@ -84,7 +84,9 @@ def main():
     owner = shell(f"stat -c %u {data}")
     if not owner.isdigit():
         raise AssertionError("Invalid app owner")
-    schema = json.loads((ROOT / "app/schemas/app.komori.data.LibraryDatabase/5.json").read_text())["database"]
+    schema_directory = ROOT / "app/schemas/app.komori.data.LibraryDatabase"
+    target_version = max(int(path.stem) for path in schema_directory.glob("*.json"))
+    schema = json.loads((schema_directory / "5.json").read_text())["database"]
     with tempfile.TemporaryDirectory(prefix="komori-acceptance-") as folder:
         path = Path(folder) / "fixture.db"
         db = sqlite3.connect(path)
@@ -210,11 +212,11 @@ def main():
         if wal == "yes":
             Path(str(path) + "-wal").write_bytes(run("exec-out", "cat", f"{data}/databases/komori.db-wal", binary=True))
         db = sqlite3.connect(path)
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 6
+        assert db.execute("PRAGMA user_version").fetchone()[0] == target_version
         assert db.execute("SELECT saved, liked FROM shelf WHERE mangaId=?", (BOOK,)).fetchone() == (1, 1)
         assert db.execute("SELECT count(*) FROM progress WHERE mangaId=?", (BOOK,)).fetchone()[0] == 1
         db.close()
-        print("PASS: schema 5→6, saved/liked/progress retention, process-death reader restoration, offline page navigation")
+        print(f"PASS: schema 5→{target_version}, saved/liked/progress retention, process-death reader restoration, offline page navigation")
 
 
 if __name__ == "__main__":

@@ -8,7 +8,9 @@ Updated October 27, 2026 for the 0.8.5 reliability and Authors-filter pass. Publ
 - [x] Add regular Atsumaru after WeebCentral, with normal comic browsing, full chapters, alternate releases and CDN page handling.
 - [x] Add Atsumaru 18+ as a separate disabled-by-default catalog using the existing shared age confirmation.
 - [x] Include Asura/Atsumaru followed creators in Authors and map native sort names.
-- [ ] Complete 0.8.16 exact-revision release checks and phone/live-reading acceptance. Local API/fixture and emulator results are recorded in the release review report.
+- [x] Publish signed 0.8.16 after exact-revision build/device checks and automatic VirusTotal evidence update. See the November 5 release review for local/API/emulator results and the API 36 rerun.
+- [ ] Physical-phone and complete live-reading/download acceptance for the new catalogs.
+- [ ] Investigate intermittent API 36 Authors filter-state assertion after Apply; first merged-commit run failed, unchanged rerun passed all 103 tests. Preserve failure evidence and add state capture before changing behavior.
 
 ## November 4: sources, offline opening and custom libraries
 
