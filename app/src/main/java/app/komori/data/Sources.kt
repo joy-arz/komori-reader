@@ -23,6 +23,8 @@ val sourceNames =
         "hive" to "HiveToons",
         "demonic" to "DemonicScans",
         "weeb" to "WeebCentral",
+        "atsu" to "Atsumaru",
+        "atsuadult" to "Atsumaru 18+",
         "mangadex" to "MangaDex",
         "zap" to "HentaiZap",
         "imhentai" to "ImHentai",
@@ -48,7 +50,7 @@ fun sourceReadingLanguage(id: String, global: String, override: String = ""): St
 
 fun sourcePageUrl(id: String): String =
     when (sourceKey(id)) {
-        "asura", "hive" -> sourceOrigins.getValue(sourceKey(id)) + sourcePath(id)
+        "asura", "hive", "atsu", "atsuadult" -> sourceOrigins.getValue(sourceKey(id)) + sourcePath(id)
         "demonic" -> "https://demonicscans.org" + sourcePath(id)
         "weeb" -> "https://weebcentral.com" + sourcePath(id)
         "zap" -> "https://hentaizap.com" + sourcePath(id)
@@ -61,8 +63,13 @@ fun sourcePageUrl(id: String): String =
 
 fun sourceName(id: String) = if (sourceKey(id) == "local") "Local" else sourceNames[sourceKey(id)] ?: "Unknown source"
 
-fun sourceOrder(value: String) =
-    (scanlationSources.filter { it !in value.split(',') } + value.split(',').filter { it in sourceNames } + sourceNames.keys).distinct()
+fun sourceOrder(value: String): List<String> {
+    val saved = value.split(',').filter { it in sourceNames }
+    val order = (scanlationSources.filter { it !in saved } + saved + sourceNames.keys).distinct().toMutableList()
+    if ("atsu" !in saved) { order.remove("atsu"); order.add(order.indexOf("weeb") + 1, "atsu") }
+    if ("atsuadult" !in saved) { order.remove("atsuadult"); order.add(order.indexOf("atsu") + 1, "atsuadult") }
+    return order
+}
 
 fun sourceId(source: String, path: String) =
     "$source:" +
@@ -109,7 +116,7 @@ fun sourceSearchTypes(key: String): List<String> =
 fun sourceBrowseLanguages(key: String): List<SourceTag> = when (key) {
     "mangadex" -> listOf("en" to "English", "ja" to "Japanese", "ko" to "Korean", "zh" to "Chinese", "zh-hk" to "Traditional Chinese", "id" to "Indonesian", "es" to "Spanish", "es-la" to "Latin American Spanish", "fr" to "French", "de" to "German", "pt-br" to "Brazilian Portuguese", "ru" to "Russian", "vi" to "Vietnamese", "th" to "Thai")
     "manhwa18", "manhwa18cc" -> listOf("en" to "English", "ko" to "Korean raw")
-    "asura", "hive", "demonic", "weeb" -> listOf("en" to "English")
+    "asura", "hive", "demonic", "weeb", "atsu", "atsuadult" -> listOf("en" to "English")
     "zap", "imhentai" -> listOf("en" to "English", "jp" to "Japanese", "es" to "Spanish",
         "fr" to "French", "kr" to "Korean", "de" to "German", "ru" to "Russian")
     "nhentai" -> listOf("english" to "English", "japanese" to "Japanese", "chinese" to "Chinese")
@@ -117,6 +124,7 @@ fun sourceBrowseLanguages(key: String): List<SourceTag> = when (key) {
 }.map { SourceTag(it.first, it.second, "language") }
 
 fun sourceBrowseCategories(key: String): List<SourceTag> = when (key) {
+    "atsu", "atsuadult" -> listOf("Manga" to "Manga", "Manwha" to "Manhwa", "Manhua" to "Manhua", "OEL" to "OEL", "Other" to "Other")
     "mangadex" -> listOf("ja" to "Japanese origin", "ko" to "Korean origin", "zh" to "Chinese origin")
     "manhwa18" -> listOf("24" to "Manga", "26" to "Manhwa", "57" to "Webtoon", "65" to "Art")
     "manhwa18cc" -> listOf("translated" to "Translated", "raw" to "Raw")
@@ -143,6 +151,7 @@ data class BrowsePage(
 class Sources(val client: OkHttpClient, apiClient: OkHttpClient = client) {
     val coverRecovery = CoverRecovery(::details)
     private val dex = MangaDex(apiClient)
+    private val atsu = atsumaruSources.associateWith { AtsumaruSource(it, client) }
     private val scans = scanlationSources.associateWith { ScanlationSource(it, sourceOrigins.getValue(it), client) }
     private val manhwa = ManhwaSource("manhwa18", "https://manhwa18.com", client)
     private val manhwaCc = ManhwaSource("manhwa18cc", "https://manhwa18.cc", client)
@@ -191,6 +200,7 @@ class Sources(val client: OkHttpClient, apiClient: OkHttpClient = client) {
         if (key == "zap" && facetBrowse) listOf("Latest", "Popular") else when (key) {
             "manhwa18" -> listOf("Latest updates", "Recently added", "Views", "Likes", "Title")
             "manhwa18cc" -> listOf("Latest updates", "Recently added", "Popularity", "Rating", "Title")
+            "atsu", "atsuadult" -> listOf("Popularity", "Recently added", "Rating", "Title")
             "asura" -> listOf("Latest updates", "Popularity", "Title")
             "hive" -> listOf("Latest updates", "Popularity")
             "demonic" -> listOf("Views", "Recently added", "Title")
@@ -214,6 +224,7 @@ class Sources(val client: OkHttpClient, apiClient: OkHttpClient = client) {
             dex.browse(query, (page - 1) * 30, creator, filter).let {
                 BrowsePage(it, it.size == 30)
             }
+        else if (key in atsumaruSources) atsu.getValue(key).browse(query, page, filter, creator)
         else if (key in scanlationSources) {
             scans.getValue(key).browse(query, page, filter, creator)
         }
@@ -225,11 +236,12 @@ class Sources(val client: OkHttpClient, apiClient: OkHttpClient = client) {
     }
 
     suspend fun tags(key: String): List<SourceTag> = sourceRequest(key, SourceStage.FILTERS) {
-        if (key in scanlationSources) scans.getValue(key).tags() else if (key == "mangadex") dex.tags() else if (key in manhwaSources) manhwa(key).tags() else web(key).tags()
+        if (key in atsumaruSources) atsu.getValue(key).tags() else if (key in scanlationSources) scans.getValue(key).tags() else if (key == "mangadex") dex.tags() else if (key in manhwaSources) manhwa(key).tags() else web(key).tags()
     }
 
     suspend fun details(manga: Manga): Manga = sourceRequest(sourceKey(manga.id), SourceStage.DETAILS) {
         if (sourceKey(manga.id) in setOf("mangadex", "local")) manga
+        else if (sourceKey(manga.id) in atsumaruSources) atsu.getValue(sourceKey(manga.id)).details(manga)
         else if (sourceKey(manga.id) in scanlationSources) scans.getValue(sourceKey(manga.id)).details(manga)
         else if (sourceKey(manga.id) in manhwaSources) manhwa(sourceKey(manga.id)).details(manga)
         else web(sourceKey(manga.id)).details(manga)
@@ -237,6 +249,7 @@ class Sources(val client: OkHttpClient, apiClient: OkHttpClient = client) {
 
     suspend fun chapters(id: String, language: String) = sourceRequest(sourceKey(id), SourceStage.CHAPTERS) {
         if (sourceKey(id) == "mangadex") dex.chapters(id, language)
+        else if (sourceKey(id) in atsumaruSources) atsu.getValue(sourceKey(id)).chapters(id)
         else if (sourceKey(id) in scanlationSources) scans.getValue(sourceKey(id)).chapters(id)
         else if (sourceKey(id) in manhwaSources) manhwa(sourceKey(id)).chapters(id)
         else web(sourceKey(id)).chapters(id)
@@ -248,6 +261,7 @@ class Sources(val client: OkHttpClient, apiClient: OkHttpClient = client) {
 
     suspend fun pages(id: String, saver: Boolean) = sourceRequest(sourceKey(id), SourceStage.MANIFEST) {
         if (sourceKey(id) == "mangadex") dex.pages(id, saver)
+        else if (sourceKey(id) in atsumaruSources) atsu.getValue(sourceKey(id)).pages(id)
         else if (sourceKey(id) in scanlationSources) scans.getValue(sourceKey(id)).pages(id)
         else if (sourceKey(id) in manhwaSources) manhwa(sourceKey(id)).pages(id)
         else web(sourceKey(id)).pages(id)
@@ -262,7 +276,7 @@ class Sources(val client: OkHttpClient, apiClient: OkHttpClient = client) {
                         header("Referer", "https://mangadex.org/")
                         header("User-Agent", "Komori/${app.komori.BuildConfig.VERSION_NAME} (Android reader)")
                     }
-                    "asura", "hive", "manhwa18", "manhwa18cc" -> header("Referer", "${sourceOrigins[sourceKey(id)]}/")
+                    "asura", "hive", "atsu", "atsuadult", "manhwa18", "manhwa18cc" -> header("Referer", "${sourceOrigins[sourceKey(id)]}/")
                     "demonic" -> header("Referer", "https://demonicscans.org/")
                     "weeb" -> header("Referer", "https://weebcentral.com/")
                     "zap" -> header("Referer", "https://hentaizap.com/")

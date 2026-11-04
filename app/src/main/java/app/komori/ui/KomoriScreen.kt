@@ -289,13 +289,14 @@ internal fun MangaCover(
             if (coverState == 0) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
             else { Icon(KomoriIcons.MenuBook, "No cover available", Modifier.size(26.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
-        if (showSource) Text(
-            when (sourceKey(manga.id)) { "asura" -> "AS"; "hive" -> "HT"; "mangadex" -> "MD"; "demonic" -> "DS"; "weeb" -> "WC"; "zap" -> "HZ"; "imhentai" -> "IM"; "nhentai" -> "NH"; "manhwa18" -> "M18"; "manhwa18cc" -> "18C"; "local" -> "Local"; else -> "?" },
-            Modifier.align(Alignment.TopEnd).padding(6.dp).clip(RoundedCornerShape(5.dp))
-                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)).padding(horizontal = 6.dp, vertical = 3.dp)
-                .semantics { contentDescription = "Source: ${sourceName(manga.id)}" },
-            color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall,
-        )
+        if (showSource) Box(Modifier.align(Alignment.TopEnd).padding(6.dp)
+            .semantics { contentDescription = "Source: ${sourceName(manga.id)}" }) {
+            if (sourceKey(manga.id) in sourceNames) SourceIcon(sourceKey(manga.id), 22.dp)
+            else Text(if (sourceKey(manga.id) == "local") "Local" else "?",
+                Modifier.clip(RoundedCornerShape(5.dp)).background(MaterialTheme.colorScheme.surface.copy(alpha = .95f))
+                    .padding(horizontal = 6.dp, vertical = 3.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
+        }
         if (languages.isNotEmpty()) {
             Text(
                 languages.joinToString(" / ") { it.code },
@@ -512,6 +513,7 @@ internal fun Discover(vm: ReaderViewModel) {
                     activeSource == key,
                     { vm.chooseSource(key) },
                     label = { Text(sourceNames.getValue(key)) },
+                    leadingIcon = { SourceIcon(key) },
                     shape = RoundedCornerShape(50),
                 )
             }
@@ -872,8 +874,8 @@ internal fun SourceFilters(
                     BrowseChoice("Chapter language", "All available languages", sourceBrowseLanguages(source), language) { language = it }
                     if (sourceBrowseCategories(source).isNotEmpty())
                         BrowseChoice(if (source == "mangadex") "Original language / origin" else "Category", "All categories", sourceBrowseCategories(source), category) { category = it }
-                    if (source == "mangadex" || source in manhwaSources)
-                        BrowseChoice("Publication status", "All statuses", listOf("ongoing", "completed", "hiatus", "cancelled").filter { source == "mangadex" || it != "cancelled" }.map { SourceTag(it, it.replaceFirstChar(Char::uppercase)) }, status) { status = it }
+                    if (source == "mangadex" || source in manhwaSources || source in atsumaruSources)
+                        BrowseChoice("Publication status", "All statuses", listOf("ongoing", "completed", "hiatus", "cancelled").filter { source == "mangadex" || source in atsumaruSources || it != "cancelled" }.map { SourceTag(it, it.replaceFirstChar(Char::uppercase)) }, status) { status = it }
                     if (source == "mangadex") {
                         Text("Content rating", style = MaterialTheme.typography.titleSmall)
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

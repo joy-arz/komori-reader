@@ -19,6 +19,8 @@ val sourceOrigins =
         "hive" to "https://hivetoons.org",
         "demonic" to "https://demonicscans.org",
         "weeb" to "https://weebcentral.com",
+        "atsu" to "https://atsu.moe",
+        "atsuadult" to "https://atsu.moe",
         "zap" to "https://hentaizap.com",
         "imhentai" to "https://imhentai.xxx",
         "nhentai" to "https://nhentai.net",

@@ -35,11 +35,11 @@ class SourceConsentTest {
         }
         withStore(false, emptyMap()) { store ->
             val fresh = store.flow.first()
-            assertEquals("asura,hive,demonic,weeb", fresh.enabledSources)
+            assertEquals("asura,hive,demonic,weeb,atsu", fresh.enabledSources)
             assertFalse(fresh.adultSourcesConfirmed)
             assertFalse("MangaDex is non-adult and disabled initially", "mangadex" in fresh.enabledSources.split(','))
             assertTrue(runCatching { store.enableSource("nhentai", true) }.isFailure)
-            assertEquals("asura,hive,demonic,weeb", store.flow.first().enabledSources)
+            assertEquals("asura,hive,demonic,weeb,atsu", store.flow.first().enabledSources)
             store.confirmAdultSource("nhentai")
             store.enableSource("zap", true)
             store.enableSource("nhentai", false)
@@ -97,6 +97,10 @@ class SourceConsentTest {
             compose.onNodeWithContentDescription("Enable HentaiZap").performScrollTo().performClick()
             awaitSettings { "zap" in it.enabledSources.split(',') }
             compose.onNodeWithContentDescription("Enable HentaiZap").assertIsOn()
+            compose.onNodeWithText("Adults only · 18+").assertDoesNotExist()
+            compose.onNodeWithContentDescription("Enable Atsumaru 18+").performScrollTo().performClick()
+            awaitSettings { "atsuadult" in it.enabledSources.split(',') }
+            compose.onNodeWithContentDescription("Enable Atsumaru 18+").assertIsOn()
             compose.onNodeWithText("Adults only · 18+").assertDoesNotExist()
             withContext(Dispatchers.Main) { vm!!.viewModelScope.cancel() }
             show()

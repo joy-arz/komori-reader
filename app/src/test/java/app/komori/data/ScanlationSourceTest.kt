@@ -70,14 +70,14 @@ class ScanlationSourceTest {
     }
     @Test fun namespacesOriginsAndFreshOrderingRemainSeparate() {
         val source = Sources(MangaDex.client())
-        assertEquals(listOf("asura", "hive", "demonic", "weeb"), enabledSourceOrder(Settings()))
+        assertEquals(listOf("asura", "hive", "demonic", "weeb", "atsu"), enabledSourceOrder(Settings()))
         for (key in scanlationSources) {
             val id = sourceId(key, if (key == "asura") "/comics/test" else "/series/test")
             assertEquals(sourceOrigins[key] + sourcePath(id), sourcePageUrl(id))
             assertEquals(sourceOrigins[key] + "/", source.imageRequest("https://cdn.example/page.webp", id).header("Referer"))
             assertFalse(SourceConsentPolicy.needsConfirmation(key, true, false))
         }
-        assertEquals(listOf("asura", "hive", "weeb", "demonic"), sourceOrder("weeb,demonic").take(4))
+        assertEquals(listOf("asura", "hive", "weeb", "atsu"), sourceOrder("weeb,demonic").take(4))
     }
     @Test fun observedPublicPagesParseWhenLocalCaptureIsProvided() {
         val directory = System.getenv("KOMORI_SOURCE_CAPTURE")

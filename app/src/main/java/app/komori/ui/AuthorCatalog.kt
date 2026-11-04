@@ -15,11 +15,11 @@ enum class AuthorSort(val label: String) {
         when (this) {
             POPULAR ->
                 when (source) {
-                    "mangadex" -> "Popularity"
+                    "mangadex", "asura", "atsu", "atsuadult" -> "Popularity"
                     "nhentai" -> "Popular all time"
                     else -> "Popular"
                 }
-            else -> if (source == "mangadex") "Latest updates" else "Latest"
+            else -> when (source) { "mangadex", "asura" -> "Latest updates"; "atsu", "atsuadult" -> "Recently added"; else -> "Latest" }
         }
 }
 

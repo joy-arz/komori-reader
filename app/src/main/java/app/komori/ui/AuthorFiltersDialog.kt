@@ -34,7 +34,7 @@ internal fun AuthorFiltersDialog(current: AuthorWorkFilter, sources: List<String
                         FilterChip(draft.sources.isEmpty(), { draft = draft.copy(sources = emptySet()) }, { Text("All") })
                         sources.forEach { key -> FilterChip(key in draft.sources, {
                             draft = draft.copy(sources = if (key in draft.sources) draft.sources - key else draft.sources + key)
-                        }, { Text(sourceNames[key] ?: key) }) }
+                        }, { Text(sourceNames[key] ?: key) }, leadingIcon = { SourceIcon(key, 20.dp) }) }
                     }
                     Text("Language", style = MaterialTheme.typography.labelLarge)
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
