@@ -1,6 +1,6 @@
 # Komori changelog
 
-## Unreleased
+## 0.8.15
 
 - Add AsuraScans comics and HiveToons sources, ahead of existing sources in the default tab order. Enable both on fresh installations while retaining existing source-enable and adult-consent choices on upgrade. Asura novels are excluded.
 - Support public catalog search, latest/popularity browsing, genres, title metadata, complete chapter lists, reader pages and downloads for the new sources. Asura also supports alphabetical browsing and author/artist catalogs. Preserve locked chapters as unavailable with a source-page link.
