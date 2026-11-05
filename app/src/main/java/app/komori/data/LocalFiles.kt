@@ -25,7 +25,7 @@ import org.json.JSONObject
 
 private const val LOCAL_LIMIT = 512L * 1024 * 1024
 private const val MAX_LOCAL_PAGES = 10000
-private val localExtensions = setOf("jpg", "jpeg", "png", "webp", "gif", "avif")
+private val localExtensions = setOf("jpg", "jpeg", "png", "webp", "gif", "avif", "bmp", "heic", "heif")
 private const val ARCHIVE_LIMIT = LOCAL_LIMIT + 4L * 1024 * 1024
 
 fun naturalFileKey(name: String): String = Regex("\\d+").replace(name.lowercase(Locale.ROOT)) { match ->
@@ -205,9 +205,8 @@ object LocalFiles {
                         ensureSpace(archive.parentFile!!)
                         val page = pageFile(app, current.releaseId, index)
                         if (repairMarker(app, current.releaseId, index).exists() || !validImage(page)) throw ContentFailure("A downloaded page needs repair before export.")
-                        val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                        android.graphics.BitmapFactory.decodeFile(page.path, bounds)
-                        val extension = when (bounds.outMimeType) { "image/jpeg" -> "jpg"; "image/png" -> "png"; "image/webp" -> "webp"; "image/gif" -> "gif"; "image/avif" -> "avif"; else -> throw ContentFailure("This image format cannot be exported as CBZ.") }
+                        val extension = ImageFormats.info(page)?.mime?.let(ImageFormats::exportExtension)
+                            ?: throw ContentFailure("This image format cannot be exported as CBZ.")
                         zip.putNextEntry(ZipEntry("${(index + 1).toString().padStart(5, '0')}.$extension"))
                         total += page.inputStream().use { copyLocalBytes(it, zip, minOf(MAX_IMAGE_BYTES, LOCAL_LIMIT - total)) }
                         zip.closeEntry()

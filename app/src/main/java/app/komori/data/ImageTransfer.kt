@@ -33,10 +33,7 @@ internal fun copyImageBytes(
 }
 
 fun validImage(file: File): Boolean {
-    if (!file.isFile || file.length() == 0L) return false
-    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    BitmapFactory.decodeFile(file.path, bounds)
-    return bounds.outWidth > 0 && bounds.outHeight > 0
+    return ImageFormats.info(file) != null
 }
 
 /** Cancellation closes the actual socket, including while the body is being read. */
@@ -90,8 +87,19 @@ suspend fun transferImage(
                                         }
                                     }
                                 }
-                            if (!validImage(target))
-                                throw ContentFailure("The source did not return a valid image.")
+                            if (target.length() == 0L)
+                                throw ImageContentFailure(ImageContentProblem.EMPTY)
+                            if (!validImage(target)) {
+                                val prefix = target.inputStream().use { input ->
+                                    val bytes = ByteArray(4096)
+                                    val count = input.read(bytes).coerceAtLeast(0)
+                                    String(bytes, 0, count, Charsets.UTF_8)
+                                }
+                                if (prefix.trimStart().startsWith("<") && listOf("cf-chl-", "/cdn-cgi/challenge-platform/", "challenges.cloudflare.com")
+                                        .any { marker -> prefix.contains(marker, ignoreCase = true) })
+                                    throw SourceVerificationRequired("source")
+                                throw ImageContentFailure(ImageContentProblem.UNREADABLE)
+                            }
                         }
                         if (continuation.isActive) continuation.resume(Unit)
                     } catch (e: Exception) {

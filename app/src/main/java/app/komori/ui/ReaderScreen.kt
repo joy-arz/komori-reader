@@ -158,6 +158,33 @@ fun ReaderScreen(vm: ReaderViewModel, chapter: Release) {
                     else if (file == null) CircularProgressIndicator()
                     else
                         key(file!!.path) {
+                            val animated by produceState<Boolean?>(null, file) {
+                                value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                    file?.let { app.komori.data.ImageFormats.info(it)?.canAnimate } == true
+                                }
+                            }
+                            if (animated == null) CircularProgressIndicator()
+                            else if (animated == true) AndroidView(
+                                factory = { context -> AnimatedReaderView(context).apply {
+                                    load(file!!) { vm.readerError.value = "Could not decode this animation. Retry this page." }
+                                } },
+                                update = { image ->
+                                    image.onReaderTap = { x, y ->
+                                        val delta = mode.tapDelta(x)
+                                        if (delta != null) navigate(delta)
+                                        else {
+                                            val viewport = viewportBounds
+                                            val origin = IntArray(2)
+                                            image.getLocationInWindow(origin)
+                                            val screenX = viewport?.takeIf { it.width > 0f }?.let { (origin[0] + x * image.width - it.left) / it.width } ?: x
+                                            val screenY = viewport?.takeIf { it.height > 0f }?.let { (origin[1] + y * image.height - it.top) / it.height } ?: y
+                                            if (ReaderTapZones.isControlTap(screenX, screenY)) controls = !controls
+                                        }
+                                    }
+                                    image.onReaderSwipe = { navigate(mode.swipeDelta(it)) }
+                                }, modifier = Modifier.fillMaxSize().clipToBounds().graphicsLayer(alpha = 1f - settings.dim / 100f),
+                                onReset = null, onRelease = { it.release() },
+                            ) else
                             AndroidView(
                                 factory = { context ->
                                     ReaderImageView(context).apply {

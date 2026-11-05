@@ -51,7 +51,11 @@ class KomoriApp : Application(), ImageLoaderFactory {
         ImageLoader.Builder(this)
             .memoryCache { MemoryCache.Builder(this).maxSizePercent(0.12).build() }
             .okHttpClient(source.client)
-            .components { add(CoverFallbackInterceptor(source.coverRecovery)) }
+            .components {
+                add(CoverFallbackInterceptor(source.coverRecovery))
+                if (android.os.Build.VERSION.SDK_INT >= 28) add(coil.decode.ImageDecoderDecoder.Factory())
+                else add(coil.decode.GifDecoder.Factory())
+            }
             .crossfade(false)
             .build()
 }

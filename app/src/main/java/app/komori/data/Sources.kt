@@ -165,7 +165,22 @@ class Sources(val client: OkHttpClient, apiClient: OkHttpClient = client) {
     suspend fun transferPage(id: String, url: String, file: java.io.File, progress: (Long, Long) -> Unit = { _, _ -> }) {
         sourceRequest(sourceKey(id), SourceStage.IMAGE) {
         val request = imageRequest(url, id)
-        if (sourceKey(id) != "mangadex") { transferImage(client, request, file, progress); return@sourceRequest }
+        if (sourceKey(id) != "mangadex") {
+            try { transferImage(client, request, file, progress) }
+            catch (error: IOException) {
+                val location = request.url
+                val alternative = if (sourceKey(id) == "demonic" && location.isHttps && location.port == 443 &&
+                    location.host == "cdn.demoniclibs.com" && location.username.isEmpty() && location.password.isEmpty() &&
+                    (error is ImageContentFailure || error is SourceHttpException && error.status in setOf(404, 410)))
+                    location.newBuilder().host("cdn.librarydm.com").build() else null
+                if (alternative == null) throw error
+                // Demonic's own reader advertises this exact alternate CDN on image error.
+                try { transferImage(client, imageRequest(alternative.toString(), id), file, progress) }
+                catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
+                catch (alternate: IOException) { error.addSuppressed(alternate); throw error }
+            }
+            return@sourceRequest
+        }
         val usingCompatibility = System.nanoTime() < dexImageCompatibilityUntil
         try { transferImage(if (usingCompatibility) dexCompatibility else dexImages, request, file, progress) }
         catch (e: IOException) {

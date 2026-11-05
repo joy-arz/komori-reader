@@ -34,6 +34,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.komori.data.ImageFormats
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import androidx.compose.ui.platform.LocalContext
 import app.komori.data.ChapterFiles
 import app.komori.data.pageFile
 import app.komori.data.repairMarker
@@ -52,9 +56,9 @@ private const val STRIP_HEIGHT = 1024
 
 private data class WebtoonAnchor(val key: String, val scrollOffset: Int, val beforeLayout: LazyListLayoutInfo)
 
-private data class ScrollImage(val file: File, val width: Int, val height: Int) {
+private data class ScrollImage(val file: File, val width: Int, val height: Int, val animated: Boolean = false) {
     val strips
-        get() = (height + STRIP_HEIGHT - 1) / STRIP_HEIGHT
+        get() = if (animated) 1 else (height + STRIP_HEIGHT - 1) / STRIP_HEIGHT
 }
 
 private suspend fun savedScrollImages(vm: ReaderViewModel, chapter: Release): Map<String, ScrollImage> =
@@ -69,10 +73,9 @@ private suspend fun savedScrollImages(vm: ReaderViewModel, chapter: Release): Ma
                     currentCoroutineContext().ensureActive()
                     if (repairMarker(vm.app, chapter.id, page).exists()) continue
                     val file = pageFile(vm.app, chapter.id, page)
-                    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                    BitmapFactory.decodeFile(file.path, bounds)
-                    if (bounds.outWidth > 0 && bounds.outHeight > 0)
-                        put("${chapter.id}|$page", ScrollImage(file, bounds.outWidth, bounds.outHeight))
+                    ImageFormats.info(file)?.let { info ->
+                        put("${chapter.id}|$page", ScrollImage(file, info.width, info.height, info.canAnimate))
+                    }
                 }
             }
         } ?: emptyMap()
@@ -450,16 +453,9 @@ fun WebtoonReader(
                                     vm.prefetchAfter(release, page)
                                     val image =
                                         withContext(Dispatchers.IO) {
-                                            val bounds =
-                                                BitmapFactory.Options().apply {
-                                                    inJustDecodeBounds = true
-                                                }
-                                            BitmapFactory.decodeFile(file.path, bounds)
-                                            if (bounds.outWidth <= 0 || bounds.outHeight <= 0)
-                                                throw ContentFailure(
-                                                    "Could not decode page ${page + 1}. Retry manually or use another release."
-                                                )
-                                            ScrollImage(file, bounds.outWidth, bounds.outHeight)
+                                            val info = ImageFormats.info(file) ?: throw ContentFailure(
+                                                "Could not decode page ${page + 1}. Retry manually or use another release.")
+                                            ScrollImage(file, info.width, info.height, info.canAnimate)
                                         }
                                     withContext(Dispatchers.Main.immediate) { publishImage(imageKey, image) }
                                 } catch (e: CancellationException) {
@@ -505,7 +501,7 @@ fun WebtoonReader(
                                     onDispose { vm.releaseReaderPages(pageLease) }
                                 }
                                 val top = strip * STRIP_HEIGHT
-                                val bottom = minOf(top + STRIP_HEIGHT, image.height)
+                                val bottom = if (image.animated) image.height else minOf(top + STRIP_HEIGHT, image.height)
                                 var availableFile by
                                     remember(image.file) {
                                         mutableStateOf<File?>(image.file.takeIf { it.exists() })
@@ -544,6 +540,15 @@ fun WebtoonReader(
                                         )
                                 ) {
                                     availableFile?.let { file ->
+                                        if (image.animated) {
+                                            val context = LocalContext.current
+                                            val request = remember(file, retry) { ImageRequest.Builder(context).data(file)
+                                                .size(1024, 2048).allowHardware(false).build() }
+                                            AsyncImage(request, "${release.label}, page ${page + 1}", Modifier.fillMaxSize(),
+                                                contentScale = ContentScale.FillBounds,
+                                                onSuccess = { decoded = true },
+                                                onError = { decodeError = ContentFailure("Could not decode this animation. Retry this page.") })
+                                        } else {
                                         val displayWidth =
                                             with(LocalDensity.current) { stripWidth.roundToPx() }
                                         val stripKey =
@@ -580,6 +585,7 @@ fun WebtoonReader(
                                                 Modifier.fillMaxSize(),
                                                 contentScale = ContentScale.FillBounds,
                                             )
+                                        }
                                         }
                                     }
                                     if (!decoded && decodeError == null)

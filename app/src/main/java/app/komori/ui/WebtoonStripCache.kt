@@ -47,25 +47,12 @@ internal object WebtoonStripCache {
                     cache.get(key)
                         ?: run {
                             coroutineContext.ensureActive()
-                            val decoder =
-                                BitmapRegionDecoder.newInstance(file.path, false)
-                                    ?: throw IOException("Could not open image")
-                            try {
-                                var sample = 1
-                                while (
-                                    sourceWidth / (sample * 2) >= displayWidth.coerceAtLeast(1)
-                                ) sample *= 2
-                                val bitmap =
-                                    decoder.decodeRegion(
-                                        Rect(0, top, sourceWidth, bottom),
-                                        BitmapFactory.Options().apply { inSampleSize = sample },
-                                    ) ?: throw IOException("Could not decode image strip")
-                                coroutineContext.ensureActive()
-                                cache.put(key, bitmap)
-                                bitmap
-                            } finally {
-                                decoder.recycle()
-                            }
+                            var sample = 1
+                            while (sourceWidth / (sample * 2) >= displayWidth.coerceAtLeast(1)) sample *= 2
+                            val bitmap = app.komori.data.ImageFormats.region(file, Rect(0, top, sourceWidth, bottom), sample)
+                            coroutineContext.ensureActive()
+                            cache.put(key, bitmap)
+                            bitmap
                         }
                 }
           }
