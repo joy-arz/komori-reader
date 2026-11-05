@@ -166,7 +166,12 @@ fun ReaderScreen(vm: ReaderViewModel, chapter: Release) {
                             if (animated == null) CircularProgressIndicator()
                             else if (animated == true) AndroidView(
                                 factory = { context -> AnimatedReaderView(context).apply {
-                                    load(file!!) { vm.readerError.value = "Could not decode this animation. Retry this page." }
+                                    load(file!!) {
+                                        vm.readerRetryAllowed.value = false
+                                        vm.readerSourceAction.value = false
+                                        vm.readerRetryAt.value = 0L
+                                        vm.readerError.value = "Could not decode this animation. Retry this page."
+                                    }
                                 } },
                                 update = { image ->
                                     image.onReaderTap = { x, y ->

@@ -2,6 +2,11 @@ package app.komori
 
 import android.graphics.drawable.Animatable
 import android.widget.ImageView
+import app.komori.data.*
+import coil.imageLoader
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.first
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
@@ -20,6 +25,45 @@ import org.junit.Test
 
 class AnimatedReaderGestureTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
+
+    @Test fun pagedAnimationDecodeFailureOffersManualRetryWithoutAutomaticLoop() = kotlinx.coroutines.runBlocking<Unit> {
+        val instrument = InstrumentationRegistry.getInstrumentation()
+        val application = instrument.targetContext.applicationContext as KomoriApp
+        val previous = application.settings.flow.first()
+        application.settings.set("webtoon", false)
+        val file = File.createTempFile("animation-failure-", ".img", application.cacheDir)
+        instrument.context.assets.open("images/animated.gif").use { input -> file.outputStream().use { input.copyTo(it) } }
+        val originalLoader = application.imageLoader
+        val failingLoader = coil.ImageLoader.Builder(application).components {
+            add(object : coil.intercept.Interceptor {
+                override suspend fun intercept(chain: coil.intercept.Interceptor.Chain): coil.request.ImageResult =
+                    coil.request.ErrorResult(null, chain.request, java.io.IOException("Fixture decoder failure"))
+            })
+        }.build()
+        var vm: app.komori.ui.ReaderViewModel? = null
+        try {
+            coil.Coil.setImageLoader(failingLoader)
+            compose.runOnUiThread {
+                val model = app.komori.ui.ReaderViewModel(application) { _, _, _ -> app.komori.data.BrowsePage(emptyList(), false) }
+                vm = model
+                model.readerFile.value = file; model.readerReady.value = true; model.pageCount.value = 1
+                val chapter = app.komori.domain.Release("animation-failure", "animation-title", "1", null, "", "en", emptyList(), "", 1)
+                compose.activity.setContent { MaterialTheme { app.komori.ui.ReaderScreen(model, chapter) } }
+            }
+            compose.waitUntil(5000) { vm?.readerError?.value?.contains("animation") == true }
+            assertFalse(requireNotNull(vm).readerRetryAllowed.value)
+            assertFalse(requireNotNull(vm).readerSourceAction.value)
+            assertEquals(0L, requireNotNull(vm).readerRetryAt.value)
+            compose.onNodeWithText("Retry").assertExists()
+            compose.onAllNodesWithText("Retrying this page", substring = true).assertCountEquals(0)
+        } finally {
+            compose.runOnUiThread { compose.activity.setContent {}; vm?.viewModelScope?.cancel() }
+            compose.waitForIdle()
+            coil.Coil.setImageLoader(originalLoader); failingLoader.shutdown()
+            application.settings.set("webtoon", previous.webtoon)
+            file.delete()
+        }
+    }
 
     @Test fun tiledPageTapFiresOnceAndDoubleTapDoesNotOpenControls() {
         val taps = AtomicInteger()
