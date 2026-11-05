@@ -47,7 +47,8 @@ class AnimatedReaderGestureTest {
             compose.runOnIdle { assertEquals("Zoom must not open controls", 1, taps.get()) }
         } finally {
             compose.runOnUiThread { compose.activity.setContent {} }
-            if (!bitmap.isRecycled) bitmap.recycle()
+            compose.waitForIdle()
+            // The view owns this bitmap and recycles it from onRelease after detachment.
         }
     }
 
@@ -84,6 +85,7 @@ class AnimatedReaderGestureTest {
             assertEquals(2, taps.get())
         } finally {
             compose.runOnUiThread { compose.activity.setContent {} }
+            compose.waitForIdle()
             file.delete()
         }
     }
