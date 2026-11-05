@@ -117,11 +117,15 @@ class OfflineLibraryTest {
             assertEquals(2, created.size)
             withContext(Dispatchers.Main) { vm.changeCategories(listOf(book.id), mapOf(created[1].id to true), listOf(book)) }.join()
             compose.activity.runOnUiThread { compose.activity.setContent { MaterialTheme { CategoryManagerDialog(vm) { } } } }
-            compose.waitUntil(5000) { compose.onAllNodesWithText("Second $token").fetchSemanticsNodes().isNotEmpty() }
+            compose.waitUntil(5000) { vm.categories.value.any { it.id == created[1].id } }
+            compose.onNode(SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsActions.ScrollToIndex))
+                .performScrollToNode(hasText("Second $token"))
+            compose.onNodeWithText("Second $token").assertIsDisplayed()
             val earlier = compose.onNodeWithContentDescription("Reorder Second $token").fetchSemanticsNode().config[androidx.compose.ui.semantics.SemanticsActions.CustomActions].single { it.label == "Move earlier" }
             compose.runOnUiThread { assertTrue(earlier.action()) }
             withTimeout(5000) { vm.categories.first { rows -> rows.indexOfFirst { it.id == created[1].id } < rows.indexOfFirst { it.id == created[0].id } } }
             assertEquals(created[1].id, app.dao.backupMemberships().single { it.mangaId == book.id }.categoryId)
+            app.settings.libraryView("collection:Saved", true)
             compose.activity.runOnUiThread { compose.activity.setContent { MaterialTheme { Library(vm) { } } } }
             compose.waitUntil(5000) { compose.onAllNodesWithText(book.title).fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithText("Libraries", useUnmergedTree = true).performClick()
