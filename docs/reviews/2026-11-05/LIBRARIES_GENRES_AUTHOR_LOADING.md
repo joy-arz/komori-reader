@@ -19,7 +19,7 @@ Baseline: `4e1815399594120bb579d30031fcd5cf64593778`, following v0.8.16. Unrelat
 - Debug/test APK and minified release compile passed. Lint: zero errors, 50 warnings, unchanged from baseline.
 - API 30 opt-in real Hive test through the app's networking client and Android cleartext policy: catalog 1, genres 3, chapters 28, page manifest 32; zero image bytes. Locked chapters are not bypassed.
 - Final affected API 30 run: **11/11 passed**, zero skipped/failures. Covers multi-library save/cancel/unassignment, duplicate confirmation/cancel, 48 dp touch bounds, selected genre remove/clear/retry, 120-creator incremental/cache/refresh behavior, Authors filters/navigation, source facets/drag and the opt-in live Hive request.
-- Ten Python release/scan checks passed. Cloud checks are recorded below when complete.
+- Ten Python release/scan checks passed. [Cloud build](https://github.com/joy-arz/komori-reader/actions/runs/41963830482): 216 JVM passed, nine optional tests skipped, zero failures. [API 26/30/34/36 matrix](https://github.com/joy-arz/komori-reader/actions/runs/41963830487) and [repeated API 36 selection](https://github.com/joy-arz/komori-reader/actions/runs/41963830532) passed on the first attempt.
 
 ## UI evidence
 
@@ -33,4 +33,4 @@ An initial new UI test measured the 40 dp painted Material icon-button bounds in
 
 ## Remaining acceptance
 
-The API 30 network result is emulator acceptance from this network, not the user's Android 14 phone/network or an OEM battery check. Full live reading/download sessions, physical low-memory measurements and all source-specific taxonomy changes remain external acceptance. Missing metadata is not invented, nor are unsupported filters advertised. The user confirmed the phone displays “Connection interrupted/reset,” consistent with the generic transport wrapper for the blocked redirect; phone/network acceptance remains pending. This pass does not create or publish a new version.
+The API 30 network result is emulator acceptance from this network, not the user's Android 14 phone/network or an OEM battery check. Full live reading/download sessions, physical low-memory measurements and all source-specific taxonomy changes remain external acceptance. Missing metadata is not invented, nor are unsupported filters advertised. The user confirmed the phone displays “Connection interrupted/reset,” consistent with the generic transport wrapper for the blocked redirect; phone/network acceptance remains pending. The implementation was delivered in PR #13, merged as `0b5950e9e7d0189aa3f3b091f67c6751a00fa141` following the user’s merge/build request. The next signed version is 0.8.17; publication remains gated on checks for the exact release commit.

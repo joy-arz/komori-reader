@@ -1,6 +1,6 @@
 # Komori changelog
 
-## Unreleased
+## 0.8.17
 
 - Add a Libraries picker beside Save on title details. Assign a title to multiple custom libraries or create one there, saving it on Apply while preserving Cancel and duplicate-title safeguards.
 - Load WeebCentral's native genre taxonomy and extract clickable genres, category and language on regular-source title details. Add WeebCentral category/status filtering, selected-genre chips and explicit genre loading/retry feedback.
