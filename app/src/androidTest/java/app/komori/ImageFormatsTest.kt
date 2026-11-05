@@ -81,6 +81,32 @@ class ImageFormatsTest {
         }
     }
 
+    @Test fun alternateCdnPreservesVerificationCooldownTlsAndStorageActions() = runBlocking {
+        val app = InstrumentationRegistry.getInstrumentation().targetContext
+        val until = System.currentTimeMillis() + 60000
+        for (failure in listOf(SourceVerificationRequired("source"), SourceHttpException(429, "source", until),
+            javax.net.ssl.SSLHandshakeException("Fixture TLS failure"), StorageFailure("Fixture storage failure"))) {
+            val calls = java.util.concurrent.atomic.AtomicInteger()
+            val client = OkHttpClient.Builder().addInterceptor { chain ->
+                calls.incrementAndGet()
+                if (chain.request().url.host == "cdn.librarydm.com") throw failure
+                Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(200).message("Empty primary")
+                    .body(ByteArray(0).toResponseBody()).build()
+            }.build()
+            val file = File.createTempFile("alternate-policy-", ".img", app.cacheDir)
+            try {
+                try { Sources(client).transferPage(sourceId("demonic", "/fixture"), "https://cdn.demoniclibs.com/page.jpeg", file); fail("Must surface alternate failure") }
+                catch (wrapped: SourceRequestFailure) {
+                    assertSame(failure, wrapped.failure)
+                    assertEquals(failureKind(failure), failureKind(wrapped))
+                    assertEquals(requiresSourceAction(failure), requiresSourceAction(wrapped))
+                    assertEquals(retryAtMillis(failure), retryAtMillis(wrapped))
+                }
+                assertEquals(2, calls.get()); assertFalse(file.exists())
+            } finally { file.delete(); client.dispatcher.executorService.shutdown() }
+        }
+    }
+
     @Test fun emptySuccessAndHtmlAreRejectedWithoutKeepingBadPage() = runBlocking {
         val app = InstrumentationRegistry.getInstrumentation().targetContext
         for ((body, message) in listOf("" to "empty image", "<html>not an image</html>" to "unsupported or damaged")) {

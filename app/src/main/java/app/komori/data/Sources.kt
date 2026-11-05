@@ -177,7 +177,12 @@ class Sources(val client: OkHttpClient, apiClient: OkHttpClient = client) {
                 // Demonic's own reader advertises this exact alternate CDN on image error.
                 try { transferImage(client, imageRequest(alternative.toString(), id), file, progress) }
                 catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
-                catch (alternate: IOException) { error.addSuppressed(alternate); throw error }
+                catch (alternate: IOException) {
+                    if (requiresSourceAction(alternate) || failureKind(alternate) in setOf(FailureKind.RATE_LIMIT, FailureKind.SECURE_CONNECTION, FailureKind.STORAGE))
+                        throw alternate
+                    error.addSuppressed(alternate)
+                    throw error
+                }
             }
             return@sourceRequest
         }
