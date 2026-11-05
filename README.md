@@ -51,9 +51,9 @@ Built with Kotlin and Compose. Native online and offline reading.
 
 - Black-and-lime design with Outfit typography, outlined collection, setting and chapter cards, green gradient actions and floating navigation.
 - Choose System, Dark or Light appearance and compact or comfortable cover density. Existing appearance preferences are retained.
-- Settings are grouped into **Reading**, **Sources**, **App** and a full-page **Support** tab.
+- Settings are grouped into **Reading**, **Sources**, **App** and a full-page **Support** tab. In Sources, hold a handle to drag the order; accessible move actions are available. The first enabled source opens in Discover.
 - Background update checks and downloads use a nonblocking banner. Installation dialogs open from **Review/Install**.
-- Compact Library and Discover toolbars with icon-triggered search. Library collection tabs keep counts in a shorter row, leaving more room for covers.
+- Compact Library and Discover toolbars with icon-triggered search. Library has separate compact **Collection** (Saved, Liked, History, Downloaded) and **Libraries** tabs, with **All** for custom libraries. Counts stay beside their labels, leaving more room for covers.
 - Swipe left or right across the catalog to change sources in your Settings order.
 - Discover filters live in the toolbar. **Verify source** and **Reset search** sit under Source options.
 
@@ -72,6 +72,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 - Forward and backward continuous webtoon scrolling across chapters, with saved page and scroll position, bounded neighboring-chapter windows and image strips. Works offline, with a Paged/Webtoon switch.
 - Chapter/page jump and seek, numeric chapter-gap warnings, and navigation restoration from saved identifiers.
 - Brightness, artwork dimming, orientation lock, optional volume-key navigation, and adjustable preload/cache choices. Images load sequentially up to ten pages ahead in paged and webtoon reading, including continuous chapter boundaries; speculative loading never advances reading progress. Cache hits reuse displayed images without forcing reloads during scrolling.
+- GIF and animated WebP pages animate in paged and continuous reading, including offline files. Animations above 4 megapixels display their first frame to limit memory use. JPEG, PNG, WebP and BMP are supported; HEIF/AVIF depend on the device’s Android codecs. Long static pages retain bounded tiled decoding. Empty or damaged source images show a specific error rather than being accepted as pages. DemonicScans can try its advertised alternate CDN once for a missing/invalid image; source verification and rate limits still stop the request.
 - **Settings → Reading → Clear cached pages** removes temporary reader images while keeping downloads and imported comics. Close the reader first.
 - Webtoon pinch zoom and opt-in tall-page detection; Smart Chapter explanations, alternate releases and per-title language.
 - Immersive reading starts with controls hidden. Tap the middle of the screen to show or hide them; scrolling leaves them hidden.
@@ -87,7 +88,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 - The **Downloaded** collection includes titles with saved pages and opens their offline chapter list.
 - Downloaded titles open from saved descriptions and chapter metadata without waiting for a network refresh. With no connection, only complete downloaded chapters are offered for automatic reading. Online refresh failures retain the saved information.
 - Download covers are stored in app files rather than the evictable image cache. Removing the last download for a title cleans its downloaded cover while retaining Library metadata and reading progress. A failed cover fetch does not discard readable chapter pages; refresh the title online to retry.
-- Create multiple named libraries from **Library → Manage libraries**. Use **Move earlier / Move later** to arrange their tabs, rename them, and assign selected titles through **Set libraries**. Use the **Libraries** button beside Save on a title detail page for direct multiple-library assignment and library creation. Existing categories become libraries without losing membership. Deleting a library keeps its titles, progress and downloads. Library order is included in metadata backups.
+- Create multiple named libraries from **Library → Libraries → Manage libraries**. Hold a handle and drag to arrange them; accessibility actions also offer **Move earlier / Move later**. Rename libraries, and assign selected titles through **Set libraries**. Use the **Libraries** button beside Save on a title detail page for direct multiple-library assignment and library creation. Existing categories become libraries without losing membership. Deleting a library keeps its titles, progress and downloads. Library order is included in metadata backups. **On open** in Manage libraries remembers the last viewed collection/library by default, or pins a custom library (or All) as the starting view. Deleting a pinned library falls back to All.
 - Long-press a title, chapter, download or followed creator to select it. Batch controls appear only during selection; browsing has no idle Select bar.
 - Bulk actions: save, like, download, read-state changes, pause, resume, and confirmed deletion or unfollow. Select all applies to loaded or filtered items.
 - Possible-duplicate warnings for normalized matching titles already saved from another source. Titles are never merged automatically.
@@ -112,7 +113,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 - Persistent ordered chapter downloads with Download now, reordering, cancel without file deletion, explicit network/storage waits, title grouping, Wi-Fi constraint, retries, pause and resume, original or data-saving images, and offline access.
 - Local CBZ/folder import and completed-chapter CBZ export through Android document providers, including a preferred export folder. Metadata backups exclude local pages.
 - Bulk options: custom reading-order ranges, all readable, all unread and next 1, 5, 10 or 25 unread. Active and completed downloads are skipped.
-- A compact Downloads header shows queued and offline counts. Queue options contain pause and resume/retry commands when available. Completed chapters omit redundant progress bars; active transfers retain detailed progress.
+- A compact Downloads header shows queued and offline counts. **All / Queue / Offline** tabs separate waiting work from finished chapters. Group titles and pause/resume actions are visible above the queue; Queue options retain background and storage tools. Completed chapters omit redundant progress bars; active transfers retain detailed progress.
 - Configurable visible-image retries (off, 3, 5, 10 or 30 seconds, up to three attempts, 3 seconds by default).
 - Integrity checks when opening saved chapters, a persistent **Needs repair** status and targeted repair. Intact pages stay accessible with **Read saved pages**.
 - **Queue options → Storage & integrity** shows file totals, scans images/checksums and previews delete-read cleanup. Deletion rechecks completed reading progress and skips active downloads; Library/history remain.

@@ -9,7 +9,6 @@ import kotlin.math.abs
 /** Leaves pinch/double-tap zoom and zoomed panning with the tiled decoder. */
 class ReaderImageView(context: Context) : SubsamplingScaleImageView(context) {
     init { setRegionDecoderFactory { CompatibleRegionDecoder() } }
-    private var confirmedTap: Pair<Float, Float>? = null
     var onReaderTap: (Float, Float) -> Unit = { _, _ -> }
     var onReaderSwipe: ((Float) -> Unit)? = null
     private var multiplePointers = false
@@ -23,25 +22,12 @@ class ReaderImageView(context: Context) : SubsamplingScaleImageView(context) {
                 override fun onDown(e: MotionEvent): Boolean = true
 
                 override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
-                    if (!multiplePointers) {
-                        confirmedTap = e.x / width.coerceAtLeast(1) to e.y / height.coerceAtLeast(1)
-                        performClick()
-                    }
+                    if (!multiplePointers) onReaderTap(e.x / width.coerceAtLeast(1), e.y / height.coerceAtLeast(1))
                     return true
                 }
             },
         )
 
-    override fun performClick(): Boolean {
-        super.performClick()
-        val tap = confirmedTap ?: (.5f to .5f)
-        confirmedTap = null
-        onReaderTap(tap.first, tap.second)
-        return true
-    }
-
-    // Confirmed single taps invoke performClick from GestureDetector, after double-tap arbitration.
-    @android.annotation.SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if (event.actionMasked == MotionEvent.ACTION_DOWN) {
             multiplePointers = false
