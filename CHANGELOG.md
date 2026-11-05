@@ -1,5 +1,12 @@
 # Komori changelog
 
+## Unreleased
+
+- Add a Libraries picker beside Save on title details. Assign a title to multiple custom libraries or create one there, saving it on Apply while preserving Cancel and duplicate-title safeguards.
+- Load WeebCentral's native genre taxonomy and extract clickable genres, category and language on regular-source title details. Add WeebCentral category/status filtering, selected-genre chips and explicit genre loading/retry feedback.
+- Publish followed-author results as each creator page completes, with at most two catalog/enrichment requests at a time. Retain up to three small catalogs when switching between All and individual creators; manual refresh clears them.
+- Fix HiveToons requests to use canonical HTTPS paths, avoiding its slashless HTTP redirect without relaxing Android cleartext or TLS checks.
+
 ## 0.8.16
 
 - Add compact green circular source badges using the websites' own icons. Show them in Discover, Settings, Authors source filters and cover source badges. Bundle the artwork so icons work offline without a favicon service.

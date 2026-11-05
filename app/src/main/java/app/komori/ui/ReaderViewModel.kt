@@ -62,6 +62,9 @@ class ReaderViewModel(
     val browseFilter = MutableStateFlow(BrowseFilter())
     val tags = MutableStateFlow<List<SourceTag>>(emptyList())
     private var tagsJob: Job? = null
+    private var tagGeneration = 0L
+    val tagsLoading = MutableStateFlow(false)
+    val tagsError = MutableStateFlow<String?>(null)
     val chapters = MutableStateFlow<List<Release>>(emptyList())
     val chapterStatus = MutableStateFlow("")
     val sourceLanguages = MutableStateFlow<List<String>>(emptyList())
@@ -173,6 +176,12 @@ class ReaderViewModel(
     val authorFeed = MutableStateFlow(AuthorFeed())
     private var authorContext: List<Creator>? = null
     private var authorCatalog: AuthorCatalog? = null
+    private data class AuthorCatalogContext(val creators: List<Creator>, val popular: Boolean, val filter: AuthorWorkFilter)
+    private data class CachedAuthorCatalog(val catalog: AuthorCatalog, val errors: List<String>)
+    private var authorCatalogContext: AuthorCatalogContext? = null
+    private val authorCatalogCache = object : LinkedHashMap<AuthorCatalogContext, CachedAuthorCatalog>() {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<AuthorCatalogContext, CachedAuthorCatalog>?) = size > 3
+    }
     private var authorWorkFilter = AuthorWorkFilter()
     private var authorSort = AuthorSort.LATEST
     private var authorJob: Job? = null
@@ -181,6 +190,8 @@ class ReaderViewModel(
         if (authorFeed.value.loading) return
         val current = authorContext ?: return
         authorContext = null
+        authorCatalogContext = null
+        authorCatalogCache.clear()
         app.source.clearCreatorMetadata()
         showAuthorWorks(current, authorSort, authorWorkFilter)
     }
@@ -252,11 +263,17 @@ class ReaderViewModel(
             return
         }
         authorJob?.cancel()
+        authorCatalogContext?.let { context -> current?.takeIf { it.retainedTitleCount <= 300 }?.let {
+            authorCatalogCache[context] = CachedAuthorCatalog(it, authorFeed.value.errors)
+        } }
+        val context = AuthorCatalogContext(creators.toList(), sort == AuthorSort.POPULAR, workFilter)
+        val cached = authorCatalogCache.remove(context)
+        authorCatalogContext = context
         authorContext = creators.toList()
         authorSort = sort
         authorWorkFilter = workFilter
         authorCatalog =
-            AuthorCatalog(creators, sort, workFilter, enrich = { if (authorPage == null) app.source.details(it) else it }) { creator, page ->
+            cached?.catalog?.also { it.reorder(sort) } ?: AuthorCatalog(creators, sort, workFilter, enrich = { if (authorPage == null) app.source.details(it) else it }) { creator, page ->
                 val key = sourceKey(creator.id)
                 require(key in setOf("mangadex", "zap", "nhentai", "imhentai", "asura", "atsu", "atsuadult")) {
                     "This source does not provide a creator catalog."
@@ -268,12 +285,15 @@ class ReaderViewModel(
             }
         authorFeed.value =
             AuthorFeed(
-                hasMore = creators.isNotEmpty(),
+                items = authorCatalog!!.items,
+                errors = cached?.errors.orEmpty(),
+                incompleteMetadata = authorCatalog!!.incompleteMetadataCount,
+                hasMore = authorCatalog!!.hasMore,
                 context = creators.map { it.id },
                 sort = sort,
                 filter = workFilter,
             )
-        loadAuthorWorks()
+        if (cached == null) loadAuthorWorks()
     }
 
     fun loadAuthorWorks() {
@@ -282,7 +302,10 @@ class ReaderViewModel(
         authorJob =
             viewModelScope.launch {
                 authorFeed.value = authorFeed.value.copy(loading = true, errors = emptyList())
-                val errors = catalog.loadNext()
+                val errors = catalog.loadNext {
+                    if (authorCatalog === catalog) authorFeed.value = authorFeed.value.copy(
+                        items = catalog.items, hasMore = catalog.hasMore, incompleteMetadata = catalog.incompleteMetadataCount)
+                }
                 if (authorCatalog === catalog) {
                     authorFeed.value =
                         AuthorFeed(
@@ -431,8 +454,12 @@ class ReaderViewModel(
         activeSource.value = sourceKey(manga.id)
         tagsJob?.cancel()
         tags.value = emptyList()
-        browseFilter.value = if (sourceKey(manga.id) in gallerySources) BrowseFilter(facetPath = tag.id)
-            else BrowseFilter(tags = setOf(tag.id))
+        browseFilter.value = when {
+            sourceKey(manga.id) in gallerySources -> BrowseFilter(facetPath = tag.id)
+            tag.type == "category" -> BrowseFilter(category = tag.id)
+            tag.type == "language" -> BrowseFilter(language = tag.id)
+            else -> BrowseFilter(tags = setOf(tag.id))
+        }
         search("", null)
     }
 
@@ -448,8 +475,20 @@ class ReaderViewModel(
 
     fun loadTags() {
         tagsJob?.cancel()
+        val generation = ++tagGeneration
         val key = activeSource.value
-        tagsJob = task { tags.value = app.source.tags(key) }
+        tagsLoading.value = true
+        tagsError.value = null
+        tagsJob = viewModelScope.launch {
+            try {
+                val result = app.source.tags(key)
+                currentCoroutineContext().ensureActive()
+                if (generation == tagGeneration && activeSource.value == key) tags.value = result
+            } catch (error: CancellationException) { throw error }
+            catch (error: Exception) {
+                if (generation == tagGeneration && activeSource.value == key) tagsError.value = connectionMessage(error)
+            } finally { if (generation == tagGeneration) tagsLoading.value = false }
+        }
     }
 
     fun applyFilter(filter: BrowseFilter) {

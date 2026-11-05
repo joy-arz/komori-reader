@@ -4,6 +4,9 @@ import app.komori.data.*
 import java.util.Locale
 import org.json.JSONArray
 import kotlinx.coroutines.*
+import kotlinx.coroutines.selects.select
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 
 enum class AuthorSort(val label: String) {
     LATEST("Latest"),
@@ -50,12 +53,14 @@ class AuthorCatalog(
         sort = order
     }
 
+    private val requests = Semaphore(2)
     private val cursors = creators.distinctBy { it.id }.map { Cursor(it) }
     private var next = 0
     private val titles = linkedMapOf<String, Manga>()
     private val incomplete = linkedMapOf<String, Manga>()
     private val resolved = mutableSetOf<String>()
     private val waitingOwners = mutableMapOf<String, MutableSet<Creator>>()
+    val retainedTitleCount get() = (titles.keys + incomplete.keys).size
     val incompleteMetadataCount get() = incomplete.size
 
     private suspend fun metadata(batch: List<Manga>): Map<String, Manga?> = coroutineScope {
@@ -63,7 +68,7 @@ class AuthorCatalog(
         for (chunk in batch.distinctBy { it.id }.chunked(2)) {
             val results = chunk.map { title -> async {
                 title.id to try {
-                    val detailed = enrich?.invoke(title) ?: title
+                    val detailed = requests.withPermit { enrich?.invoke(title) ?: title }
                     require(detailed.id == title.id) { "Details belong to a different title." }
                     detailed.metadata(); JSONArray(detailed.creatorsJson).objects()
                     detailed
@@ -117,18 +122,29 @@ class AuthorCatalog(
     val hasMore: Boolean
         get() = cursors.any { !it.done }
 
-    suspend fun loadNext(): List<String> {
+    suspend fun loadNext(onProgress: () -> Unit = {}): List<String> = coroutineScope {
         val failures = mutableListOf<String>()
-        var attempted = 0
+        val selected = mutableListOf<Cursor>()
         var visited = 0
-        while (attempted < 3 && visited < cursors.size) {
+        while (selected.size < 3 && visited < cursors.size) {
             val cursor = cursors[next % cursors.size]
             next = (next + 1) % cursors.size
             visited++
             if (cursor.done) continue
-            attempted++
+            selected += cursor
+        }
+        val pending = selected.map { cursor -> async {
+            val result = try { Result.success(requests.withPermit { fetch(cursor.creator, cursor.page) }) }
+                catch (error: CancellationException) { throw error }
+                catch (error: Exception) { Result.failure<BrowsePage>(error) }
+            cursor to result
+        } }.toMutableList()
+        while (pending.isNotEmpty()) {
+            val (task, outcome) = select { pending.forEach { task -> task.onAwait { task to it } } }
+            pending.remove(task)
+            val (cursor, response) = outcome
             try {
-                val result = fetch(cursor.creator, cursor.page)
+                val result = response.getOrThrow()
                 val details = if (filter.needsMetadata) metadata(result.titles.filter { it.id !in resolved && it.id !in incomplete }) else emptyMap()
                 currentCoroutineContext().ensureActive()
                 val fresh = result.paginationIds.any { it !in cursor.paginationIds }
@@ -156,8 +172,10 @@ class AuthorCatalog(
             } catch (e: Exception) {
                 failures += "${cursor.creator.name}: ${connectionMessage(e)}"
             }
+            currentCoroutineContext().ensureActive()
+            onProgress()
         }
-        return failures
+        failures
     }
 }
 

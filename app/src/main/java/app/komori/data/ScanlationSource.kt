@@ -20,12 +20,16 @@ class ScanlationSource(private val key: String, private val base: String, privat
     private val root = if (asura) "comics" else "series"
     private suspend fun document(route: String): Document = withContext(Dispatchers.IO) {
         require(route.startsWith('/') && !route.startsWith("//"))
-        client.newCall(Request.Builder().url(base + route).header("Referer", "$base/").build()).readResponse { response ->
+        val url = (base + route).toHttpUrl().let { target ->
+            // Hive's slashless URLs redirect through HTTP. Request the HTTPS canonical path directly.
+            if (asura) target else target.newBuilder().encodedPath(target.encodedPath.trimEnd('/') + "/").build()
+        }
+        client.newCall(Request.Builder().url(url).header("Referer", "$base/").build()).readResponse { response ->
             if (!response.isSuccessful) throw httpFailure(response, key)
             if (response.header("cf-mitigated") == "challenge") throw SourceVerificationRequired(key)
             val body = response.body?.source() ?: throw IOException("Empty source response.")
             if (body.request(8L * 1024 * 1024 + 1)) throw ContentFailure("Source page exceeds 8 MB.")
-            Jsoup.parse(body.readUtf8(), base + route).also {
+            Jsoup.parse(body.readUtf8(), url.toString()).also {
                 if (it.title().contains("Just a moment", true) || it.selectFirst("#cf-error-details") != null) throw SourceVerificationRequired(key)
             }
         }

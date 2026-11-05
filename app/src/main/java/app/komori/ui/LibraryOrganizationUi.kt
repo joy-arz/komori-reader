@@ -55,7 +55,7 @@ internal fun CategoryAssignmentDialog(vm: ReaderViewModel, ids: List<String>, ti
     val memberships by vm.memberships.collectAsStateWithLifecycle()
     val changes = remember { mutableStateMapOf<String, Boolean>() }
     var manage by remember { mutableStateOf(false) }
-    AlertDialog(onDismissRequest = dismiss, title = { Text("Libraries · ${ids.size} titles") }, text = {
+    AlertDialog(onDismissRequest = dismiss, title = { Text("Libraries · ${ids.size} ${if (ids.size == 1) "title" else "titles"}") }, text = {
         Column {
             if (categories.isEmpty()) Text("Create a library to organize your titles.")
             LazyColumn(Modifier.heightIn(max = 320.dp)) {

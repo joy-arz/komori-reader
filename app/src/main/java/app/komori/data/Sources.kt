@@ -9,6 +9,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.withLock
 import okhttp3.*
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -125,6 +126,7 @@ fun sourceBrowseLanguages(key: String): List<SourceTag> = when (key) {
 
 fun sourceBrowseCategories(key: String): List<SourceTag> = when (key) {
     "atsu", "atsuadult" -> listOf("Manga" to "Manga", "Manwha" to "Manhwa", "Manhua" to "Manhua", "OEL" to "OEL", "Other" to "Other")
+    "weeb" -> listOf("Manga" to "Manga", "Manhwa" to "Manhwa", "Manhua" to "Manhua", "OEL" to "OEL")
     "mangadex" -> listOf("ja" to "Japanese origin", "ko" to "Korean origin", "zh" to "Chinese origin")
     "manhwa18" -> listOf("24" to "Manga", "26" to "Manhwa", "57" to "Webtoon", "65" to "Art")
     "manhwa18cc" -> listOf("translated" to "Translated", "raw" to "Raw")
@@ -345,37 +347,33 @@ class WebSource(
             }
         }
 
+    private val genreLock = kotlinx.coroutines.sync.Mutex()
+    private var genreDefinitions: Pair<Long, List<SourceTag>>? = null
     suspend fun tags(): List<SourceTag> {
+        if (key in setOf("demonic", "weeb")) return genreLock.withLock {
+            genreDefinitions?.takeIf { System.nanoTime() - it.first in 0 until 600_000_000_000L }?.let { return@withLock it.second }
+            val result = parseSourceTags(document(if (key == "weeb") "/search" else "/advanced.php"))
+            if (result.isEmpty()) throw ContentFailure("No source genres returned. Retry or verify the source.")
+            genreDefinitions = System.nanoTime() to result
+            result
+        }
         if (key == "nhentai")
             return document("/tags/").select("a[href^=/tag/]").mapNotNull { a ->
                 metadataLink(a, "tag")?.let { SourceTag(it.first, it.second) }
             }.distinctBy { it.id }
         if (key == "zap" || key == "imhentai") return galleryCategories
-        if (key == "weeb")
-            return listOf(
-                    "Action",
-                    "Adventure",
-                    "Comedy",
-                    "Drama",
-                    "Fantasy",
-                    "Historical",
-                    "Horror",
-                    "Isekai",
-                    "Martial Arts",
-                    "Mecha",
-                    "Mystery",
-                    "Romance",
-                    "School Life",
-                    "Sci-fi",
-                    "Slice of Life",
-                    "Sports",
-                    "Supernatural",
-                )
-                .map { SourceTag(it, it) }
-        return document("/advanced.php").select("input[name=\"genres[]\"]").map {
-            SourceTag(it.attr("value"), it.parent()!!.text())
-        }
+        if (key == "weeb") return parseSourceTags(document("/search"))
+        return parseSourceTags(document("/advanced.php"))
     }
+
+    internal fun parseSourceTags(d: Document): List<SourceTag> = if (key == "weeb")
+        d.select("input[id^=tag-][id$=-value]").mapNotNull { input ->
+            input.attr("value").trim().takeIf { it.isNotEmpty() }?.let { SourceTag(it, it) }
+        }.distinctBy { it.id }
+    else d.select("input[name=\"genres[]\"]").mapNotNull {
+        val id = it.attr("value"); val name = it.parent()?.text()?.trim().orEmpty()
+        if (id.isBlank() || name.isBlank()) null else SourceTag(id, name)
+    }.distinctBy { it.id }
 
     suspend fun browse(
         query: String, page: Int, filter: BrowseFilter, creator: Creator? = null, deferCreatorDetails: Boolean = false,
@@ -516,6 +514,14 @@ class WebSource(
                         )
                         .addQueryParameter("adult", "False")
                 filter.tags.forEach { url.addQueryParameter("included_tag", it) }
+                if (filter.category.isNotBlank()) {
+                    require(sourceBrowseCategories(key).any { it.id == filter.category })
+                    url.addQueryParameter("included_type", filter.category)
+                }
+                if (filter.status.isNotBlank()) url.addQueryParameter("included_status", when (filter.status) {
+                    "ongoing" -> "Ongoing"; "completed" -> "Complete"; "hiatus" -> "Hiatus"; "cancelled" -> "Canceled"
+                    else -> throw IllegalArgumentException("Unsupported publication status.")
+                })
                 document(url.build().toString().removePrefix(base))
             }
         val titles = parseBrowse(doc).let { rows ->
@@ -668,10 +674,22 @@ class WebSource(
         val description =
             if (key == "demonic") d.selectFirst(".genres-list ~ .white-font")?.text()
             else d.selectFirst("li:has(strong:contains(Description)) > p")?.text()
-        val genres = if (key == "demonic") JSONArray().apply {
-            d.select(".genres-list li").forEach { put(JSONObject().put("id", it.text().trim()).put("name", it.text().trim()).put("type", "tag")) }
-        }.toString() else manga.tagsJson
-        return manga.copy(description = description ?: manga.description, tagsJson = genres)
+        val tags = if (key == "demonic") d.select(".genres-list li").map { element ->
+            val name = element.text().trim()
+            val id = element.selectFirst("a[href]")?.absUrl("href")?.toHttpUrlOrNull()?.queryParameter("genres[]") ?: name
+            SourceTag(id, name)
+        } else d.select("li:has(strong) a[href]").mapNotNull { a ->
+            val url = a.absUrl("href").toHttpUrlOrNull()?.takeIf { it.host == base.toHttpUrl().host } ?: return@mapNotNull null
+            when {
+                url.queryParameter("included_tag") != null -> SourceTag(url.queryParameter("included_tag")!!, a.text().trim())
+                url.queryParameter("included_type") != null -> SourceTag(url.queryParameter("included_type")!!, a.text().trim(), "category")
+                else -> null
+            }
+        }
+        val genres = JSONArray((manga.metadata().filter { it.type !in setOf("tag", "category") } + tags + SourceTag("en", "English", "language")).filter { it.id.isNotBlank() && it.name.isNotBlank() }
+            .distinctBy { it.type to it.id }.map { JSONObject().put("id", it.id).put("name", it.name).put("type", it.type) }).toString()
+        val status = if (key == "weeb") d.selectFirst("a[href*=included_status]")?.text()?.lowercase(Locale.ROOT) else null
+        return manga.copy(description = description ?: manga.description, tagsJson = genres, status = status ?: manga.status)
     }
 
     private fun metadataLink(a: org.jsoup.nodes.Element, type: String): Pair<String, String>? {

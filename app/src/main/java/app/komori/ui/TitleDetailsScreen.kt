@@ -88,6 +88,9 @@ internal fun Details(
     val downloads by vm.downloads.collectAsStateWithLifecycle()
     val library by vm.library.collectAsStateWithLifecycle()
     val duplicates = duplicateTitles(manga, library, shelf)
+    var showLibraries by remember(manga.id) { mutableStateOf(false) }
+    if (showLibraries) CategoryAssignmentDialog(vm, listOf(manga.id), listOf(manga)) { showLibraries = false }
+    var libraryAfterConfirmation by remember(manga.id) { mutableStateOf(false) }
     var confirmDuplicate by remember(manga.id) { mutableStateOf(false) }
     if (confirmDuplicate)
         AlertDialog(
@@ -101,7 +104,8 @@ internal fun Details(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        vm.toggle(manga)
+                        if (libraryAfterConfirmation) showLibraries = true else vm.toggle(manga)
+                        libraryAfterConfirmation = false
                         confirmDuplicate = false
                     }
                 ) {
@@ -195,6 +199,7 @@ internal fun Details(
                 }
                 FilledTonalIconButton(
                     onClick = {
+                        libraryAfterConfirmation = false
                         if (entry?.saved != true && duplicates.isNotEmpty()) confirmDuplicate = true
                         else vm.toggle(manga)
                     }
@@ -204,6 +209,14 @@ internal fun Details(
                         else KomoriIcons.BookmarkAdd,
                         if (entry?.saved == true) "Remove from library" else "Add to library",
                     )
+                }
+                FilledTonalIconButton(onClick = {
+                    if (entry?.saved != true && duplicates.isNotEmpty()) {
+                        libraryAfterConfirmation = true
+                        confirmDuplicate = true
+                    } else showLibraries = true
+                }) {
+                    Icon(KomoriIcons.CollectionsBookmark, "Add to libraries")
                 }
                 FilledTonalIconButton(onClick = { vm.toggle(manga, true) }) {
                     Icon(
@@ -234,7 +247,7 @@ internal fun Details(
                 .forEach { (type, heading) ->
                     val entries = metadata.filter { it.type == type }
                     if (entries.isNotEmpty()) {
-                        Text(heading, style = MaterialTheme.typography.titleMedium)
+                        Text(if (type == "tag" && sourceKey(manga.id) !in SourceConsentPolicy.adultSources) "Genres" else heading, style = MaterialTheme.typography.titleMedium)
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             entries.forEach { tag ->
                                 AssistChip(onClick = { browseTag(tag) }, label = { Text(tag.name) })
