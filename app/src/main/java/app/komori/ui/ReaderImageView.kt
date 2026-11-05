@@ -69,7 +69,7 @@ internal class CompatibleRegionDecoder : com.davemorrissey.labs.subscaleview.dec
             file = image
             return dimensions
         } catch (_: java.io.IOException) {
-            decoder.recycle()
+            if (decoder.isReady) decoder.recycle()
         }
         val info = app.komori.data.ImageFormats.info(image) ?: throw java.io.IOException("Unsupported image")
         file = image
