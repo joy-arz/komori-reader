@@ -32,6 +32,17 @@ class SourceDiagnosticsTest {
         val offline = SourceRequestFailure("mangadex", SourceStage.CHAPTERS, UnknownHostException("secret"))
         assertEquals(FailureKind.OFFLINE, failureKind(offline))
     }
+    @Test fun imageContentFailuresRemainSpecificAndDoNotAutomaticallyRetry() {
+        for (problem in ImageContentProblem.entries) {
+            val wrapped = SourceRequestFailure("demonic", SourceStage.IMAGE, ImageContentFailure(problem))
+            assertTrue(wrapped.message.contains(problem.message))
+            assertEquals(FailureKind.CONTENT, failureKind(wrapped))
+            assertFalse(automaticRetryAllowed(wrapped))
+            assertFalse(wrapped.diagnostic.contains("https://"))
+        }
+        val untrusted = SourceRequestFailure("demonic", SourceStage.IMAGE, ContentFailure("secret-cookie"))
+        assertFalse(untrusted.message.contains("secret-cookie"))
+    }
     @Test(expected = CancellationException::class) fun cancellationIsNeverPresentedAsSourceFailure() = runBlocking<Unit> {
         sourceRequest("zap", SourceStage.DETAILS) { throw CancellationException() }
     }

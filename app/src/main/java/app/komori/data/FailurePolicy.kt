@@ -25,7 +25,14 @@ enum class FailureKind {
 
 class StorageFailure(message: String, cause: Throwable? = null) : IOException(message, cause)
 
-class ContentFailure(message: String, cause: Throwable? = null) : IOException(message, cause)
+open class ContentFailure(message: String, cause: Throwable? = null) : IOException(message, cause)
+
+internal enum class ImageContentProblem(val message: String) {
+    EMPTY("The source returned an empty image. Retry later or use another release."),
+    UNREADABLE("The source returned an unsupported or damaged image on this device. Retry or use another release."),
+}
+internal class ImageContentFailure(val problem: ImageContentProblem) : ContentFailure(problem.message)
+
 
 internal inline fun <T> storageOperation(block: () -> T): T =
     try {

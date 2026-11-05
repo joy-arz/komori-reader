@@ -12,6 +12,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.LiveRegionMode
 
 @Stable
 internal class MultiSelection(active: Boolean = false, ids: List<String> = emptyList()) {
@@ -64,12 +66,15 @@ internal fun SelectionBar(
     Row(
         Modifier.fillMaxWidth()
             .background(MaterialTheme.colorScheme.surfaceContainer)
-            .padding(horizontal = 12.dp),
+            .padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        IconButton(onClick = { selection.clear() }, modifier = Modifier.semantics { contentDescription = "End selection" }) {
+            Icon(KomoriIcons.Close, null)
+        }
         Text(
             "${selection.ids.size} selected",
-            Modifier.weight(1f),
+            Modifier.weight(1f).semantics { liveRegion = LiveRegionMode.Polite },
             style = MaterialTheme.typography.labelLarge,
         )
         TextButton(
@@ -77,7 +82,7 @@ internal fun SelectionBar(
                 selection.ids = if (selection.ids.size == available.size) emptyList() else available
             }
         ) {
-            Text(if (selection.ids.size == available.size) "Deselect all" else "Select all")
+            Text(if (selection.ids.size == available.size && available.isNotEmpty()) "Clear" else "Select all")
         }
         Box {
             TextButton(enabled = selection.ids.isNotEmpty(), onClick = { menu = true }) {
@@ -100,7 +105,7 @@ internal fun SelectionBar(
                 }
             }
         }
-        TextButton(onClick = { selection.clear() }, modifier = Modifier.semantics { contentDescription = "End selection" }) { Text("Done") }
+
     }
     pending?.let { (action, ids) ->
         AlertDialog(

@@ -32,6 +32,8 @@ class LargeLibraryPerformanceTest {
         try {
             app.settings.set("showContinue", false)
             app.settings.set("libraryAlphabetical", false)
+            app.settings.libraryView("collection:Saved", true)
+            app.settings.libraryView("collection:Saved")
             app.database.withTransaction {
                 val sql = app.database.openHelper.writableDatabase
                 val progress = sql.compileStatement("INSERT INTO progress(releaseId,mangaId,chapterKey,page,completed,scroll) VALUES(?,?,?,?,?,?)")
@@ -86,6 +88,8 @@ class LargeLibraryPerformanceTest {
             }
             app.settings.set("showContinue", settings.showContinue)
             app.settings.set("libraryAlphabetical", settings.libraryAlphabetical)
+            app.settings.libraryView(settings.libraryStart, true)
+            app.settings.libraryView(settings.lastLibraryView)
         }
     }
 }

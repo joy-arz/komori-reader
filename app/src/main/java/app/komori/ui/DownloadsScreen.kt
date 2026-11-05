@@ -75,7 +75,11 @@ internal fun Downloads(vm: ReaderViewModel) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val downloads by vm.downloads.collectAsStateWithLifecycle()
     val manga by vm.library.collectAsStateWithLifecycle()
-    val downloadIds = downloads.map { it.releaseId }
+    var queueView by rememberSaveable { mutableStateOf("All") }
+    val visibleDownloads = downloads.filter {
+        when (queueView) { "Queue" -> it.state != "Complete"; "Offline" -> it.state == "Complete"; else -> true }
+    }
+    val downloadIds = visibleDownloads.map { it.releaseId }
     val selection = rememberMultiSelection(downloadIds)
     var deleting by remember { mutableStateOf<Download?>(null) }
     val active = downloads.count { it.state in DownloadPolicy.activeStates }
@@ -96,7 +100,7 @@ internal fun Downloads(vm: ReaderViewModel) {
     var groupByTitle by rememberSaveable { mutableStateOf(true) }
     val environment by remember(vm.app) { downloadEnvironment(vm.app) }.collectAsStateWithLifecycle(DownloadEnvironment())
     val mangaById = remember(manga) { manga.associateBy { it.id } }
-    val ordered = downloads.sortedWith(compareBy<Download> { it.state == "Complete" }.thenBy { it.queuePosition }.thenBy { it.releaseId })
+    val ordered = visibleDownloads.sortedWith(compareBy<Download> { it.state == "Complete" }.thenBy { it.queuePosition }.thenBy { it.releaseId })
     val groups = if (groupByTitle) ordered.groupBy { it.mangaId } else linkedMapOf("" to ordered)
     Column(Modifier.fillMaxSize()) {
         Row(
@@ -138,10 +142,21 @@ internal fun Downloads(vm: ReaderViewModel) {
                     }
                 }
         }
-        if (downloads.isEmpty())
+        LazyRow(Modifier.fillMaxWidth().padding(horizontal = 18.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(listOf("All", "Queue", "Offline")) { label ->
+                val count = when (label) { "Queue" -> downloads.size - complete; "Offline" -> complete; else -> downloads.size }
+                FilterChip(queueView == label, { queueView = label; selection.clear() }, label = { Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { Text(label); Text(count.toString(), color = MaterialTheme.colorScheme.onSurfaceVariant) } })
+            }
+            item { FilterChip(groupByTitle, { groupByTitle = !groupByTitle }, label = { Text("Group titles") }) }
+        }
+        if (queueView != "Offline" && (active > 0 || canResume)) Row(Modifier.padding(horizontal = 18.dp)) {
+            if (active > 0) TextButton(onClick = vm::pauseAll) { Text("Pause queue") }
+            if (canResume) TextButton(onClick = vm::resumeAll) { Text("Resume / retry") }
+        }
+        if (visibleDownloads.isEmpty())
             EmptyState(
                 KomoriIcons.Download,
-                "Take a few chapters with you",
+                if (queueView == "Queue") "Queue is clear" else "Take a few chapters with you",
                 "Download from a title's chapter list. Finished downloads remain available offline.",
             )
         else
@@ -196,9 +211,9 @@ internal fun Downloads(vm: ReaderViewModel) {
                             ),
                         colors =
                             CardDefaults.outlinedCardColors(
-                                containerColor = MaterialTheme.colorScheme.surface
+                                containerColor = if (download.releaseId in selection.ids) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface
                             ),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                        border = BorderStroke(1.dp, if (download.releaseId in selection.ids) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
                     ) {
                         Column(Modifier.padding(16.dp)) {
                             if (selection.active)
@@ -210,11 +225,11 @@ internal fun Downloads(vm: ReaderViewModel) {
                                     },
                                 )
                             Text(
-                                manga.find { it.id == download.mangaId }?.title ?: download.label,
+                                if (groupByTitle) download.label else mangaById[download.mangaId]?.title ?: download.label,
                                 style = MaterialTheme.typography.titleMedium,
                             )
                             Text(
-                                "${download.label} · $displayState",
+                                if (groupByTitle) displayState else "${download.label} · $displayState",
                                 style = MaterialTheme.typography.bodySmall,
                             )
                             val transfer = transfers[download.releaseId]

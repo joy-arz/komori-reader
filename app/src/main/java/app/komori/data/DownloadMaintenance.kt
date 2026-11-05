@@ -39,11 +39,11 @@ internal fun writePageDigest(file: File) {
 
 internal fun decodableImage(file: File): Boolean {
     if (!validImage(file) || file.length() > MAX_IMAGE_BYTES) return false
-    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    BitmapFactory.decodeFile(file.path, bounds)
+    val info = ImageFormats.info(file) ?: return false
     var sample = 1
-    while (bounds.outWidth / sample > 1024 || bounds.outHeight / sample > 1024) sample *= 2
-    val image = BitmapFactory.decodeFile(file.path, BitmapFactory.Options().apply { inSampleSize = sample }) ?: return false
+    while (info.width / sample > 1024 || info.height / sample > 1024) sample *= 2
+    val image = try { ImageFormats.region(file, android.graphics.Rect(0, 0, info.width, info.height), sample) }
+        catch (_: java.io.IOException) { return false }
     image.recycle()
     return true
 }

@@ -2,6 +2,17 @@
 
 Updated October 27, 2026 for the 0.8.5 reliability and Authors-filter pass. Published delivery is listed separately below. Checkboxes record implemented features with local checks; device/network acceptance that remains unverified stays open. See [the pass log](BACKLOG_PASS.md) for exact results and release gates. Tracking is deferred by the user until core acceptance.
 
+## November 6: Library, Queue, Settings and image compatibility
+
+- [x] Separate compact Collection and Libraries navigation; rename All libraries to All, remember last view or pin a custom starting library, and handle deletion fallback.
+- [x] Add persistent drag ordering for libraries and Settings sources, with accessible move actions and independent source switches.
+- [x] Add All/Queue/Offline download scopes, visible grouping/queue actions, compact batch controls and selected outlines.
+- [x] Add animated GIF/WebP reading, bounded fallback for BMP and device-supported HEIF/AVIF, and consistent import/export/integrity format handling.
+- [x] Diagnose Manager Kim 202 page 17's empty source response; add the website-advertised, constrained Demonic alternate CDN and specific redacted image errors. Verification and rate limits still stop requests.
+- [x] Add regression/gesture/layout tests, update README/full unreleased changelog, and open PR #14. See its exact-head checks and [the scoped report](reviews/2026-11-06/LIBRARY_QUEUE_IMAGES.md) for execution evidence.
+- [ ] Confirm Manager Kim's alternate CDN on the user's Android 14 phone/network; both endpoints did not provide a usable page here.
+- [ ] Physical low-memory/TalkBack acceptance and device-specific HEIF/AVIF coverage.
+
 ## November 5: title libraries, regular-source genres and large author lists
 
 - [x] Add a title-detail Libraries button beside Save; reuse transactional multi-library assignment, creation and duplicate-title confirmation.

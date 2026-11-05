@@ -39,6 +39,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -129,12 +130,14 @@ internal fun SettingsScreen(vm: ReaderViewModel, settings: Settings) {
                     item {
                         Text("Sources", style = MaterialTheme.typography.titleLarge)
                         Text(
-                            "Top source opens first in Discover. MangaDex library entries stay available.",
+                            "Hold a handle and drag to reorder. The first enabled source opens in Discover.",
                             style = MaterialTheme.typography.bodySmall,
                         )
                         sourceOrder(settings.sources).forEachIndexed { index, key ->
+                          key(key) {
+                            var rowHeight by remember { mutableIntStateOf(64) }
                             Row(
-                                Modifier.fillMaxWidth()
+                                Modifier.fillMaxWidth().onSizeChanged { rowHeight = it.height }
                                     .padding(vertical = 4.dp)
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(MaterialTheme.colorScheme.surface)
@@ -154,28 +157,9 @@ internal fun SettingsScreen(vm: ReaderViewModel, settings: Settings) {
                                 )
                                 Switch(key in settings.enabledSources.split(','), { vm.enableSource(key, it) },
                                     Modifier.semantics { contentDescription = "Enable ${sourceNames[key]}" })
-                                TextButton(
-                                    enabled = index > 0,
-                                    onClick = { vm.moveSource(key, -1) },
-                                ) {
-                                    Text("Up")
-                                }
-                                TextButton(
-                                    enabled = index < sourceNames.size - 1,
-                                    onClick = { vm.moveSource(key, 1) },
-                                ) {
-                                    Text("Down")
-                                }
+                                ReorderHandle(sourceNames.getValue(key), rowHeight, index > 0, index < sourceNames.size - 1) { vm.moveSource(key, it) }
                             }
-                        }
-                    }
-                    item {
-                        Toggle(
-                            "Continue reading banner",
-                            "Show the most recently read title in Library",
-                            settings.showContinue,
-                        ) {
-                            vm.setting("showContinue", it)
+                          }
                         }
                     }
                     item { SourceDiagnostics(vm) }
@@ -186,6 +170,16 @@ internal fun SettingsScreen(vm: ReaderViewModel, settings: Settings) {
                     }
                 }
                 if (section == "Reading") {
+                    item {
+                        Toggle(
+                            "Continue reading banner",
+                            "Show the most recently read title in Library",
+                            settings.showContinue,
+                        ) {
+                            vm.setting("showContinue", it)
+                        }
+                    }
+
                     item { Text("Reading", style = MaterialTheme.typography.titleLarge) }
                     item { ReaderCacheSettings(vm, settings) }
                     item {

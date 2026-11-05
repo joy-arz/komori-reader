@@ -53,6 +53,8 @@ data class Settings(
     val backupStatus: String = "No automatic backup has run.",
     val backupLastSuccess: Long = 0,
     val adultSourcesConfirmed: Boolean = false,
+    val libraryStart: String = "last",
+    val lastLibraryView: String = "collection:Saved",
 )
 
 class SettingsStore(context: Context, private val legacyInstall: Boolean = false,
@@ -116,6 +118,8 @@ class SettingsStore(context: Context, private val legacyInstall: Boolean = false
                 backupStatus = p[stringPreferencesKey("backupStatus")] ?: "No automatic backup has run.",
                 backupLastSuccess = p[longPreferencesKey("backupLastSuccess")] ?: 0,
                 adultSourcesConfirmed = p[booleanPreferencesKey("adultSourcesConfirmed")] ?: false,
+                libraryStart = p[stringPreferencesKey("libraryStart")] ?: "last",
+                lastLibraryView = p[stringPreferencesKey("lastLibraryView")] ?: "collection:Saved",
             )
         })
     }
@@ -145,6 +149,12 @@ class SettingsStore(context: Context, private val legacyInstall: Boolean = false
         }
         require(value in choices)
         preferences.edit { it[stringPreferencesKey(key)] = value }
+    }
+
+    suspend fun libraryView(value: String, default: Boolean = false) {
+        require(value.length <= 4104 && (value == "last" || value.startsWith("library:") ||
+            value in setOf("collection:Saved", "collection:Liked", "collection:History", "collection:Downloaded")))
+        preferences.edit { it[stringPreferencesKey(if (default) "libraryStart" else "lastLibraryView")] = value }
     }
 
     suspend fun configureBackup(folder: String, days: Int, retention: Int) {

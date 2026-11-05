@@ -111,6 +111,7 @@ class BatchSelectionTest {
             compose.waitForIdle()
             device.waitForIdle()
         }
+            tapText("Collection")
             tapText("Downloaded")
             assertTrue(waitForNative(Until.hasObject(By.desc(titles[0].title)), 5000))
             assertTrue(device.hasObject(By.desc(titles[1].title)))

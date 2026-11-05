@@ -21,7 +21,7 @@ class SourceRequestFailure(val source: String, val stage: SourceStage, val failu
         }.orEmpty()
         FailureKind.MISSING_PAGE -> "HTTP ${(failure as SourceHttpException).status}. This content is unavailable. Refresh or choose another release."
         FailureKind.STORAGE -> "Storage is unavailable. Free space and retry."
-        FailureKind.CONTENT -> "Unsupported or invalid content. Refresh or try another release."
+        FailureKind.CONTENT -> (failure as? ImageContentFailure)?.problem?.message ?: "Unsupported or invalid content. Refresh or try another release."
         FailureKind.SECURE_CONNECTION -> "A secure connection failed. Check the device clock or try another network."
         FailureKind.OFFLINE -> "The network or source is unreachable. Check connectivity and retry."
         FailureKind.HTTP -> "HTTP ${(failure as SourceHttpException).status}. Retry later or choose another release."
