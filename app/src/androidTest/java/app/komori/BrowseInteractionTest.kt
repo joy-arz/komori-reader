@@ -34,11 +34,9 @@ class BrowseInteractionTest {
                 }
         }
         fun tap(label: String) {
-            assertTrue(
-                "Missing control: $label",
-                device.wait(Until.hasObject(By.pkg(instrumentation.targetContext.packageName).desc(label)), 8_000),
-            )
-            device.findObject(By.pkg(instrumentation.targetContext.packageName).desc(label)).click()
+            val target = device.wait(Until.findObject(By.pkg(instrumentation.targetContext.packageName).desc(label)), 8_000)
+            assertNotNull("Missing control: $label", target)
+            target.click()
             device.waitForIdle()
         }
         try {

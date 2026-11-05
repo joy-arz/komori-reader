@@ -67,3 +67,17 @@ The final execution summary is maintained in [PR #14](https://github.com/joy-arz
 - The first animation fixture inspected its view before Compose created it; the condition now waits for actual creation and a running drawable. An intermediate local binary predated the HTML challenge guard (compiled class 05:17:26 vs source 05:18:00); it was identified through javap and rebuilt. These iterations did not weaken assertions or production verification.
 
 Screenshots captured by the synthetic UI tests are `komori-library-tabs.png`, `komori-source-reorder.png` and `komori-queue-offline.png`. The device-check script collects them into artifacts. They show fixture data, not a claim of live-source reading acceptance.
+
+## Completed local verification
+
+- JVM: **227 total; 218 passed, 9 optional/live skips; zero failures/errors**.
+- Android lint: **zero errors, 50 warnings**, unchanged from the baseline count.
+- Debug/test and minified release compilation: passed.
+- Affected API 30 suite: **33/33 passed**, including Library/Queue, format/native/fallback tile decoding, GIF gestures/manual retry, CDN policies, reader transitions and download repair.
+- Broader CI exposed two old text-based `Done` selectors and a benchmark that assumed Saved was always the launch view. Dismissal now uses the accessible End selection action, with selection-dismissal assertions retained; the benchmark explicitly selects and restores its Saved launch preference. A native lookup helper now clicks the object returned by its existing wait instead of looking it up again during keyboard/navigation hierarchy changes. No timeout increased.
+- The three affected broader fixtures (Authors interaction, Browse interaction and large-Library benchmark): **3/3 passed locally** after those corrections.
+- Python release/scan tooling: **10/10 passed**.
+
+Latest API 30 debug-emulator benchmark: 1,000 titles and 50,000 progress rows; setup/seed **1,033 ms**, first Activity-visible cover **919 ms**, **4** visible cover nodes, 50 progress writes observed in **72.5 ms**, composition-apply delta **0**. PSS snapshots were **220,765 → 221,382 KB**. These include instrumentation, are not peak-memory measurements, and are not physical-phone or before/after optimization evidence. The first Activity measurement is within an existing process, not a measured cold-process start.
+
+Final cloud matrix/build conclusions are maintained in PR #14 against its exact current head. Earlier superseded runs and the first full-matrix fixture failures remain visible in Actions; they are not presented as passing runs.
