@@ -93,9 +93,10 @@ internal fun CategoryAssignmentDialog(vm: ReaderViewModel, ids: List<String>, ti
 }
 
 @Composable
-internal fun LibraryFilterDialog(vm: ReaderViewModel, category: String, status: String, unread: Boolean,
-    apply: (String, String, Boolean) -> Unit, dismiss: () -> Unit) {
+internal fun LibraryFilterDialog(vm: ReaderViewModel, category: String, status: String, unread: Boolean, collection: String,
+    apply: (String, String, Boolean, String) -> Unit, dismiss: () -> Unit) {
     val categories by vm.categories.collectAsStateWithLifecycle()
+    var collectionChoice by remember { mutableStateOf(collection) }
     var categoryChoice by remember { mutableStateOf(category) }
     var statusChoice by remember { mutableStateOf(status) }
     var unreadChoice by remember { mutableStateOf(unread) }
@@ -103,6 +104,12 @@ internal fun LibraryFilterDialog(vm: ReaderViewModel, category: String, status: 
     AlertDialog(onDismissRequest = dismiss, title = { Text("Filter Library") }, text = {
         LazyColumn(Modifier.heightIn(max = 440.dp)) {
             item { ToolSwitch("Only titles with unread chapters", unreadChoice) { unreadChoice = it } }
+            item { Text("Collection", style = MaterialTheme.typography.titleSmall) }
+            items(listOf("Saved", "Liked", "History", "Downloaded")) { choice ->
+                Row(Modifier.fillMaxWidth().clickable { collectionChoice = choice }) {
+                    RadioButton(collectionChoice == choice, { collectionChoice = choice }); Text(choice, Modifier.padding(top = 12.dp))
+                }
+            }
             item { Text("Reading status", style = MaterialTheme.typography.titleSmall) }
             items(listOf("" to "All statuses") + listOf("Plan to read", "Reading", "On hold", "Completed", "Dropped").map { it to it }) { (key, label) ->
                 Row(Modifier.fillMaxWidth().clickable { statusChoice = key }) {
@@ -117,9 +124,9 @@ internal fun LibraryFilterDialog(vm: ReaderViewModel, category: String, status: 
             }
             item { TextButton(onClick = { manage = true }) { Text("Manage libraries") } }
         }
-    }, confirmButton = { TextButton(onClick = { apply(categoryChoice, statusChoice, unreadChoice); dismiss() }) { Text("Apply") } },
+    }, confirmButton = { TextButton(onClick = { apply(categoryChoice, statusChoice, unreadChoice, collectionChoice); dismiss() }) { Text("Apply") } },
         dismissButton = { Row {
-            TextButton(onClick = { apply("", "", false); dismiss() }) { Text("Reset") }
+            TextButton(onClick = { apply("", "", false, "Saved"); dismiss() }) { Text("Reset") }
             TextButton(onClick = dismiss) { Text("Cancel") }
         } })
     if (manage) CategoryManagerDialog(vm) { manage = false }

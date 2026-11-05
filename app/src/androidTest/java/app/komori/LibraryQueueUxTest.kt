@@ -57,6 +57,14 @@ class LibraryQueueUxTest {
             compose.onAllNodesWithText(book.title).assertCountEquals(0)
             compose.onNodeWithText(second.name).performClick()
             compose.onNodeWithText(book.title).assertExists()
+            compose.onNodeWithContentDescription("Filter library").performClick()
+            compose.onNodeWithText("Liked").performClick()
+            compose.onNodeWithText("Apply").performClick()
+            compose.onAllNodesWithText(book.title).assertCountEquals(0)
+            compose.onNodeWithContentDescription("Filter library").performClick()
+            compose.onNodeWithText("Saved").performClick()
+            compose.onNodeWithText("Apply").performClick()
+            compose.onNodeWithText(book.title).assertExists()
             waitView("library:${second.id}")
             compose.runOnUiThread { screen++ }
             compose.waitUntil(5000) { compose.onAllNodes(hasText(second.name) and isSelected()).fetchSemanticsNodes().isNotEmpty() }
