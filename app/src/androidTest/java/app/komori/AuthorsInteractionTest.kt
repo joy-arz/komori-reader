@@ -3,6 +3,9 @@ package app.komori
 import android.content.Intent
 import androidx.activity.compose.setContent
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.longClick
