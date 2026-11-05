@@ -5,6 +5,7 @@ import android.graphics.drawable.Animatable
 import androidx.test.platform.app.InstrumentationRegistry
 import app.komori.data.*
 import app.komori.ui.WebtoonStripCache
+import app.komori.ui.CompatibleRegionDecoder
 import coil.imageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
@@ -31,6 +32,16 @@ class ImageFormatsTest {
                 assertNotNull(ImageFormats.exportExtension(mime))
                 val region = ImageFormats.region(file, Rect(0, 16, 32, 48), 1)
                 assertEquals(32, region.width); assertEquals(32, region.height); region.recycle()
+                val paged = CompatibleRegionDecoder()
+                try {
+                    assertEquals(android.graphics.Point(32, 64), paged.init(app, android.net.Uri.fromFile(file)))
+                    assertTrue(paged.isReady())
+                    for (top in listOf(0, 32)) {
+                        val tile = paged.decodeRegion(Rect(0, top, 32, top + 32), 1)
+                        assertEquals(32, tile.width); assertEquals(32, tile.height); tile.recycle()
+                    }
+                } finally { paged.recycle() }
+                assertFalse(paged.isReady())
                 val strip = WebtoonStripCache.load(file, 0, 32, 32, 32)
                 assertEquals(32, strip.height)
                 if (name.endsWith("gif")) {

@@ -57,16 +57,26 @@ class ReaderImageView(context: Context) : SubsamplingScaleImageView(context) {
     }
 }
 
-private class CompatibleRegionDecoder : com.davemorrissey.labs.subscaleview.decoder.ImageRegionDecoder {
+internal class CompatibleRegionDecoder : com.davemorrissey.labs.subscaleview.decoder.ImageRegionDecoder {
     private var file: java.io.File? = null
+    private var native: com.davemorrissey.labs.subscaleview.decoder.ImageRegionDecoder? = null
     override fun init(context: Context, uri: android.net.Uri): android.graphics.Point {
         val image = java.io.File(requireNotNull(uri.path))
+        val decoder = com.davemorrissey.labs.subscaleview.decoder.SkiaImageRegionDecoder()
+        try {
+            val dimensions = decoder.init(context, uri)
+            native = decoder
+            file = image
+            return dimensions
+        } catch (_: java.io.IOException) {
+            decoder.recycle()
+        }
         val info = app.komori.data.ImageFormats.info(image) ?: throw java.io.IOException("Unsupported image")
         file = image
         return android.graphics.Point(info.width, info.height)
     }
     override fun decodeRegion(rect: android.graphics.Rect, sampleSize: Int): android.graphics.Bitmap =
-        app.komori.data.ImageFormats.region(requireNotNull(file), rect, sampleSize)
-    override fun isReady() = file != null
-    override fun recycle() { file = null }
+        native?.decodeRegion(rect, sampleSize) ?: app.komori.data.ImageFormats.region(requireNotNull(file), rect, sampleSize)
+    override fun isReady() = native?.isReady() ?: (file != null)
+    override fun recycle() { native?.recycle(); native = null; file = null }
 }
