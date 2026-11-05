@@ -108,6 +108,7 @@ class OfflineLibraryTest {
         val vm = withContext(Dispatchers.Main) { ReaderViewModel(app) }
         val book = Manga("library-$token", "Library title $token", "", "")
         val original = app.dao.backupCategories()
+        val previousView = app.settings.flow.first()
         var created = emptyList<LibraryCategory>()
         try {
             withContext(Dispatchers.Main) { vm.saveCategory("First $token") }.join()
@@ -117,12 +118,13 @@ class OfflineLibraryTest {
             withContext(Dispatchers.Main) { vm.changeCategories(listOf(book.id), mapOf(created[1].id to true), listOf(book)) }.join()
             compose.activity.runOnUiThread { compose.activity.setContent { MaterialTheme { CategoryManagerDialog(vm) { } } } }
             compose.waitUntil(5000) { compose.onAllNodesWithText("Second $token").fetchSemanticsNodes().isNotEmpty() }
-            val index = app.dao.backupCategories().indexOfFirst { it.id == created[1].id }
-            compose.onAllNodesWithText("Move earlier")[index].performClick()
+            val earlier = compose.onNodeWithContentDescription("Reorder Second $token").fetchSemanticsNode().config[androidx.compose.ui.semantics.SemanticsActions.CustomActions].single { it.label == "Move earlier" }
+            compose.runOnUiThread { assertTrue(earlier.action()) }
             withTimeout(5000) { vm.categories.first { rows -> rows.indexOfFirst { it.id == created[1].id } < rows.indexOfFirst { it.id == created[0].id } } }
             assertEquals(created[1].id, app.dao.backupMemberships().single { it.mangaId == book.id }.categoryId)
             compose.activity.runOnUiThread { compose.activity.setContent { MaterialTheme { Library(vm) { } } } }
             compose.waitUntil(5000) { compose.onAllNodesWithText(book.title).fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("Libraries", useUnmergedTree = true).performClick()
             compose.onNodeWithText("First $token").performClick()
             compose.waitUntil(5000) { compose.onAllNodesWithText(book.title).fetchSemanticsNodes().isEmpty() }
             compose.onNodeWithText("Second $token").performClick()
@@ -136,6 +138,8 @@ class OfflineLibraryTest {
             withContext(Dispatchers.Main) { vm.viewModelScope.cancel() }
             created.forEach { app.dao.deleteCategory(it.id) }
             original.forEach { app.dao.putCategory(it) }
+            app.settings.libraryView(previousView.libraryStart, true)
+            app.settings.libraryView(previousView.lastLibraryView)
             app.database.openHelper.writableDatabase.execSQL("DELETE FROM shelf WHERE mangaId = ?", arrayOf(book.id))
             app.database.openHelper.writableDatabase.execSQL("DELETE FROM manga WHERE id = ?", arrayOf(book.id))
         }

@@ -18,6 +18,7 @@ object KomoriIcons {
             )
             .build()
 
+    val DragHandle = icon("Reorder", "M8,5h2v2H8ZM14,5h2v2h-2ZM8,11h2v2H8ZM14,11h2v2h-2ZM8,17h2v2H8ZM14,17h2v2h-2Z")
     val Close = icon("Close", "M6.4,5L12,10.6 17.6,5 19,6.4 13.4,12 19,17.6 17.6,19 12,13.4 6.4,19 5,17.6 10.6,12 5,6.4Z")
     val Refresh = icon("Refresh", "M17.65,6.35A7.95,7.95 0,0 0,12 4a8,8 0,1 0,7.75 10h-2.1A6,6 0,1 1,12 6c1.65,0 3.14,0.69 4.22,1.78L13,11h7V4Z")
     val ArrowBack = icon("Back", "M20,11H7.8l5.6,-5.6L12,4l-8,8 8,8 1.4,-1.4L7.8,13H20Z")

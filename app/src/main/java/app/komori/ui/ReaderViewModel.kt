@@ -498,12 +498,15 @@ class ReaderViewModel(
     }
 
     fun moveSource(key: String, delta: Int) = task {
+      mutation.withLock {
         val order = sourceOrder(app.settings.flow.first().sources).toMutableList()
         val index = order.indexOf(key)
+        if (index < 0) return@withLock
         val target = (index + delta).coerceIn(0, order.lastIndex)
         order.removeAt(index)
         order.add(target, key)
         app.settings.sources(order.joinToString(","))
+      }
     }
 
     fun readOffline(
@@ -887,6 +890,8 @@ class ReaderViewModel(
         }
     }
 
+    fun libraryView(value: String, default: Boolean = false) = task { app.settings.libraryView(value, default) }
+
     fun moveCategory(id: String, step: Int) = task {
         mutation.withLock {
             app.database.withTransaction {
@@ -900,7 +905,12 @@ class ReaderViewModel(
         }
     }
 
-    fun deleteCategory(id: String) = task { dao.deleteCategory(id) }
+    fun deleteCategory(id: String) = task {
+        dao.deleteCategory(id)
+        val current = app.settings.flow.first()
+        if (current.libraryStart == "library:$id") app.settings.libraryView("library:", true)
+        if (current.lastLibraryView == "library:$id") app.settings.libraryView("library:")
+    }
 
     fun changeCategories(ids: List<String>, changes: Map<String, Boolean>, titles: List<Manga> = emptyList()) = task {
         mutation.withLock {

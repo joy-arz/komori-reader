@@ -51,7 +51,7 @@ if [[ "$test_status" != 0 ]]; then
     adb pull /data/anr device-diagnostics/anr >/dev/null 2>&1 || true
 fi
 adb logcat -d -s KomoriBenchmark:I > device-diagnostics/progress-benchmark.txt || true
-for capture in download-maintenance scheduled-backup-settings reader-manual-refresh title-libraries source-genre-filters navigation-failure facet-failure continuous-failure author-filter-failure; do
+for capture in library-tabs source-reorder queue-offline download-maintenance scheduled-backup-settings reader-manual-refresh title-libraries source-genre-filters navigation-failure facet-failure continuous-failure author-filter-failure; do
     adb pull "/data/local/tmp/komori-$capture.png" "device-diagnostics/$capture.png" || true
 done
 adb pull /data/local/tmp/komori-author-filter-failure.json device-diagnostics/author-filter-failure.json || true

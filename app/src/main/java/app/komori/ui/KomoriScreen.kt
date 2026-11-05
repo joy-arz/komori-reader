@@ -681,8 +681,8 @@ internal fun MangaGrid(
                                 .aspectRatio(0.7f)
                                 .clip(RoundedCornerShape(16.dp))
                                 .border(
-                                    1.dp,
-                                    MaterialTheme.colorScheme.outlineVariant,
+                                    if (title.id in selection.ids) 2.dp else 1.dp,
+                                    if (title.id in selection.ids) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
                                     RoundedCornerShape(16.dp),
                                 )
                                 .background(MaterialTheme.colorScheme.surfaceVariant)
