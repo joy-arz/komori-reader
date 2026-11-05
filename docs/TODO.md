@@ -2,6 +2,15 @@
 
 Updated October 27, 2026 for the 0.8.5 reliability and Authors-filter pass. Published delivery is listed separately below. Checkboxes record implemented features with local checks; device/network acceptance that remains unverified stays open. See [the pass log](BACKLOG_PASS.md) for exact results and release gates. Tracking is deferred by the user until core acceptance.
 
+## November 5: title libraries, regular-source genres and large author lists
+
+- [x] Add a title-detail Libraries button beside Save; reuse transactional multi-library assignment, creation and duplicate-title confirmation.
+- [x] Replace WeebCentral's partial fixed genre list with its native taxonomy; extract clickable regular-source genre/category/language metadata and wire WeebCentral type/status filters.
+- [x] Show selected non-adult genres with removal/clear controls and source-tag loading/retry feedback.
+- [x] Publish author pages as each bounded request completes; retain up to three small catalogs (300 titles each) across creator switches and invalidate them on refresh.
+- [x] Request canonical HTTPS HiveToons paths to avoid the demonstrated slashless HTTP redirect, preserving existing source IDs, TLS and cleartext restrictions.
+- [ ] Finish affected emulator/live-Hive acceptance and cloud checks. No new version or public release is created by this pass.
+
 ## November 5: source icons and Atsumaru
 
 - [x] Bundle the real website artwork and render consistent green circular badges in source selectors and cover badges.

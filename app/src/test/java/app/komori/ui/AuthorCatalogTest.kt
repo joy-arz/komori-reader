@@ -3,11 +3,41 @@ package app.komori.ui
 import app.komori.data.*
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.*
+import java.util.concurrent.atomic.AtomicInteger
 import org.junit.Assert.*
 import org.junit.Test
 
 class AuthorCatalogTest {
+    @Test fun largeFollowListPublishesFastCreatorsBeforeSlowOneWithTwoRequestsMaximum() = runBlocking {
+        val followed = (1..120).map { Creator("large-$it", "Creator $it", "author") }
+        val release = CompletableDeferred<Unit>()
+        val firstVisible = CompletableDeferred<Unit>()
+        val active = AtomicInteger(); val peak = AtomicInteger()
+        val called = mutableListOf<String>()
+        val catalog = AuthorCatalog(followed) { creator, _ ->
+            val count = active.incrementAndGet(); peak.updateAndGet { maxOf(it, count) }
+            called += creator.id
+            try {
+                if (creator == followed.first()) release.await()
+                BrowsePage(listOf(title(creator.id)), false)
+            } finally { active.decrementAndGet() }
+        }
+        val initial = launch { catalog.loadNext {
+            if (catalog.items.any { it.id == "large-2" }) firstVisible.complete(Unit)
+        } }
+        withTimeout(2000) { firstVisible.await() }
+        assertTrue(initial.isActive)
+        assertTrue(called.size <= 3)
+        assertTrue(catalog.items.none { it.id == "large-1" })
+        release.complete(Unit); initial.join()
+        while (catalog.hasMore) catalog.loadNext()
+        assertEquals(120, called.size)
+        assertEquals(120, called.distinct().size)
+        assertEquals(120, catalog.items.size)
+        assertTrue(peak.get() <= 2)
+    }
+
     private fun title(id: String) = Manga(id, id, "", "")
 
     private val creators = (1..4).map { Creator("$it", "Creator $it", "author") }

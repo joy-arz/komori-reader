@@ -45,7 +45,7 @@ class SearchFilterTest {
             val source = WebSource("demonic", server.url("/").toString().trimEnd('/'), MangaDex.client())
             val page = source.browse("fixture", 1, BrowseFilter(tags = setOf("59")))
             assertEquals("Fixture", page.titles.single().title)
-            assertEquals(listOf("Action", "Fantasy"), page.titles.single().metadata().map { it.name })
+            assertEquals(listOf("Action", "Fantasy"), page.titles.single().metadata().filter { it.type == "tag" }.map { it.name })
             assertEquals("/search.php", server.takeRequest().requestUrl!!.encodedPath)
             assertEquals("/advanced.php", server.takeRequest().requestUrl!!.encodedPath)
             assertEquals("/manga/fixture", server.takeRequest().requestUrl!!.encodedPath)

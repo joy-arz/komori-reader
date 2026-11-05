@@ -43,7 +43,9 @@ class AuthorsFilterActionTest {
             compose.onAllNodes(primary).assertCountEquals(1)
             compose.onNode(primary).assertIsDisplayed().assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp).assertIsNotSelected().performClick()
             compose.onNodeWithText("Title or creator").performTextInput("forest")
+            compose.onNodeWithText("Title or creator").assertTextContains("forest")
             compose.onNodeWithText("Apply").performClick()
+            compose.waitUntil(5000) { vm.authorFeed.value.filter.query == "forest" }
             compose.onNode(primary).assertIsSelected()
             compose.onNodeWithText("Reset filters").assertHasClickAction()
             compose.onNodeWithContentDescription("Sort author works").performClick()
@@ -62,6 +64,16 @@ class AuthorsFilterActionTest {
             assertEquals(BrowseFilter(), vm.browseFilter.value)
             androidx.test.uiautomator.UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
                 .takeScreenshot(java.io.File(app.getExternalFilesDir(null), "authors-filter-after-large-rtl.png"))
+        } catch (error: Throwable) {
+            val appContext = compose.activity.applicationContext
+            val device = androidx.test.uiautomator.UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+            compose.onRoot(useUnmergedTree = true).printToLog("KomoriAuthorsFilter")
+            device.executeShellCommand("screencap -p /data/local/tmp/komori-author-filter-failure.png")
+            val state = java.io.File(appContext.getExternalFilesDir(null), "author-filter-failure.json")
+            state.writeText(org.json.JSONObject().put("filter", vm.authorFeed.value.filter.encode())
+                .put("loading", vm.authorFeed.value.loading).put("contextSize", vm.authorFeed.value.context.size).toString())
+            device.executeShellCommand("cp ${state.absolutePath} /data/local/tmp/komori-author-filter-failure.json")
+            throw error
         } finally { compose.runOnUiThread { vm.viewModelScope.cancel() }; app.dao.removeCreator(creator.id) }
     }
 }

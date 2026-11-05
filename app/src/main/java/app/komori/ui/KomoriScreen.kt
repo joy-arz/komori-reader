@@ -839,6 +839,8 @@ internal fun SourceFilters(
     close: () -> Unit,
 ) {
     val creator by vm.activeCreator.collectAsStateWithLifecycle()
+    val tagsLoading by vm.tagsLoading.collectAsStateWithLifecycle()
+    val tagsError by vm.tagsError.collectAsStateWithLifecycle()
     val facetBrowse = source in gallerySources &&
         (creator != null || filter.facetPath.isNotEmpty() || filter.searchType != "Title")
     val localMetadata = source in setOf("zap", "imhentai") && facetBrowse
@@ -850,6 +852,11 @@ internal fun SourceFilters(
     var category by remember { mutableStateOf(filter.category) }
     var chosen by remember { mutableStateOf(filter.tags) }
     var tagQuery by remember { mutableStateOf("") }
+    LaunchedEffect(tags) {
+        if (source == "demonic") chosen = chosen.map { value ->
+            tags.firstOrNull { it.id == value || it.name.equals(value, true) }?.id ?: value
+        }.toSet()
+    }
     var status by remember { mutableStateOf(filter.status) }
     var ratings by remember { mutableStateOf(filter.ratings) }
     val initialFocus = remember { FocusRequester() }
@@ -874,8 +881,8 @@ internal fun SourceFilters(
                     BrowseChoice("Chapter language", "All available languages", sourceBrowseLanguages(source), language) { language = it }
                     if (sourceBrowseCategories(source).isNotEmpty())
                         BrowseChoice(if (source == "mangadex") "Original language / origin" else "Category", "All categories", sourceBrowseCategories(source), category) { category = it }
-                    if (source == "mangadex" || source in manhwaSources || source in atsumaruSources)
-                        BrowseChoice("Publication status", "All statuses", listOf("ongoing", "completed", "hiatus", "cancelled").filter { source == "mangadex" || source in atsumaruSources || it != "cancelled" }.map { SourceTag(it, it.replaceFirstChar(Char::uppercase)) }, status) { status = it }
+                    if (source == "mangadex" || source in manhwaSources || source in atsumaruSources || source in setOf("weeb", "hive"))
+                        BrowseChoice("Publication status", "All statuses", listOf("ongoing", "completed", "hiatus", "cancelled").filter { source == "mangadex" || source in atsumaruSources || source == "weeb" || source == "hive" || it != "cancelled" }.map { SourceTag(it, it.replaceFirstChar(Char::uppercase)) }, status) { status = it }
                     if (source == "mangadex") {
                         Text("Content rating", style = MaterialTheme.typography.titleSmall)
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -901,6 +908,17 @@ internal fun SourceFilters(
                     "Genres also refine the current title-search results using title metadata.",
                     style = MaterialTheme.typography.bodySmall)
                 if (source !in setOf("zap", "imhentai")) {
+                    if (source !in SourceConsentPolicy.adultSources && chosen.isNotEmpty()) {
+                        Text("${chosen.size} ${if (chosen.size == 1) "genre" else "genres"} selected", style = MaterialTheme.typography.labelLarge)
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            chosen.forEach { id ->
+                                val name = tags.find { it.id == id }?.name ?: id
+                                InputChip(selected = true, onClick = { chosen = chosen - id }, label = { Text(name) },
+                                    trailingIcon = { Icon(KomoriIcons.Close, "Remove $name", Modifier.size(16.dp)) })
+                            }
+                        }
+                        TextButton(onClick = { chosen = emptySet() }) { Text("Clear genres") }
+                    }
                     OutlinedTextField(tagQuery, { tagQuery = it }, label = { Text("Find a genre or tag") }, singleLine = true)
                     LazyColumn(Modifier.heightIn(max = 220.dp)) {
                         items(tags.filter { it.name.contains(tagQuery, true) }, key = { it.id }) { tag ->
@@ -911,7 +929,12 @@ internal fun SourceFilters(
                                 Text(tag.name)
                             }
                         }
-                        if (tags.isEmpty()) item { Text("Tags unavailable or still loading.") }
+                        if (tags.isEmpty()) item { Text(if (tagsLoading) "Loading genres and tags…" else "No genres or tags available.") }
+                    }
+                    if (tagsLoading) LinearProgressIndicator(Modifier.fillMaxWidth())
+                    if (tagsError != null) Text(tagsError!!, style = MaterialTheme.typography.bodySmall)
+                    if (!tagsLoading && (tagsError != null || tags.isEmpty())) {
+                        TextButton(onClick = vm::loadTags) { Text("Retry genres and tags") }
                     }
                 }
             }
