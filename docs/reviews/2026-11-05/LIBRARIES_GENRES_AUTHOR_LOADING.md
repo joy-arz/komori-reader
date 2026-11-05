@@ -34,3 +34,13 @@ An initial new UI test measured the 40 dp painted Material icon-button bounds in
 ## Remaining acceptance
 
 The API 30 network result is emulator acceptance from this network, not the user's Android 14 phone/network or an OEM battery check. Full live reading/download sessions, physical low-memory measurements and all source-specific taxonomy changes remain external acceptance. Missing metadata is not invented, nor are unsupported filters advertised. The user confirmed the phone displays “Connection interrupted/reset,” consistent with the generic transport wrapper for the blocked redirect; phone/network acceptance remains pending. The implementation was delivered in PR #13, merged as `0b5950e9e7d0189aa3f3b091f67c6751a00fa141` following the user’s merge/build request. The next signed version is 0.8.17; publication remains gated on checks for the exact release commit.
+
+## 0.8.17 delivery
+
+- PR #13 merged as `0b5950e9e7d0189aa3f3b091f67c6751a00fa141`. Release tag `v0.8.17` targets preparation commit `0a803e6e2a79b27c7e75ff8a6a9a1775a1451301`; app source and instrumentation are identical to the reviewed PR, with version configuration and documentation updated.
+- [Exact-commit Android checks](https://github.com/joy-arz/komori-reader/actions/runs/41966681786): passed. [API 26/30/34/36 device matrix](https://github.com/joy-arz/komori-reader/actions/runs/41966681787): all passed. [Signed release and scan](https://github.com/joy-arz/komori-reader/actions/runs/41966723978): passed on the first attempt.
+- [Public v0.8.17](https://github.com/joy-arz/komori-reader/releases/tag/v0.8.17): version code 140, package `app.komori.reader`, 2,830,512 bytes, SHA256 `f730c765a6b74672a1af6a5afc74dcb62d08b978b0db208e6091d15ae5e59ca8`. Published digest/size manifests match; release body matches the complete checked-in release notes.
+- Original certificate SHA256 `0f654f439d6059cf8caea9fa1d5403342cc47b1b5a8228bf90e2858ec423d5fd` verified. Public APK is byte-identical to the tested signed candidate.
+- API 30 signed 0.8.16→0.8.17 install with the disposable schema-5 fixture: passed schema 5→7 migration, saved/liked/progress retention, process-death reader restoration and offline page navigation. Initial probe could not start because the old Downloads APK had been removed; re-execution used the cached published baseline. This was a local fixture-path precondition, not an application failure.
+- VirusTotal: zero malicious, zero suspicious, 68 undetected and seven unsupported engines. README scan evidence and download links updated automatically.
+- Android 14 phone/network Hive acceptance and full live reading/download sessions remain pending as stated above. No unrelated local iOS/review changes were committed.

@@ -10,7 +10,7 @@ Updated October 27, 2026 for the 0.8.5 reliability and Authors-filter pass. Publ
 - [x] Publish author pages as each bounded request completes; retain up to three small catalogs (300 titles each) across creator switches and invalidate them on refresh.
 - [x] Request canonical HTTPS HiveToons paths to avoid the demonstrated slashless HTTP redirect, preserving existing source IDs, TLS and cleartext restrictions.
 - [x] Complete affected API 30 acceptance (11/11), opt-in live Hive metadata/manifest checks, cloud build, API 26/30/34/36 and repeated selection checks for PR #13.
-- [ ] Complete signed 0.8.17 publication and scan verification after the user’s merge/build request.
+- [x] Publish signed 0.8.17 after exact-commit build/device checks; verify the public APK, full release notes, original certificate and automatic VirusTotal evidence.
 - [ ] Confirm Hive connectivity on the user’s Android 14 phone/network.
 
 ## November 5: source icons and Atsumaru
