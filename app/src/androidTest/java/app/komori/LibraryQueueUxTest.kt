@@ -52,6 +52,7 @@ class LibraryQueueUxTest {
             compose.onNodeWithText("Collection").assertIsSelected()
             compose.onNodeWithText("Libraries", useUnmergedTree = true).performClick()
             compose.onNodeWithText("All", useUnmergedTree = true).assertExists()
+            compose.onNodeWithContentDescription("Manage libraries").assertIsDisplayed().assertHasClickAction().assertTouchWidthIsEqualTo(48.dp)
             compose.onNodeWithText(first.name).performClick()
             compose.onAllNodesWithText(book.title).assertCountEquals(0)
             compose.onNodeWithText(second.name).performClick()

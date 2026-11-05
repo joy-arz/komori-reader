@@ -198,12 +198,14 @@ internal fun Library(vm: ReaderViewModel, discover: () -> Unit) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-        } else LazyRow(Modifier.fillMaxWidth().padding(horizontal = 18.dp), state = libraryTabs, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            item { FilterChip(selected = category.isEmpty(), onClick = { category = "" }, label = { Text("All") }) }
-            items(categoryNames, key = { it.id }) { library ->
-                FilterChip(selected = category == library.id, onClick = { category = library.id }, label = { Text(library.name) })
+        } else Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            LazyRow(Modifier.weight(1f), state = libraryTabs, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                item { FilterChip(selected = category.isEmpty(), onClick = { category = "" }, label = { Text("All") }) }
+                items(categoryNames, key = { it.id }) { library ->
+                    FilterChip(selected = category == library.id, onClick = { category = library.id }, label = { Text(library.name) })
+                }
             }
-            item { TextButton(onClick = { manageLibraries = true }) { Text("Manage libraries") } }
+            RoundControl(KomoriIcons.CollectionsBookmark, "Manage libraries", { manageLibraries = true })
         }
         val recent = shelf.firstOrNull { it.lastRelease != null }
         val book = manga.find { it.id == recent?.mangaId }
