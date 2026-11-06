@@ -11,6 +11,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
+import org.json.JSONArray
 
 interface MangaSource {
     suspend fun search(query: String, offset: Int = 0, creator: Creator? = null): List<Manga>
@@ -62,7 +63,9 @@ class MangaDex(val client: OkHttpClient, private val baseUrl: String = "https://
                 suspend fun fetch(connection: OkHttpClient): JSONObject =
                     connection.newCall(request).readResponse { response ->
                         if (!response.isSuccessful) throw httpFailure(response, "mangadex")
-                        JSONObject(response.body?.string() ?: throw IOException("Empty response"))
+                        val body = response.body?.source() ?: throw IOException("Empty response")
+                        if (body.request(8L * 1024 * 1024 + 1)) throw ContentFailure("MangaDex response exceeds 8 MB. Try a narrower request.")
+                        JSONObject(body.readUtf8())
                     }
                 val usingCompatibility = System.nanoTime() < compatibilityUntil
                 try {
@@ -123,48 +126,67 @@ class MangaDex(val client: OkHttpClient, private val baseUrl: String = "https://
         if (filter.status.isNotEmpty()) params += "status[]" to filter.status
         if (query.isNotBlank()) params += "title" to query
         creator?.let { params += (if (it.role == "artist") "artists[]" else "authors[]") to it.id }
-        return json("manga", params).getJSONArray("data").objects().map { o ->
-            val a = o.getJSONObject("attributes")
-            val relationships = o.getJSONArray("relationships").objects()
-            val cover =
-                relationships
-                    .firstOrNull { it.optString("type") == "cover_art" }
-                    ?.optJSONObject("attributes")
-                    ?.optString("fileName")
-            val names = a.getJSONObject("title")
-            val title =
-                names.nullable("en")
-                    ?: names.keys().asSequence().firstOrNull()?.let { names.getString(it) }
-                    ?: "Untitled"
-            val creators =
-                org.json.JSONArray().apply {
-                    relationships
-                        .filter { it.optString("type") in listOf("author", "artist") }
-                        .forEach {
-                            put(
-                                JSONObject()
-                                    .put("id", it.getString("id"))
-                                    .put(
-                                        "name",
-                                        it.optJSONObject("attributes")?.optString("name")
-                                            ?: "Unknown creator",
-                                    )
-                                    .put("role", it.getString("type"))
-                            )
-                        }
-                }
-            Manga(
-                o.getString("id"),
-                title,
-                a.optJSONObject("description")?.nullable("en")
-                    ?: "No English description available.",
-                cover?.let {
-                    "https://uploads.mangadex.org/covers/${o.getString("id")}/$it.256.jpg"
-                } ?: "",
-                creators.toString(),
-                a.optString("status"),
-            )
+        return json("manga", params).getJSONArray("data").objects().map(::parseManga)
+    }
+
+    suspend fun details(manga: Manga): Manga =
+        parseManga(json("manga/${manga.id}", listOf(
+            "includes[]" to "cover_art", "includes[]" to "author", "includes[]" to "artist",
+        )).getJSONObject("data")).also {
+            require(it.id == manga.id) { "Details belong to another title." }
         }
+
+    private fun parseManga(o: JSONObject): Manga {
+        val a = o.getJSONObject("attributes")
+        val relationships = o.getJSONArray("relationships").objects()
+        val cover =
+            relationships
+                .firstOrNull { it.optString("type") == "cover_art" }
+                ?.optJSONObject("attributes")
+                ?.optString("fileName")
+        val names = a.getJSONObject("title")
+        val title =
+            names.nullable("en")
+                ?: names.keys().asSequence().firstOrNull()?.let { names.getString(it) }
+                ?: "Untitled"
+        val creators =
+            org.json.JSONArray().apply {
+                relationships
+                    .filter { it.optString("type") in listOf("author", "artist") }
+                    .forEach {
+                        put(
+                            JSONObject()
+                                .put("id", it.getString("id"))
+                                .put(
+                                    "name",
+                                    it.optJSONObject("attributes")?.optString("name")
+                                        ?: "Unknown creator",
+                                )
+                                .put("role", it.getString("type"))
+                        )
+                    }
+            }
+        return Manga(
+            o.getString("id"),
+            title,
+            a.optJSONObject("description")?.nullable("en")
+                ?: "No English description available.",
+            cover?.let {
+                "https://uploads.mangadex.org/covers/${o.getString("id")}/$it.256.jpg"
+            } ?: "",
+            creators.toString(),
+            a.optString("status"),
+            JSONArray().apply {
+                a.optJSONArray("tags")?.objects()?.forEach { tag ->
+                    val names = tag.optJSONObject("attributes")?.optJSONObject("name")
+                    val name = names?.nullable("en") ?: names?.keys()?.asSequence()?.firstOrNull()?.let { names.getString(it) }
+                    if (!name.isNullOrBlank()) put(JSONObject().put("id", tag.getString("id")).put("name", name).put("type", "tag"))
+                }
+                sourceBrowseCategories("mangadex").find { it.id == a.optString("originalLanguage") }?.let {
+                    put(JSONObject().put("id", it.id).put("name", it.name).put("type", it.type))
+                }
+            }.toString(),
+        )
     }
 
     override suspend fun chapters(mangaId: String, language: String): List<Chapter> {

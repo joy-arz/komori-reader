@@ -93,7 +93,7 @@ internal fun CategoryAssignmentDialog(vm: ReaderViewModel, ids: List<String>, ti
 }
 
 @Composable
-internal fun LibraryFilterDialog(vm: ReaderViewModel, category: String, status: String, unread: Boolean, collection: String,
+internal fun LibraryFilterDialog(vm: ReaderViewModel, category: String, status: String, unread: Boolean, collection: String, customLibraries: Boolean,
     apply: (String, String, Boolean, String) -> Unit, dismiss: () -> Unit) {
     val categories by vm.categories.collectAsStateWithLifecycle()
     var collectionChoice by remember { mutableStateOf(collection) }
@@ -105,7 +105,7 @@ internal fun LibraryFilterDialog(vm: ReaderViewModel, category: String, status: 
         LazyColumn(Modifier.heightIn(max = 440.dp)) {
             item { ToolSwitch("Only titles with unread chapters", unreadChoice) { unreadChoice = it } }
             item { Text("Collection", style = MaterialTheme.typography.titleSmall) }
-            items(listOf("Saved", "Liked", "History", "Downloaded")) { choice ->
+            items((if (customLibraries) listOf("All titles") else emptyList()) + listOf("Saved", "Liked", "History", "Downloaded")) { choice ->
                 Row(Modifier.fillMaxWidth().clickable { collectionChoice = choice }) {
                     RadioButton(collectionChoice == choice, { collectionChoice = choice }); Text(choice, Modifier.padding(top = 12.dp))
                 }
@@ -126,7 +126,7 @@ internal fun LibraryFilterDialog(vm: ReaderViewModel, category: String, status: 
         }
     }, confirmButton = { TextButton(onClick = { apply(categoryChoice, statusChoice, unreadChoice, collectionChoice); dismiss() }) { Text("Apply") } },
         dismissButton = { Row {
-            TextButton(onClick = { apply("", "", false, "Saved"); dismiss() }) { Text("Reset") }
+            TextButton(onClick = { apply("", "", false, if (customLibraries) "All titles" else "Saved"); dismiss() }) { Text("Reset") }
             TextButton(onClick = dismiss) { Text("Cancel") }
         } })
     if (manage) CategoryManagerDialog(vm) { manage = false }

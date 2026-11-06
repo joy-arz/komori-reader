@@ -2,6 +2,11 @@
 
 Updated October 27, 2026 for the 0.8.5 reliability and Authors-filter pass. Published delivery is listed separately below. Checkboxes record implemented features with local checks; device/network acceptance that remains unverified stays open. See [the pass log](BACKLOG_PASS.md) for exact results and release gates. Tracking is deferred by the user until core acceptance.
 
+## November 6: review follow-up
+
+- [x] Implement the five verified findings: completion-driven Library aggregation, bounded MangaDex JSON, retained MangaDex tags, failure-isolated filtered Discover with targeted retry, and unrestricted custom libraries.
+- [ ] Finish regression/emulator/CI validation, merge and deliver 0.8.19; see [the follow-up report](reviews/2026-11-06/CATALOG_LIBRARY_RELIABILITY.md).
+
 ## November 6: Library, Queue, Settings and image compatibility
 
 - [x] Separate compact Collection and Libraries navigation; rename All libraries to All, remember last view or pin a custom starting library, and handle deletion fallback.
