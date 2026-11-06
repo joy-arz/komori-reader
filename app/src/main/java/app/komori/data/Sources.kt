@@ -147,6 +147,7 @@ data class BrowsePage(
     val paginationIds: List<String> = titles.map { it.id },
     val incompleteCreatorTitles: List<Manga> = emptyList(),
     val orderingIds: List<String> = (titles + incompleteCreatorTitles).map { it.id },
+    val incompleteMetadata: List<Manga> = emptyList(),
 )
 
 /** Existing MangaDex UUIDs stay unchanged; other source IDs encode paths safely for local files. */
@@ -257,12 +258,18 @@ class Sources(val client: OkHttpClient, apiClient: OkHttpClient = client) {
         else web(key).browse(query, page, filter, creator, deferCreatorDetails)
     }
 
+    suspend fun retryBrowseMetadata(key: String, titles: List<Manga>, filter: BrowseFilter, query: String = "", creator: Creator? = null): BrowsePage = sourceRequest(key, SourceStage.DETAILS) {
+        require(titles.all { sourceKey(it.id) == key }) { "Metadata retry belongs to another source." }
+        web(key).refineMetadata(BrowsePage(titles, false), filter, web(key).metadataCreator(query, filter, creator))
+    }
+
     suspend fun tags(key: String): List<SourceTag> = sourceRequest(key, SourceStage.FILTERS) {
         if (key in atsumaruSources) atsu.getValue(key).tags() else if (key in scanlationSources) scans.getValue(key).tags() else if (key == "mangadex") dex.tags() else if (key in manhwaSources) manhwa(key).tags() else web(key).tags()
     }
 
     suspend fun details(manga: Manga): Manga = sourceRequest(sourceKey(manga.id), SourceStage.DETAILS) {
-        if (sourceKey(manga.id) in setOf("mangadex", "local")) manga
+        if (sourceKey(manga.id) == "local") manga
+        else if (sourceKey(manga.id) == "mangadex") dex.details(manga)
         else if (sourceKey(manga.id) in atsumaruSources) atsu.getValue(sourceKey(manga.id)).details(manga)
         else if (sourceKey(manga.id) in scanlationSources) scans.getValue(sourceKey(manga.id)).details(manga)
         else if (sourceKey(manga.id) in manhwaSources) manhwa(sourceKey(manga.id)).details(manga)
@@ -395,6 +402,37 @@ class WebSource(
         if (id.isBlank() || name.isBlank()) null else SourceTag(id, name)
     }.distinctBy { it.id }
 
+    internal fun metadataCreator(query: String, filter: BrowseFilter, creator: Creator? = null): String? {
+        if (key != "zap") return null
+        creator?.let { return it.id }
+        val path = filter.facetPath.ifEmpty {
+            if (filter.searchType != "Author" || query.isBlank()) return null
+            "$base/".toHttpUrl().newBuilder().addPathSegment("artist")
+                .addPathSegment(query.trim().lowercase(Locale.ROOT).replace(Regex("\\s+"), "-"))
+                .addPathSegment("").build().encodedPath
+        }
+        return path.takeIf { Regex("/(artist|author)/[^/?#]+/").matches(it) }?.let { sourceId(key, it) }
+    }
+
+    internal suspend fun refineMetadata(page: BrowsePage, filter: BrowseFilter, expectedCreator: String? = null): BrowsePage {
+        val selected = if (key == "demonic") tags().filter { it.id in filter.tags || filter.tags.any { value -> value.equals(it.name.trim(), true) } } else emptyList()
+        if (key == "demonic") require(selected.size == filter.tags.size) { "A selected genre is no longer available. Reset the genre filters." }
+        val language = sourceBrowseLanguages(key).find { it.id == filter.language }?.name
+        val category = sourceBrowseCategories(key).find { it.id == filter.category }?.name
+        val refined = refineCatalog(page.copy(incompleteCreatorTitles = emptyList()), { if (key in setOf("zap", "imhentai")) creatorDetails(it) else details(it) }) { title ->
+            if (expectedCreator != null) {
+                val creators = JSONArray(title.creatorsJson).objects()
+                require(creators.isNotEmpty()) { "Author metadata is unavailable." }
+                if (creators.none { it.optString("id") == expectedCreator }) return@refineCatalog false
+            }
+            val metadata = title.metadata()
+            selected.all { genre -> metadata.any { it.name.equals(genre.name.trim(), true) } } &&
+                (language == null || metadata.any { it.type == "language" && it.name.equals(language, true) }) &&
+                (category == null || metadata.any { it.type == "category" && it.name.equals(category, true) })
+        }
+        return refined.copy(incompleteMetadata = (refined.incompleteMetadata + page.incompleteCreatorTitles).distinctBy { it.id })
+    }
+
     suspend fun browse(
         query: String, page: Int, filter: BrowseFilter, creator: Creator? = null, deferCreatorDetails: Boolean = false,
     ): BrowsePage {
@@ -409,15 +447,7 @@ class WebSource(
         if (key == "demonic" && query.isNotBlank() && filter.tags.isNotEmpty()) {
             val native = browse(query, page, filter.copy(tags = emptySet()), creator)
             if (native.titles.isEmpty()) return native
-            val selected = tags().filter { it.id in filter.tags || filter.tags.any { value -> value.equals(it.name.trim(), true) } }
-            require(selected.size == filter.tags.size) { "A selected genre is no longer available. Reset the genre filters." }
-            val refined = mutableListOf<Manga>()
-            for (chunk in native.titles.chunked(2)) {
-                coroutineScope { chunk.map { async { details(it) } }.awaitAll() }.filterTo(refined) { manga ->
-                    selected.all { genre -> manga.metadata().any { it.name.equals(genre.name.trim(), true) } }
-                }
-            }
-            return BrowsePage(refined, native.hasMore, native.paginationIds)
+            return refineMetadata(native, filter)
         }
         if (key in gallerySources) {
             require(filter.searchType in sourceSearchTypes(key)) { "Unsupported search type." }
@@ -448,18 +478,8 @@ class WebSource(
                     "Invalid metadata path."
                 }
                 if (key in setOf("zap", "imhentai") && (filter.language.isNotEmpty() || filter.category.isNotEmpty())) {
-                    val native = browse(query, page, filter.copy(language = "", category = ""), creator)
-                    val language = sourceBrowseLanguages(key).find { it.id == filter.language }?.name
-                    val category = sourceBrowseCategories(key).find { it.id == filter.category }?.name
-                    val refined = mutableListOf<Manga>()
-                    for (chunk in native.titles.chunked(2)) {
-                        coroutineScope { chunk.map { async { creatorDetails(it) } }.awaitAll() }.filterTo(refined) { title ->
-                            val metadata = title.metadata()
-                            (language == null || metadata.any { it.type == "language" && it.name.equals(language, true) }) &&
-                                (category == null || metadata.any { it.type == "category" && it.name.equals(category, true) })
-                        }
-                    }
-                    return BrowsePage(refined, native.hasMore, native.paginationIds)
+                    val native = browse(query, page, filter.copy(language = "", category = ""), creator, deferCreatorDetails = true)
+                    return refineMetadata(native, filter, metadataCreator(query, filter, creator))
                 }
                 if (key == "nhentai" &&
                     (filter.language.isNotEmpty() || filter.category.isNotEmpty() || filter.tags.isNotEmpty())) {

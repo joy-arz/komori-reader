@@ -10,6 +10,38 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class MangaDexTest {
+    @Test fun browseAndDetailsRetainTagsForAuthorsAndRefreshLegacyMetadata() = runBlocking {
+        MockWebServer().use { server ->
+            val title = """{"id":"title","attributes":{"title":{"en":"Example"},"originalLanguage":"ja","tags":[{"id":"fantasy","attributes":{"name":{"en":"Fantasy"}}}]},"relationships":[]}"""
+            server.enqueue(MockResponse().setBody("{\"data\":[$title]}"))
+            server.enqueue(MockResponse().setBody("{\"data\":$title}"))
+            val source = MangaDex(MangaDex.client(), server.url("/").toString().trimEnd('/'))
+            val found = source.browse("", 0, null, BrowseFilter()).single()
+            assertTrue(app.komori.ui.AuthorWorkFilter(tags = "Fantasy").matches(found, emptyList()))
+            assertEquals("Japanese origin", found.metadata().single { it.type == "category" }.name)
+            val refreshed = source.details(found.copy(tagsJson = "[]"))
+            assertEquals(found.tagsJson, refreshed.tagsJson)
+        }
+    }
+
+    @Test fun oversizedChunkedAndCompressedJsonAreRejectedBeforeParsing() = runBlocking {
+        for (gzip in listOf(false, true)) MockWebServer().use { server ->
+            val bytes = " ".repeat(8 * 1024 * 1024 + 1).toByteArray()
+            val response = MockResponse()
+            if (gzip) {
+                val out = java.io.ByteArrayOutputStream()
+                java.util.zip.GZIPOutputStream(out).use { it.write(bytes) }
+                response.setBody(okio.Buffer().write(out.toByteArray())).setHeader("Content-Encoding", "gzip")
+            } else response.setChunkedBody(okio.Buffer().write(bytes), 16384)
+            server.enqueue(response)
+            try {
+                MangaDex(MangaDex.client(), server.url("/").toString().trimEnd('/')).tags()
+                fail("Expected bounded response failure")
+            } catch (error: ContentFailure) { assertTrue(error.message!!.contains("8 MB")) }
+            assertEquals(1, server.requestCount)
+        }
+    }
+
     @Test
     fun `connection reset retries once with HTTP1 compatibility and identity`() = runBlocking {
         var requests = 0

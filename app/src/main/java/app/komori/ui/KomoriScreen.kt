@@ -53,6 +53,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -340,6 +341,7 @@ internal fun VerifySourceButton(vm: ReaderViewModel, source: String) {
 
 @Composable
 internal fun Discover(vm: ReaderViewModel) {
+    val incompleteMetadata by vm.incompleteBrowseMetadata.collectAsStateWithLifecycle()
     val results by vm.results.collectAsStateWithLifecycle()
     val loading by vm.loading.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
@@ -544,6 +546,14 @@ internal fun Discover(vm: ReaderViewModel) {
                     style = MaterialTheme.typography.labelLarge,
                 )
                 TextButton(onClick = vm::clearFacet) { Text("Clear") }
+            }
+        }
+        if (incompleteMetadata.isNotEmpty()) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Partial results · metadata unavailable for ${incompleteMetadata.size} ${if (incompleteMetadata.size == 1) "title" else "titles"}",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.weight(1f).semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite })
+                TextButton(onClick = vm::retryBrowseMetadata, enabled = !loading) { Text("Retry metadata") }
             }
         }
         var sourceDrag by remember { mutableFloatStateOf(0f) }

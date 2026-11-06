@@ -89,7 +89,7 @@ internal fun Library(vm: ReaderViewModel, discover: () -> Unit) {
     var initialized by rememberSaveable { mutableStateOf(false) }
     val libraryTabs = rememberLazyListState()
     var filter by rememberSaveable { mutableStateOf("Saved") }
-    var libraryCollection by rememberSaveable { mutableStateOf("Saved") }
+    var libraryCollection by rememberSaveable { mutableStateOf("All titles") }
     val activeCollection = if (librarySection) libraryCollection else filter
     var category by rememberSaveable { mutableStateOf("") }
     var status by rememberSaveable { mutableStateOf("") }
@@ -103,7 +103,7 @@ internal fun Library(vm: ReaderViewModel, discover: () -> Unit) {
         if (category in knownLibraries && category !in current) category = ""
         knownLibraries = current
     }
-    if (showLibraryFilters) LibraryFilterDialog(vm, if (librarySection) category else "", status, unreadOnly, activeCollection,
+    if (showLibraryFilters) LibraryFilterDialog(vm, if (librarySection) category else "", status, unreadOnly, activeCollection, librarySection,
         { selectedCategory, selectedStatus, unread, collection ->
             category = selectedCategory
             if (selectedCategory.isNotEmpty()) librarySection = true
@@ -165,7 +165,7 @@ internal fun Library(vm: ReaderViewModel, discover: () -> Unit) {
             if (!searchExpanded)
                 RoundControl(KomoriIcons.Search, "Search library", { searchExpanded = true })
         }
-        if (status.isNotEmpty() || unreadOnly || librarySection && libraryCollection != "Saved") {
+        if (status.isNotEmpty() || unreadOnly || librarySection && libraryCollection != "All titles") {
             Text(listOfNotNull(libraryCollection.takeIf { librarySection && it != "Saved" }, status.takeIf { it.isNotEmpty() }, "Unread chapters".takeIf { unreadOnly }).joinToString(" · "),
                 Modifier.padding(horizontal = 18.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall)
         }
@@ -254,6 +254,7 @@ internal fun Library(vm: ReaderViewModel, discover: () -> Unit) {
             val entries =
                 shelf.filter {
                     when (activeCollection) {
+                        "All titles" -> true
                         "Liked" -> it.liked
                         "History" -> it.lastRelease != null
                         else -> it.saved
@@ -262,6 +263,7 @@ internal fun Library(vm: ReaderViewModel, discover: () -> Unit) {
             val categoriesByTitle = remember(memberships) { memberships.groupBy { it.mangaId }.mapValues { (_, rows) -> rows.map { it.categoryId }.toSet() } }
             val titles =
                 (if (activeCollection == "Downloaded") manga.filter { it.id in downloadedIds }
+                    else if (activeCollection == "All titles") manga
                     else entries.mapNotNull { entry -> mangaById[entry.mangaId] })
                     .filter { it.title.contains(query, true) }
                     .filter { status.isEmpty() || shelfById[it.id]?.status == status }
@@ -274,13 +276,13 @@ internal fun Library(vm: ReaderViewModel, discover: () -> Unit) {
                         else it
                     }
             if (titles.isEmpty()) {
-                val filtered = query.isNotEmpty() || status.isNotEmpty() || unreadOnly || librarySection && (category.isNotEmpty() || libraryCollection != "Saved")
+                val filtered = query.isNotEmpty() || status.isNotEmpty() || unreadOnly || librarySection && (category.isNotEmpty() || libraryCollection != "All titles")
                 EmptyState(
                     KomoriIcons.MenuBook,
                     if (filtered) "No matching titles" else if (activeCollection == "Downloaded") "No downloaded chapters" else "Your next story starts here",
                     if (filtered) "Try another library or clear your filters." else "Browse a source or download chapters to read offline.",
                     if (filtered) "Clear filters" else "Explore sources",
-                    if (filtered) ({ query = ""; status = ""; unreadOnly = false; category = ""; libraryCollection = "Saved" }) else discover,
+                    if (filtered) ({ query = ""; status = ""; unreadOnly = false; category = ""; libraryCollection = "All titles" }) else discover,
                 )
             }
             else

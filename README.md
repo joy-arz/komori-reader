@@ -55,9 +55,9 @@ Built with Kotlin and Compose. Native online and offline reading.
 - Choose System, Dark or Light appearance and compact or comfortable cover density. Existing appearance preferences are retained.
 - Settings are grouped into **Reading**, **Sources**, **App** and a full-page **Support** tab. In Sources, hold a handle to drag the order; accessible move actions are available. The first enabled source opens in Discover.
 - Background update checks and downloads use a nonblocking banner. Installation dialogs open from **Review/Install**.
-- Compact Library and Discover toolbars with icon-triggered search. Library has separate compact **Collection** (Saved, Liked, History, Downloaded) and **Libraries** tabs, with **All** for custom libraries. Compact collection counts leave more room for covers.
+- Compact Library and Discover toolbars with icon-triggered search. Library has separate compact **Collection** (Saved, Liked, History, Downloaded) and **Libraries** tabs, with **All** for custom libraries. Custom libraries default to **All titles**, including unsaved members; optional collection restrictions stay visible. Compact collection counts leave more room for covers.
 - Swipe left or right across the catalog to change sources in your Settings order.
-- Discover filters live in the toolbar. **Verify source** and **Reset search** sit under Source options.
+- Discover filters live in the toolbar. **Verify source** and **Reset search** sit under Source options. Failed title-metadata requests leave successful filtered results visible, with a targeted **Retry metadata** action.
 
 ### Library backup and restore
 

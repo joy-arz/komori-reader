@@ -174,11 +174,15 @@ interface LibraryDao {
     @Query("SELECT * FROM migration_links ORDER BY fromId, toId") suspend fun backupLinks(): List<MigrationLink>
     @Query("SELECT * FROM migration_links") fun observeMigrationLinks(): Flow<List<MigrationLink>>
     @Upsert suspend fun putLink(link: MigrationLink)
-    @Query("""SELECT c.mangaId, c.language, COUNT(DISTINCT c.chapterKey) AS total,
-        COUNT(DISTINCT CASE WHEN p.chapterKey IS NULL THEN c.chapterKey ELSE NULL END) AS unread
-        FROM chapter_index c LEFT JOIN (SELECT DISTINCT chapterKey FROM progress WHERE completed = 1) p ON p.chapterKey = c.chapterKey
-        WHERE c.active = 1 GROUP BY c.mangaId, c.language""")
-    fun observeLibraryLanguageCounts(): Flow<List<LibraryLanguageCount>>
+    @Query("SELECT DISTINCT mangaId, language, chapterKey FROM chapter_index WHERE active = 1 ORDER BY mangaId, language, chapterKey")
+    fun observeActiveChapterKeys(): Flow<List<LibraryChapterKey>>
+
+    @Query("SELECT DISTINCT chapterKey FROM progress WHERE completed = 1 ORDER BY chapterKey")
+    fun observeCompletedChapterKeys(): Flow<List<String>>
+
+    fun observeLibraryLanguageCounts(): Flow<List<LibraryLanguageCount>> = libraryLanguageCounts(
+        observeActiveChapterKeys(), observeCompletedChapterKeys(),
+    )
 
     fun observeLibraryCounts(language: String): Flow<List<LibraryCount>> =
         combine(observeLibraryLanguageCounts(), observeTitlePreferences()) { rows, preferences ->

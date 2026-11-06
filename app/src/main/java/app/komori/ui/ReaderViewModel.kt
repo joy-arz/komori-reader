@@ -52,12 +52,14 @@ class ReaderViewModel(
     val memberships = dao.observeMemberships().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val libraryCounts = settings.map { it.language }.distinctUntilChanged()
-        .flatMapLatest { dao.observeLibraryCounts(it) }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+        .flatMapLatest { dao.observeLibraryCounts(it) }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(0), emptyList())
     val libraryRefreshing = WorkManager.getInstance(app).getWorkInfosByTagFlow("library-manual-refresh")
         .map { rows -> rows.any { !it.state.isFinished } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val libraryUpdates = dao.observeLibraryUpdates().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val results = MutableStateFlow<List<Manga>>(emptyList())
+    val incompleteBrowseMetadata = MutableStateFlow<List<Manga>>(emptyList())
+    private var browseGeneration = 0L
     val activeSource = MutableStateFlow("")
     val browseFilter = MutableStateFlow(BrowseFilter())
     val tags = MutableStateFlow<List<SourceTag>>(emptyList())
@@ -142,6 +144,7 @@ class ReaderViewModel(
         val offlineLanguage: String?,
         val error: String?,
         val paginationIds: Set<String>,
+        val incompleteMetadata: List<Manga>,
     )
 
     private val history = ArrayDeque<NavigationSnapshot>()
@@ -166,6 +169,7 @@ class ReaderViewModel(
                 offlineLanguage,
                 error.value,
                 paginationIds.toSet(),
+                incompleteBrowseMetadata.value,
             )
         )
         if (history.size > 30) history.removeFirst()
@@ -273,7 +277,7 @@ class ReaderViewModel(
         authorSort = sort
         authorWorkFilter = workFilter
         authorCatalog =
-            cached?.catalog?.also { it.reorder(sort) } ?: AuthorCatalog(creators, sort, workFilter, enrich = { if (authorPage == null) app.source.details(it) else it }) { creator, page ->
+            cached?.catalog?.also { it.reorder(sort) } ?: AuthorCatalog(creators, sort, workFilter, enrich = { if (authorPage != null || sourceKey(it.id) == "mangadex" && it.metadata().isNotEmpty()) it else app.source.details(it) }) { creator, page ->
                 val key = sourceKey(creator.id)
                 require(key in setOf("mangadex", "zap", "nhentai", "imhentai", "asura", "atsu", "atsuadult")) {
                     "This source does not provide a creator catalog."
@@ -357,6 +361,7 @@ class ReaderViewModel(
     fun search(text: String = query, creator: Creator? = creatorFilter, more: Boolean = false) {
         if (more && (searchJob?.isActive == true || !canLoadMore)) return
         searchJob?.cancel()
+        val generation = ++browseGeneration
         if (!more) searchQuery.value = text
         searchJob = task {
             loading.value = true
@@ -364,6 +369,7 @@ class ReaderViewModel(
             try {
                 if (!more) {
                     results.value = emptyList()
+                    incompleteBrowseMetadata.value = emptyList()
                     nextOffset = 1
                     paginationIds.clear()
                     canLoadMore = true
@@ -388,13 +394,16 @@ class ReaderViewModel(
                         ?: throw IOException("Enable a source in Settings to browse titles.")
                 browseFilter.value = browseFilter.value.copy(sort = contextualSearchSort(activeSource.value, query, browseFilter.value.sort))
                 val foundPage =
-                    app.source.browse(
+                    (pageSource ?: app.source).browse(
                         activeSource.value,
                         query,
                         nextOffset,
                         browseFilter.value,
                         creatorFilter,
                     )
+                currentCoroutineContext().ensureActive()
+                if (generation != browseGeneration) return@task
+                incompleteBrowseMetadata.value = (incompleteBrowseMetadata.value + foundPage.incompleteMetadata).distinctBy { it.id }
                 val found = foundPage.titles
                 nextOffset += 1
                 val previous = if (more) results.value else emptyList()
@@ -403,9 +412,33 @@ class ReaderViewModel(
                 paginationIds.addAll(foundPage.paginationIds)
                 canLoadMore = PaginationPolicy.hasNext(foundPage.hasMore, beforePagination, paginationIds.size)
                 results.value = merged
+                val visible = merged.map { it.id }.toSet()
+                incompleteBrowseMetadata.value = incompleteBrowseMetadata.value.filter { it.id !in visible }
             } finally {
-                loading.value = false
+                if (generation == browseGeneration) loading.value = false
             }
+        }
+    }
+
+    fun retryBrowseMetadata() {
+        if (searchJob?.isActive == true || incompleteBrowseMetadata.value.isEmpty()) return
+        val generation = browseGeneration
+        val source = activeSource.value
+        val filter = browseFilter.value
+        val pending = incompleteBrowseMetadata.value
+        val text = query
+        val creator = creatorFilter
+        searchJob = task {
+            loading.value = true
+            error.value = null
+            try {
+                val retried = (pageSource ?: app.source).retryBrowseMetadata(source, pending, filter, text, creator)
+                currentCoroutineContext().ensureActive()
+                if (generation != browseGeneration || source != activeSource.value || filter != browseFilter.value) return@task
+                val order = paginationIds.withIndex().associate { it.value to it.index }
+                results.value = (results.value + retried.titles).distinctBy { it.id }.sortedBy { order[it.id] ?: Int.MAX_VALUE }
+                incompleteBrowseMetadata.value = retried.incompleteMetadata
+            } finally { if (generation == browseGeneration) loading.value = false }
         }
     }
 
@@ -681,6 +714,7 @@ class ReaderViewModel(
     }
 
     fun back() {
+        browseGeneration++
         detailJob?.cancel()
         searchJob?.cancel()
         tagsJob?.cancel()
@@ -699,6 +733,7 @@ class ReaderViewModel(
             creatorFilter = previous.creator
             activeCreator.value = previous.creator
             results.value = previous.results
+            incompleteBrowseMetadata.value = previous.incompleteMetadata
             nextOffset = previous.nextOffset
             paginationIds.clear()
             paginationIds.addAll(previous.paginationIds)
