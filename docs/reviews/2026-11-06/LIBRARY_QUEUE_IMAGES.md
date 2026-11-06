@@ -53,7 +53,7 @@ An intermediate lint invocation overlapped edits and reported stale-line Suspici
 
 Focused code commits: `70549ec` (Library/Queue/Settings) and `00166ca` (images and Demonic recovery). [PR #14](https://github.com/joy-arz/komori-reader/pull/14) contains the final code, documentation and automated check results. The PR description records final CI conclusions; this report distinguishes the test scopes below.
 
-No application/version/signing identity or secrets changed. The local release APK is an **unsigned compilation check**, not a published update. The unrelated local `.gitignore`, iOS tree and October 30 reports remain outside the commits.
+The feature PR did not change application/version/signing identity or secrets. Its local release APK was an **unsigned compilation check**; signed public delivery is recorded below. The unrelated local `.gitignore`, iOS tree and October 30 reports remain outside the commits.
 
 Remaining acceptance: actual TalkBack navigation on a phone, physical low-memory/OEM behavior, platform-specific HEIF/AVIF codecs, and the user's Android 14 live Manager Kim page/fallback. Local UI tests include narrow 320dp / 1.6 font-scale RTL selection; this is synthetic layout coverage, not a complete accessibility audit. No physical-phone or complete live-chapter success is claimed.
 
@@ -81,3 +81,14 @@ Screenshots captured by the synthetic UI tests are `komori-library-tabs.png`, `k
 Latest API 30 debug-emulator benchmark: 1,000 titles and 50,000 progress rows; setup/seed **1,033 ms**, first Activity-visible cover **919 ms**, **4** visible cover nodes, 50 progress writes observed in **72.5 ms**, composition-apply delta **0**. PSS snapshots were **220,765 → 221,382 KB**. These include instrumentation, are not peak-memory measurements, and are not physical-phone or before/after optimization evidence. The first Activity measurement is within an existing process, not a measured cold-process start.
 
 Final cloud matrix/build conclusions are maintained in PR #14 against its exact current head. Earlier superseded runs and the first full-matrix fixture failures remain visible in Actions; they are not presented as passing runs.
+
+
+## Signed 0.8.18 delivery and README refresh
+
+PR #14 was merged as `60a2c5a`; release preparation `beaa3352072b9c4ffa3da8602e7f7f63e6e36508` is the exact `v0.8.18` tag target. [Android checks](https://github.com/joy-arz/komori-reader/actions/runs/42130856178), [API 26/30/34/36 checks](https://github.com/joy-arz/komori-reader/actions/runs/42130856141) and [signed publication plus scan evidence](https://github.com/joy-arz/komori-reader/actions/runs/42130860583) all completed successfully.
+
+The downloaded public APK matches the signed candidate byte for byte: package `app.komori.reader`, version `0.8.18`, code `141`, size `2,863,280` bytes, SHA-256 `7c13efeae9ccb627d66c2dd5a31dcfdee6e2cffbe2479071846b61bde9797ff5`. The original signing-certificate SHA-256 remains `0f654f439d6059cf8caea9fa1d5403342cc47b1b5a8228bf90e2858ec423d5fd`. Updater metadata and checksum file match; the public release body matches the full written release notes. VirusTotal recorded 0 malicious, 0 suspicious and 68 undetected results for this exact APK; seven engines reported unsupported type.
+
+The local API 30 disposable-emulator signed upgrade from the public 0.8.17 APK to the public 0.8.18 APK passed: schema 5→7, saved/liked/progress retention, reader restoration after process death and offline page navigation. Log: `/tmp/komori-0818-signed-upgrade.log`. This is emulator evidence, not a physical-phone test.
+
+README screenshots were replaced byte for byte with the user's Library, Discover and Sources-settings attachments. Their captions describe the configured installation and distinguish fresh-install defaults. The README audit corrected CI API coverage, current release instructions, update download/verification behavior, session-reset labels, WeebCentral filtering coverage and backup limitations. Local README links, exact attachment equality and whitespace checks passed. Existing physical-device and live-source acceptance limitations remain open above.

@@ -10,6 +10,7 @@ Updated October 27, 2026 for the 0.8.5 reliability and Authors-filter pass. Publ
 - [x] Add animated GIF/WebP reading, bounded fallback for BMP and device-supported HEIF/AVIF, and consistent import/export/integrity format handling.
 - [x] Diagnose Manager Kim 202 page 17's empty source response; add the website-advertised, constrained Demonic alternate CDN and specific redacted image errors. Verification and rate limits still stop requests.
 - [x] Add regression/gesture/layout tests, update README/full unreleased changelog, and open PR #14. See its exact-head checks and [the scoped report](reviews/2026-11-06/LIBRARY_QUEUE_IMAGES.md) for execution evidence.
+- [x] Merge PR #14 and publish signed 0.8.18 after exact-tag build/device checks; verify original signer, full release notes, checksum/updater metadata, VirusTotal evidence and API 30 signed upgrade. Refresh README screenshots and current behavior descriptions.
 - [ ] Confirm Manager Kim's alternate CDN on the user's Android 14 phone/network; both endpoints did not provide a usable page here.
 - [ ] Physical low-memory/TalkBack acceptance and device-specific HEIF/AVIF coverage.
 

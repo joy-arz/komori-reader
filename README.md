@@ -20,9 +20,11 @@ Built with Kotlin and Compose. Native online and offline reading.
 
 <br>
 
-<img src="docs/images/library.png" width="240" alt="Komori black-and-lime library">&nbsp;&nbsp;
-<img src="docs/images/discover.png" width="240" alt="Source browsing">&nbsp;&nbsp;
-<img src="docs/images/settings.png" width="240" alt="Grouped reading settings">
+<img src="docs/images/library.png" width="240" alt="Library Collection tab with saved covers, unread counts and language badges">&nbsp;&nbsp;
+<img src="docs/images/discover.png" width="240" alt="Discover with source icons, language badges and cover reading shortcuts">&nbsp;&nbsp;
+<img src="docs/images/settings.png" width="240" alt="Sources settings with website icons, enable switches and drag handles">
+
+<sub>Screenshots show a configured installation. Fresh installs keep MangaDex and adult catalogs disabled until you enable them.</sub>
 
 </div>
 
@@ -53,7 +55,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 - Choose System, Dark or Light appearance and compact or comfortable cover density. Existing appearance preferences are retained.
 - Settings are grouped into **Reading**, **Sources**, **App** and a full-page **Support** tab. In Sources, hold a handle to drag the order; accessible move actions are available. The first enabled source opens in Discover.
 - Background update checks and downloads use a nonblocking banner. Installation dialogs open from **Review/Install**.
-- Compact Library and Discover toolbars with icon-triggered search. Library has separate compact **Collection** (Saved, Liked, History, Downloaded) and **Libraries** tabs, with **All** for custom libraries. Counts stay beside their labels, leaving more room for covers.
+- Compact Library and Discover toolbars with icon-triggered search. Library has separate compact **Collection** (Saved, Liked, History, Downloaded) and **Libraries** tabs, with **All** for custom libraries. Compact collection counts leave more room for covers.
 - Swipe left or right across the catalog to change sources in your Settings order.
 - Discover filters live in the toolbar. **Verify source** and **Reset search** sit under Source options.
 
@@ -78,7 +80,7 @@ Built with Kotlin and Compose. Native online and offline reading.
 - Immersive reading starts with controls hidden. Tap the middle of the screen to show or hide them; scrolling leaves them hidden.
 - Direction-aware edge taps and swipes in paged mode.
 - Tiled pinch and double-tap zoom, plus optional keep-screen-awake.
-- Dismissible **Continue reading** banner (restore it in Settings) and direct **Read offline** from Downloads.
+- Dismissible **Continue reading** banner (restore it in **Settings → Reading**) and direct **Read offline** from Downloads.
 
 ### <img src="https://api.iconify.design/lucide/library.svg?color=%23A3E635" width="22" height="22" align="absmiddle"> Library and organization
 
@@ -166,7 +168,7 @@ Reorderable source tabs: AsuraScans, HiveToons, DemonicScans, WeebCentral, Atsum
 | **AsuraScans** | Native | Comics only; no novels. Title search, latest/popular/alphabetical browsing, genres, full chapter lists, reading and downloads. Locked chapters stay unavailable. |
 | **HiveToons** | Native | Title search, latest/popular browsing, genres, full server-rendered chapter lists, reading and downloads. Locked chapters stay unavailable. |
 | **DemonicScans** | Native | Reading and downloads. Views, new and title browsing, genre selection. Genre refinement also works during title search. |
-| **WeebCentral** | Experimental | Native paged and webtoon reader. Parser and request routing have fixture coverage. |
+| **WeebCentral** | Experimental | Native paged/webtoon reading and downloads, native genre taxonomy, combined title/genre/category/status filters, and clickable title metadata. Parser and request routing have fixture coverage; live reading acceptance remains pending. |
 | **Atsumaru** | Native | Regular English comics. Title/author search, genres, category/status filters, popularity/rating/alphabetical/new sorting, complete chapter lists and alternate groups. |
 | **Atsumaru 18+** | Optional · 18+ | Separate adult catalog; disabled initially and protected by the shared one-time age confirmation. |
 | **MangaDex** | Native | Search, popularity, rating, update and title sorting, genre, language/origin, publication-status and content-rating filters. |
@@ -232,18 +234,15 @@ Local signing is automated through JVM `keytool` validation and Gradle. See [rel
 
 ## <img src="https://api.iconify.design/lucide/bot.svg?color=%23A3E635" width="26" height="26" align="absmiddle"> Automated releases
 
-Every push to `main` and every pull request runs unit tests, lint, a debug APK build, and API 26/API 30/API 36 instrumentation. A separate Signed upgrade checks workflow validates published APKs against the 0.7.5 baseline with synthetic data, process death and offline navigation.
+Every push to `main` and every pull request runs unit tests, lint, debug and minified release builds, and API 26/30/34/36 instrumentation. Pull requests also run five repeated API 36 selection checks. The manually dispatched **Signed upgrade checks** workflow validates published APKs against the 0.7.5 baseline on API 26 and 36, using synthetic data, process death and offline navigation.
 
-A version tag such as `v0.8.1` automatically tests, builds, signs and publishes a release APK plus a SHA-256 checksum and updater metadata (`update.json`).
+A version tag such as `v0.8.18` automatically tests, builds and signs a release APK plus a SHA-256 checksum and updater metadata (`update.json`). The workflow uploads a signed candidate, then requires successful build and API 26/30/34/36 checks for the exact tagged commit before publication.
 
 - Plain version tags publish full releases and mark them as **Latest**.
 - Tags containing a suffix remain prereleases.
 - After publication, VirusTotal evidence is refreshed for the exact released APK. Latest stable releases also update the README version, download link, hash and scan summary. New scans require the optional `VIRUSTOTAL_API_KEY` Actions secret; without it, new APKs are explicitly marked **scan pending**. Older screenshots are never presented as evidence for a different APK.
 
-```sh
-git tag v0.8.1
-git push origin v0.8.1
-```
+Prepare the version and complete changelog before creating a new release tag. Follow the steps in [RELEASING.md](docs/RELEASING.md).
 
 Signing secrets are already configured in repository Actions secrets. No signing material is committed. See [RELEASING.md](docs/RELEASING.md) for key backup and release details.
 
@@ -251,12 +250,12 @@ Signing secrets are already configured in repository Actions secrets. No signing
 
 ## <img src="https://api.iconify.design/lucide/refresh-cw.svg?color=%23A3E635" width="26" height="26" align="absmiddle"> How app updates work
 
-Install version 0.5 manually once if you are coming from an older build. After that, automatic checks use public GitHub releases with a persistent cooldown. Stable excludes prereleases; Preview includes them.
+If your installed build does not offer in-app updates, install the current signed APK from GitHub Releases. Automatic checks use public GitHub releases with a persistent cooldown. Stable excludes prereleases; Preview includes them.
 
 - Failed update checks do not block reading.
-- Automatic downloads default to unmetered connections. Change this in Settings, or choose a manual download on mobile data.
+- Automatic APK downloads run on unmetered connections when enabled in Settings. Choose a manual download to use mobile data.
 - Android requires permission to install from Komori and confirmation in its installer. This is not a silent system installation.
-- The updater verifies the checksum, package, increasing version code and existing signing certificate before installation.
+- The updater verifies expected file size, SHA-256 checksum, package name, release version name, increasing version code and the existing signing certificate before installation.
 - No GitHub token is stored in the app.
 
 ---
@@ -280,7 +279,7 @@ Install version 0.5 manually once if you are coming from an older build. After t
 
 - Library metadata and creator follows remain local. Scheduled source checks use best-effort source catalogs; a latest-page author check can miss uploads between runs.
 - AniList/MAL tracking is deferred until core acceptance.
-- **Shipped in 0.8.1:** optional daily/weekly metadata backups with verified retention; download integrity scans, storage totals, reviewed delete-read cleanup and cache clearing in Settings → Reading; compact refresh controls for Discover, Authors, Library, title details and reading; automatic HentaiZap gallery-cover fallback after thumbnail failure.
+- Metadata backups exclude downloaded image files, device settings and source sessions. Export completed chapters as CBZ separately.
 
 </details>
 
@@ -314,7 +313,7 @@ Install version 0.5 manually once if you are coming from an older build. After t
 - Source websites may block requests or change their HTML. WeebCentral's parser and request routing have fixture coverage, but live reading has not been verified on the current network.
 - For HTTP 403 or a browser-verification prompt, use **Verify source**, complete verification manually, then **Retry native access**.
 - Download jobs waiting for verification retain completed pages. Resume them from Downloads after verification.
-- **Reset sessions** clears all source browser cookies and storage without changing library data.
+- In **Verify source**, **Reset this source** clears that source’s used cookies and site storage while retaining other sessions. **Clear all sessions** clears browser cookies and site storage for every source. Library data stays intact.
 - Browser verification cannot guarantee that a source will accept native requests. Unsupported sources are not represented as working readers.
 
 </details>
@@ -327,7 +326,9 @@ Install version 0.5 manually once if you are coming from an older build. After t
 |---|---|
 | [Source and session review](docs/SOURCE_SESSION_REVIEW_2026-10-15.md) | Follow-up review of sources and sessions |
 | [Implementation plan](docs/PLAN.md) | Roadmap and design decisions |
-| [Validation notes](docs/VALIDATION.md) | Test and verification results |
+| [Changelog](CHANGELOG.md) | Full release-by-release changes |
+| [Current UI and image validation](docs/reviews/2026-11-06/LIBRARY_QUEUE_IMAGES.md) | Library, Queue, Settings, image compatibility and 0.8.18 delivery evidence |
+| [Validation notes](docs/VALIDATION.md) | Earlier test and verification history |
 | [Komikku reference review](docs/KOMIKKU_REVIEW.md) | Feature comparison, implemented reader improvements and remaining priorities |
 | [Releasing](docs/RELEASING.md) | Signing, key backup and release steps |
 | [TODO](docs/TODO.md) | Complete prioritized backlog |
