@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import app.komori.data.*
 import app.komori.ui.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.first
 import okhttp3.*
 import org.junit.Assert.*
 import org.junit.Rule
@@ -21,11 +22,15 @@ class DiscoverMetadataRetryTest {
 
     @Test fun partialResultsRetryOnlyMissingTitleAndObsoleteRetryCannotReplaceNewSearch() = runBlocking<Unit> {
         val app = compose.activity.application as KomoriApp
+        val previouslyEnabled = "demonic" in app.settings.flow.first().enabledSources.split(',')
+        app.settings.enableSource("demonic", true)
+        val requests = java.util.concurrent.CopyOnWriteArrayList<String>()
         val failedRequests = AtomicInteger()
         val retryStarted = CountDownLatch(1)
         val releaseRetry = CountDownLatch(1)
         val client = OkHttpClient.Builder().addInterceptor { chain ->
             val request = chain.request()
+            requests += request.url.encodedPath
             var status = 200
             val html = when {
                 request.url.encodedPath == "/advanced.php" -> "<label><input name='genres[]' value='1'>Action</label>"
@@ -71,9 +76,16 @@ class DiscoverMetadataRetryTest {
             compose.waitForIdle()
             assertEquals(listOf("New result"), vm.results.value.map { it.title })
             assertTrue(vm.incompleteBrowseMetadata.value.isEmpty())
+        } catch (error: Throwable) {
+            val diagnostic = "source=${vm.activeSource.value}; filter=${vm.browseFilter.value}; error=${vm.error.value}; loading=${vm.loading.value}; pending=${vm.incompleteBrowseMetadata.value.map { it.title }}; results=${vm.results.value.map { it.title }}; requests=$requests"
+            android.util.Log.e("KomoriCatalogRetry", diagnostic, error)
+            java.io.File(app.getExternalFilesDir(null), "catalog-retry-failure.txt").writeText(diagnostic)
+            compose.onRoot(useUnmergedTree = true).printToLog("KomoriCatalogRetry")
+            throw error
         } finally {
             releaseRetry.countDown()
             compose.runOnUiThread { vm.viewModelScope.cancel(); compose.activity.setContent {} }
+            app.settings.enableSource("demonic", previouslyEnabled)
             client.dispatcher.executorService.shutdown(); client.connectionPool.evictAll()
         }
     }

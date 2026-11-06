@@ -25,3 +25,11 @@ Custom-library membership survived unsaving, but the UI silently intersected eve
 ## Acceptance limits
 
 Fixture and emulator results do not prove current live-site behavior or physical 2 GB / OEM performance. Physical TalkBack, battery behavior and real-service acceptance remain separate. No protection-bypass functionality is introduced. Unrelated local iOS, ignore-file and older review edits remain untouched in the original working tree.
+
+## Local validation before final CI
+
+- JVM: 234 cases, 225 passed, nine optional/live skips, zero failures/errors.
+- Lint: zero errors, 50 existing warnings. Python release/scan tests: 10/10 passed.
+- The first API 30 scoped pass passed six of seven cases (Room counts, Library/Queue interaction and the 1,000-title/50,000-progress fixture). Its new Discover test relied on persisted source enablement; it now explicitly enables/restores DemonicScans and records state/request diagnostics on failure. The targeted retry/race test then passed 1/1 without increasing timeouts or removing assertions.
+- Extra inspection found filtered HentaiZap author supplementation could fail before refinement. Its failed candidates now enter the same manual retry path, and retries must verify author ownership before accepting a language/category match. A native-index/supplement/404/retry fixture covers this path and rejects another author's title. An initial fixture omitted the website's required results container; correcting that fixture produced the passing JVM result above.
+- Debug and minified release compilation passed in the initial local pass; exact-final-head build/device evidence is recorded in PR #15 and will be summarized at delivery.

@@ -258,9 +258,9 @@ class Sources(val client: OkHttpClient, apiClient: OkHttpClient = client) {
         else web(key).browse(query, page, filter, creator, deferCreatorDetails)
     }
 
-    suspend fun retryBrowseMetadata(key: String, titles: List<Manga>, filter: BrowseFilter): BrowsePage = sourceRequest(key, SourceStage.DETAILS) {
+    suspend fun retryBrowseMetadata(key: String, titles: List<Manga>, filter: BrowseFilter, query: String = "", creator: Creator? = null): BrowsePage = sourceRequest(key, SourceStage.DETAILS) {
         require(titles.all { sourceKey(it.id) == key }) { "Metadata retry belongs to another source." }
-        web(key).refineMetadata(BrowsePage(titles, false), filter)
+        web(key).refineMetadata(BrowsePage(titles, false), filter, web(key).metadataCreator(query, filter, creator))
     }
 
     suspend fun tags(key: String): List<SourceTag> = sourceRequest(key, SourceStage.FILTERS) {
@@ -402,17 +402,35 @@ class WebSource(
         if (id.isBlank() || name.isBlank()) null else SourceTag(id, name)
     }.distinctBy { it.id }
 
-    internal suspend fun refineMetadata(page: BrowsePage, filter: BrowseFilter): BrowsePage {
+    internal fun metadataCreator(query: String, filter: BrowseFilter, creator: Creator? = null): String? {
+        if (key != "zap") return null
+        creator?.let { return it.id }
+        val path = filter.facetPath.ifEmpty {
+            if (filter.searchType != "Author" || query.isBlank()) return null
+            "$base/".toHttpUrl().newBuilder().addPathSegment("artist")
+                .addPathSegment(query.trim().lowercase(Locale.ROOT).replace(Regex("\\s+"), "-"))
+                .addPathSegment("").build().encodedPath
+        }
+        return path.takeIf { Regex("/(artist|author)/[^/?#]+/").matches(it) }?.let { sourceId(key, it) }
+    }
+
+    internal suspend fun refineMetadata(page: BrowsePage, filter: BrowseFilter, expectedCreator: String? = null): BrowsePage {
         val selected = if (key == "demonic") tags().filter { it.id in filter.tags || filter.tags.any { value -> value.equals(it.name.trim(), true) } } else emptyList()
         if (key == "demonic") require(selected.size == filter.tags.size) { "A selected genre is no longer available. Reset the genre filters." }
         val language = sourceBrowseLanguages(key).find { it.id == filter.language }?.name
         val category = sourceBrowseCategories(key).find { it.id == filter.category }?.name
-        return refineCatalog(page, { if (key in setOf("zap", "imhentai")) creatorDetails(it) else details(it) }) { title ->
+        val refined = refineCatalog(page.copy(incompleteCreatorTitles = emptyList()), { if (key in setOf("zap", "imhentai")) creatorDetails(it) else details(it) }) { title ->
+            if (expectedCreator != null) {
+                val creators = JSONArray(title.creatorsJson).objects()
+                require(creators.isNotEmpty()) { "Author metadata is unavailable." }
+                if (creators.none { it.optString("id") == expectedCreator }) return@refineCatalog false
+            }
             val metadata = title.metadata()
             selected.all { genre -> metadata.any { it.name.equals(genre.name.trim(), true) } } &&
                 (language == null || metadata.any { it.type == "language" && it.name.equals(language, true) }) &&
                 (category == null || metadata.any { it.type == "category" && it.name.equals(category, true) })
         }
+        return refined.copy(incompleteMetadata = (refined.incompleteMetadata + page.incompleteCreatorTitles).distinctBy { it.id })
     }
 
     suspend fun browse(
@@ -460,8 +478,8 @@ class WebSource(
                     "Invalid metadata path."
                 }
                 if (key in setOf("zap", "imhentai") && (filter.language.isNotEmpty() || filter.category.isNotEmpty())) {
-                    val native = browse(query, page, filter.copy(language = "", category = ""), creator)
-                    return refineMetadata(native, filter)
+                    val native = browse(query, page, filter.copy(language = "", category = ""), creator, deferCreatorDetails = true)
+                    return refineMetadata(native, filter, metadataCreator(query, filter, creator))
                 }
                 if (key == "nhentai" &&
                     (filter.language.isNotEmpty() || filter.category.isNotEmpty() || filter.tags.isNotEmpty())) {

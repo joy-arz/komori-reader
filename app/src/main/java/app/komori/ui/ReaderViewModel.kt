@@ -426,11 +426,13 @@ class ReaderViewModel(
         val source = activeSource.value
         val filter = browseFilter.value
         val pending = incompleteBrowseMetadata.value
+        val text = query
+        val creator = creatorFilter
         searchJob = task {
             loading.value = true
             error.value = null
             try {
-                val retried = (pageSource ?: app.source).retryBrowseMetadata(source, pending, filter)
+                val retried = (pageSource ?: app.source).retryBrowseMetadata(source, pending, filter, text, creator)
                 currentCoroutineContext().ensureActive()
                 if (generation != browseGeneration || source != activeSource.value || filter != browseFilter.value) return@task
                 val order = paginationIds.withIndex().associate { it.value to it.index }
