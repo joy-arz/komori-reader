@@ -67,6 +67,7 @@ class DiscoverMetadataRetryTest {
             compose.runOnUiThread { vm.search("new") }
             compose.waitUntil(5000) { vm.results.value.singleOrNull()?.title == "New result" && !vm.loading.value }
             releaseRetry.countDown()
+            compose.waitUntil(5000) { client.dispatcher.runningCallsCount() == 0 }
             compose.waitForIdle()
             assertEquals(listOf("New result"), vm.results.value.map { it.title })
             assertTrue(vm.incompleteBrowseMetadata.value.isEmpty())

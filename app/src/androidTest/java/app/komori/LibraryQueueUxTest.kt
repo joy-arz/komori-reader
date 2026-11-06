@@ -58,6 +58,7 @@ class LibraryQueueUxTest {
             compose.onNodeWithText(second.name).performClick()
             compose.onNodeWithText(book.title).assertExists()
             app.dao.putShelf(Shelf(book.id, saved = false))
+            compose.waitUntil(5000) { vm.shelf.value.find { it.mangaId == book.id }?.saved == false }
             compose.waitForIdle()
             compose.onNodeWithText(book.title).assertExists()
             assertTrue(app.dao.backupMemberships().any { it.mangaId == book.id && it.categoryId == second.id })
