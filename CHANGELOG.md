@@ -1,5 +1,10 @@
 # Komori changelog
 
+## 0.8.20
+
+- Send browser-style HTML `Accept` headers on AsuraScans and HiveToons page requests, so the source edge no longer answers title details, chapter lists or reader pages with a Cloudflare challenge.
+- Fix metadata refresh for affected Asura titles such as Bad Born Blood; title details, chapter lists, covers and reader pages now load normally while the existing Referer, cookie, TLS and source-verification behavior stays unchanged.
+
 ## 0.8.19
 
 - Keep successful filtered Discover results when an individual title's metadata fails. Show a partial-results message and retry only unresolved titles; keep later pages accessible, preserve source order after retries, and cancel obsolete retries when a search changes.
