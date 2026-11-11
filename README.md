@@ -380,6 +380,18 @@ Maintained by [@joy-arz](https://github.com/joy-arz). Issues and pull requests a
 
 ---
 
+## Star History
+
+<a href="https://www.star-history.com/?repos=joy-arz%2Fkomori-reader&type=date&logscale=&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=joy-arz/komori-reader&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=joy-arz/komori-reader&type=date&theme=dark&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=joy-arz/komori-reader&type=date&theme=dark&legend=top-left" />
+ </picture>
+</a>
+
+---
+
 ## <img src="https://api.iconify.design/lucide/heart.svg?color=%23A3E635" width="26" height="26" align="absmiddle"> Credits
 
 - **Typography:** Outfit is bundled under the SIL Open Font License. See `app/src/main/assets/licenses/Outfit-OFL.txt`.
