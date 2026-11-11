@@ -68,6 +68,18 @@ class ScanlationSourceTest {
         val locked = Jsoup.parse("""<astro-island component-url='/_astro/ChapterReader.fixture.js' props='{"isLocked":[0,true]}'></astro-island><img data-page-index='0' src='https://cdn.example/teaser.webp'>""")
         assertThrows(ContentFailure::class.java) { source.parsePages(locked) }
     }
+    @Test fun scanlationPageRequestsAdvertiseHtmlToAvoidEdgeChallenges() = runBlocking {
+        MockWebServer().use { server ->
+            for (key in scanlationSources) {
+                val source = ScanlationSource(key, server.url("/").toString().trimEnd('/'), MangaDex.client())
+                server.enqueue(MockResponse().setBody("<h1>Fixture</h1>"))
+                val root = if (key == "asura") "comics" else "series"
+                source.details(Manga(sourceId(key, "/$root/fixture"), "", "", ""))
+                val accept = server.takeRequest().getHeader("Accept")
+                assertTrue("$key must request HTML", accept != null && accept.startsWith("text/html"))
+            }
+        }
+    }
     @Test fun namespacesOriginsAndFreshOrderingRemainSeparate() {
         val source = Sources(MangaDex.client())
         assertEquals(listOf("asura", "hive", "demonic", "weeb", "atsu"), enabledSourceOrder(Settings()))

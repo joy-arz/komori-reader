@@ -24,7 +24,14 @@ class ScanlationSource(private val key: String, private val base: String, privat
             // Hive's slashless URLs redirect through HTTP. Request the HTTPS canonical path directly.
             if (asura) target else target.newBuilder().encodedPath(target.encodedPath.trimEnd('/') + "/").build()
         }
-        client.newCall(Request.Builder().url(url).header("Referer", "$base/").build()).readResponse { response ->
+        client.newCall(
+            Request.Builder()
+                .url(url)
+                .header("Referer", "$base/")
+                // Asura's edge serves a Cloudflare challenge to HTML requests without a browser Accept header.
+                .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                .build()
+        ).readResponse { response ->
             if (!response.isSuccessful) throw httpFailure(response, key)
             if (response.header("cf-mitigated") == "challenge") throw SourceVerificationRequired(key)
             val body = response.body?.source() ?: throw IOException("Empty source response.")
