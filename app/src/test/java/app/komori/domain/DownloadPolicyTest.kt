@@ -52,6 +52,20 @@ class DownloadPolicyTest {
     }
 
     @Test
+    fun clearQueueKeepsCompletedAndSeparatesActiveFromStopped() {
+        assertFalse(DownloadPolicy.isClearable("Complete", stoppedOnly = false))
+        assertFalse(DownloadPolicy.isClearable("Complete", stoppedOnly = true))
+        DownloadPolicy.activeStates.forEach {
+            assertTrue(DownloadPolicy.isClearable(it, stoppedOnly = false))
+            assertFalse(DownloadPolicy.isClearable(it, stoppedOnly = true))
+        }
+        DownloadPolicy.stoppedStates.forEach {
+            assertTrue(DownloadPolicy.isClearable(it, stoppedOnly = false))
+            assertTrue(DownloadPolicy.isClearable(it, stoppedOnly = true))
+        }
+    }
+
+    @Test
     fun allIncludesReadButNeverExternalUnavailableOrDuplicates() {
         val chapters =
             listOf(

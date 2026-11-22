@@ -15,6 +15,9 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.LiveRegionMode
 
+/** Selections above this size are intentionally not persisted across process recreation. */
+private const val MAX_SAVED_SELECTION = 200
+
 @Stable
 internal class MultiSelection(active: Boolean = false, ids: List<String> = emptyList()) {
     var active by mutableStateOf(active)
@@ -37,8 +40,12 @@ internal fun rememberMultiSelection(available: List<String>): MultiSelection {
         rememberSaveable(
             saver =
                 listSaver(
-                    save = { listOf(if (it.active) "1" else "0") + it.ids },
-                    restore = { MultiSelection(it.first() == "1", it.drop(1)) },
+                    // Very large selections must not be written to the saved-state Bundle.
+                    save = {
+                        if (it.active && it.ids.size <= MAX_SAVED_SELECTION) listOf("1") + it.ids
+                        else listOf("0")
+                    },
+                    restore = { if (it.firstOrNull() == "1") MultiSelection(true, it.drop(1)) else MultiSelection() },
                 )
         ) {
             MultiSelection()

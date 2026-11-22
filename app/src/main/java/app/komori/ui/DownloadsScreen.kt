@@ -88,8 +88,11 @@ internal fun Downloads(vm: ReaderViewModel) {
         downloads.any {
             it.state in listOf("Paused", "Failed", "Verification required", "Needs repair")
         }
+    val stoppedCount = downloads.count { DownloadPolicy.isClearable(it.state, stoppedOnly = true) }
+    val unfinishedCount = downloads.count { DownloadPolicy.isClearable(it.state, stoppedOnly = false) }
     val exportComic = rememberComicExporter(vm)
     var queueMenu by remember { mutableStateOf(false) }
+    var clearDialog by remember { mutableStateOf(false) }
     var backgroundDialog by remember { mutableStateOf(false) }
     if (backgroundDialog) AlertDialog(onDismissRequest = { backgroundDialog = false },
         title = { Text("Background downloads") },
@@ -97,10 +100,42 @@ internal fun Downloads(vm: ReaderViewModel) {
         confirmButton = { TextButton(onClick = { backgroundDialog = false }) { Text("Done") } })
     var storageDialog by remember { mutableStateOf(false) }
     if (storageDialog) DownloadMaintenanceDialog({ storageDialog = false })
+    if (clearDialog)
+        AlertDialog(
+            onDismissRequest = { clearDialog = false },
+            title = { Text("Clear download queue") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Removes queue entries and their saved pages from this device. Completed downloads, Library entries and reading progress are kept.")
+                    if (stoppedCount > 0)
+                        OutlinedButton(
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = {
+                                clearDialog = false
+                                vm.clearDownloads(stoppedOnly = true)
+                            },
+                        ) { Text("Clear stopped · $stoppedCount") }
+                    if (unfinishedCount > 0)
+                        Button(
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = {
+                                clearDialog = false
+                                vm.clearDownloads(stoppedOnly = false)
+                            },
+                        ) { Text("Clear all unfinished · $unfinishedCount") }
+                    Text(
+                        "Stopped means cancelled, failed, paused, awaiting verification or needing repair.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            },
+            confirmButton = { TextButton(onClick = { clearDialog = false }) { Text("Cancel") } },
+        )
     var groupByTitle by rememberSaveable { mutableStateOf(true) }
     val environment by remember(vm.app) { downloadEnvironment(vm.app) }.collectAsStateWithLifecycle(DownloadEnvironment())
     val mangaById = remember(manga) { manga.associateBy { it.id } }
     val ordered = visibleDownloads.sortedWith(compareBy<Download> { it.state == "Complete" }.thenBy { it.queuePosition }.thenBy { it.releaseId })
+    val queuePositions = remember(ordered) { ordered.withIndex().associate { (index, item) -> item.releaseId to index + 1 } }
     val groups = if (groupByTitle) ordered.groupBy { it.mangaId } else linkedMapOf("" to ordered)
     Column(Modifier.fillMaxSize()) {
         Row(
@@ -137,6 +172,14 @@ internal fun Downloads(vm: ReaderViewModel) {
                                 onClick = {
                                     vm.resumeAll()
                                     queueMenu = false
+                                },
+                            )
+                        if (unfinishedCount > 0)
+                            DropdownMenuItem(
+                                text = { Text("Clear queue…") },
+                                onClick = {
+                                    queueMenu = false
+                                    clearDialog = true
                                 },
                             )
                     }
@@ -269,7 +312,7 @@ internal fun Downloads(vm: ReaderViewModel) {
                                                 " / ${transfer.totalBytes / 1024} KB"
                                             else " received"
                                     displayState.startsWith("Waiting") -> displayState
-                                    download.state == "Queued" -> "Queued · position ${ordered.indexOfFirst { it.releaseId == download.releaseId } + 1}"
+                                    download.state == "Queued" -> "Queued · position ${queuePositions[download.releaseId] ?: 0}"
                                     download.state == "Retrying" ->
                                         "Retry scheduled · ${download.done} pages saved"
                                     else -> "${download.done} / ${download.total} pages"

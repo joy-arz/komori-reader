@@ -16,6 +16,11 @@ enum class DownloadChoice(
 
 object DownloadPolicy {
     val activeStates = setOf("Queued", "Downloading", "Retrying", "Waiting for storage")
+    val stoppedStates = setOf("Paused", "Failed", "Verification required", "Needs repair", "Cancelled")
+
+    /** [stoppedOnly] keeps active transfers in the queue; complete downloads are never cleared. */
+    fun isClearable(state: String, stoppedOnly: Boolean): Boolean =
+        state != "Complete" && (!stoppedOnly || state in stoppedStates)
 
     fun range(releases: List<Release>, existing: Map<String, String>, first: Int, last: Int): List<Release> {
         val ordered = ChapterPolicy.readingOrder(releases).filter { it.readable }.distinctBy { it.id }

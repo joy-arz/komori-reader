@@ -186,7 +186,7 @@ fun KomoriScreen(vm: ReaderViewModel) {
                                     style = MaterialTheme.typography.bodySmall,
                                 )
                                 TextButton(onClick = vm::stopAddingDownloads) {
-                                    Text("Stop adding")
+                                    Text("Stop")
                                 }
                             }
                         }

@@ -244,6 +244,8 @@ interface LibraryDao {
 
     @Query("DELETE FROM downloads WHERE releaseId = :id") suspend fun removeDownload(id: String)
 
+    @Query("DELETE FROM downloads WHERE releaseId IN (:ids)") suspend fun removeDownloads(ids: List<String>)
+
     @Query("DELETE FROM progress WHERE mangaId = :id") suspend fun resetProgress(id: String)
 }
 

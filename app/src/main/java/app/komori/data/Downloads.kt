@@ -20,6 +20,9 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
+/** Tags every chapter transfer so a bulk queue clear can cancel them in one call. */
+internal const val DOWNLOAD_QUEUE_TAG = "komori-download-queue"
+
 data class DownloadTransfer(
     val page: Int = 0,
     val bytes: Long = 0,
@@ -85,6 +88,7 @@ internal fun downloadRequest(
 ) =
     OneTimeWorkRequestBuilder<ChapterDownloadWorker>()
         .setInputData(workDataOf("chapter" to id, "attemptBase" to attemptBase))
+        .addTag(DOWNLOAD_QUEUE_TAG)
         .setInitialDelay(
             delayMillis.coerceIn(
                 0,

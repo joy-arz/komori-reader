@@ -835,15 +835,53 @@ class ReaderViewModel(
     }
 
     fun batchDownloads(ids: List<String>, action: String) = task {
-        for (id in ids.distinct()) dao.download(id)?.let {
-            when (action) {
-                "Pause" -> pause(it).join()
-                "Resume" -> resume(it).join()
-                "Cancel" -> cancelDownload(it).join()
-                "Delete downloads" -> deleteDownload(it).join()
+        val rows = ids.distinct().mapNotNull { dao.download(it) }
+        when (action) {
+            "Pause" -> rows.forEach { pause(it).join() }
+            "Resume" -> rows.forEach { resume(it).join() }
+            "Cancel" -> rows.forEach { cancelDownload(it).join() }
+            "Delete downloads" ->
+                if (rows.isNotEmpty()) {
+                    if (bulkStatus.value != null) {
+                        notice.value = "Another download operation is running. Try again in a moment."
+                    } else {
+                        bulkStatus.value = "Preparing to delete downloads…"
+                        try {
+                            val report = downloadCoordinator.deleteMany(rows) { bulkStatus.value = it }
+                            notice.value = deleteSummary(report)
+                        } finally {
+                            bulkStatus.value = null
+                        }
+                    }
+                }
+        }
+    }
+
+    /** Clears stopped rows only, or every unfinished row while keeping completed downloads. */
+    fun clearDownloads(stoppedOnly: Boolean) {
+        if (bulkStatus.value != null) return
+        val rows = downloads.value.filter { DownloadPolicy.isClearable(it.state, stoppedOnly) }
+        if (rows.isEmpty()) {
+            notice.value = "No matching downloads to clear."
+            return
+        }
+        bulkStatus.value = "Preparing to clear downloads…"
+        bulkJob = task {
+            try {
+                val report = downloadCoordinator.deleteMany(rows) { bulkStatus.value = it }
+                notice.value = deleteSummary(report)
+            } finally {
+                bulkStatus.value = null
             }
         }
     }
+
+    private fun deleteSummary(report: DownloadCoordinator.BulkDeleteResult): String =
+        buildString {
+            append("${report.removed} ${if (report.removed == 1) "download" else "downloads"} removed.")
+            if (report.skipped > 0) append(" ${report.skipped} open in the reader were kept.")
+            if (report.failed > 0) append(" ${report.failed} could not be deleted; check free space and retry.")
+        }
 
     fun downloadTitles(titles: List<Manga>, unread: Boolean) {
         if (bulkStatus.value != null) return
