@@ -81,11 +81,14 @@ class SourceHttpException(
     val source: String,
     val retryAtMillis: Long? = null,
     val deferred: Boolean = false,
+    /** CDN image requests are not source pages; a 401/403 there is usually hotlink/WAF noise. */
+    val image: Boolean = false,
 ) :
     IOException(
         when (status) {
             403 ->
-                if (source == "mangadex") "MangaDex could not serve this chapter or image (HTTP 403). Refresh the chapter, try another release or try another network."
+                if (image) "${sourceNames[source] ?: "The source"} image server denied this page (HTTP 403). Retry the download or try another network."
+                else if (source == "mangadex") "MangaDex could not serve this chapter or image (HTTP 403). Refresh the chapter, try another release or try another network."
                 else "${sourceNames[source] ?: "The source"} denied access (HTTP 403). Try Verify source. The site may still restrict native access."
             429 ->
                 "${sourceNames[source] ?: "The source"} is rate limiting requests (HTTP 429). Wait before retrying."
@@ -101,7 +104,7 @@ class SourceHttpException(
 
 fun requiresSourceAction(error: Exception?): Boolean = originalFailure(error).let {
     it is SourceVerificationRequired ||
-        (it is SourceHttpException && it.source != "mangadex" && it.status in listOf(401, 403))
+        (it is SourceHttpException && !it.image && it.source != "mangadex" && it.status in listOf(401, 403))
 }
 
 class SourceSessions(context: Context) {
@@ -186,8 +189,11 @@ class SourceSessions(context: Context) {
                 }
                 if (source != null && response.code in listOf(401, 403)) {
                     val status = response.code
+                    val origin = sourceOrigins.getValue(source).toHttpUrl().host
+                    val host = response.request.url.host
+                    val image = response.request.header("Referer") != null && host != origin && host != "www.$origin"
                     response.close()
-                    throw SourceHttpException(status, source)
+                    throw SourceHttpException(status, source, image = image)
                 }
                 if (response.code in listOf(429, 503)) {
                     val failure = httpFailure(response, source ?: "source")

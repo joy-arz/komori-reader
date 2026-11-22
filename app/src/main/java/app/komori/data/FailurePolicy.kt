@@ -75,7 +75,10 @@ fun automaticRetryAllowed(error: Exception?): Boolean =
             FailureKind.VERIFICATION,
             FailureKind.MISSING_PAGE -> false
             FailureKind.HTTP ->
-                (originalFailure(error) as SourceHttpException).status.let { it in listOf(408, 425, 429) || it >= 500 }
+                (originalFailure(error) as SourceHttpException).let { failure ->
+                    failure.status in listOf(408, 425, 429) || failure.status >= 500 ||
+                        failure.image && failure.status in listOf(401, 403)
+                }
             else -> true
         }
 

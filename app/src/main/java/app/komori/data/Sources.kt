@@ -170,10 +170,16 @@ class Sources(val client: OkHttpClient, apiClient: OkHttpClient = client) {
             try { transferImage(client, request, file, progress) }
             catch (error: IOException) {
                 val location = request.url
-                val alternative = if (sourceKey(id) == "demonic" && location.isHttps && location.port == 443 &&
-                    location.host == "cdn.demoniclibs.com" && location.username.isEmpty() && location.password.isEmpty() &&
-                    (error is ImageContentFailure || error is SourceHttpException && error.status in setOf(404, 410)))
-                    location.newBuilder().host("cdn.librarydm.com").build() else null
+                val alternative = when {
+                    // Cloudflare 526 is hostname/origin-certificate specific; Manhwa18 also serves on www.
+                    sourceKey(id) in manhwaSources && error is SourceHttpException && error.status == 526 ->
+                        manhwaWwwUrl(location.toString())?.toHttpUrlOrNull()
+                    sourceKey(id) == "demonic" && location.isHttps && location.port == 443 &&
+                        location.host == "cdn.demoniclibs.com" && location.username.isEmpty() && location.password.isEmpty() &&
+                        (error is ImageContentFailure || error is SourceHttpException && error.status in setOf(404, 410)) ->
+                        location.newBuilder().host("cdn.librarydm.com").build()
+                    else -> null
+                }
                 if (alternative == null) throw error
                 // Demonic's own reader advertises this exact alternate CDN on image error.
                 try { transferImage(client, imageRequest(alternative.toString(), id), file, progress) }
@@ -300,6 +306,7 @@ class Sources(val client: OkHttpClient, apiClient: OkHttpClient = client) {
         Request.Builder()
             .url(url)
             .apply {
+                if (sourceKey(id) != "mangadex") header("Accept", "image/avif,image/webp,image/apng,image/*,*/*;q=0.8")
                 when (sourceKey(id)) {
                     "mangadex" -> {
                         header("Referer", "https://mangadex.org/")

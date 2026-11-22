@@ -18,21 +18,47 @@ import org.jsoup.nodes.Element
 
 val manhwaSources = setOf("manhwa18", "manhwa18cc")
 
+/**
+ * Cloudflare 526 means the origin certificate failed validation for this hostname. Both Manhwa18
+ * sites also answer on www, so retry there before failing a whole chapter transfer.
+ */
+internal fun manhwaWwwUrl(url: String): String? {
+    val target = url.toHttpUrlOrNull() ?: return null
+    if (target.host != "manhwa18.com" && target.host != "manhwa18.cc") return null
+    return target.newBuilder().host("www.${target.host}").build().toString()
+}
+
 class ManhwaSource(private val key: String, private val base: String, private val client: OkHttpClient) {
     private val com = key == "manhwa18"
     private val titlePath = if (com) "manga" else "webtoon"
     @Volatile private var knownGenres = comGenres
     private suspend fun document(path: String): Document = withContext(Dispatchers.IO) {
         require(path.startsWith('/') && !path.startsWith("//"))
-        val request = Request.Builder().url(base + path).header("Referer", "$base/").build()
-        client.newCall(request).readResponse { response ->
-            if (!response.isSuccessful) throw httpFailure(response, key)
-            if (response.header("cf-mitigated") == "challenge") throw SourceVerificationRequired(key)
-            val body = response.body?.source() ?: throw IOException("Empty source response")
-            if (body.request(4L * 1024 * 1024 + 1)) throw ContentFailure("Source page exceeds 4 MB.")
-            Jsoup.parse(body.readUtf8(), base + path).also {
-                if (it.title().contains("Just a moment", true) || it.selectFirst("#cf-error-details") != null)
-                    throw SourceVerificationRequired(key)
+        val target = base + path
+        suspend fun fetch(url: String): Document {
+            val request = Request.Builder().url(url).header("Referer", "$base/").build()
+            return client.newCall(request).readResponse { response ->
+                if (!response.isSuccessful) throw httpFailure(response, key)
+                if (response.header("cf-mitigated") == "challenge") throw SourceVerificationRequired(key)
+                val body = response.body?.source() ?: throw IOException("Empty source response")
+                if (body.request(4L * 1024 * 1024 + 1)) throw ContentFailure("Source page exceeds 4 MB.")
+                Jsoup.parse(body.readUtf8(), url).also {
+                    if (it.title().contains("Just a moment", true) || it.selectFirst("#cf-error-details") != null)
+                        throw SourceVerificationRequired(key)
+                }
+            }
+        }
+        try {
+            fetch(target)
+        } catch (error: SourceHttpException) {
+            val alternate = manhwaWwwUrl(target)?.takeIf { error.status == 526 } ?: throw error
+            try {
+                fetch(alternate)
+            } catch (cancel: kotlinx.coroutines.CancellationException) {
+                throw cancel
+            } catch (fallback: Exception) {
+                error.addSuppressed(fallback)
+                throw error
             }
         }
     }

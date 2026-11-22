@@ -69,6 +69,18 @@ class FailurePolicyTest {
     }
 
     @Test
+    fun cdnImageDenialsRetryWithoutAskingForSourceVerification() {
+        val page = SourceHttpException(403, "asura")
+        val image = SourceHttpException(403, "asura", image = true)
+        assertTrue(requiresSourceAction(page))
+        assertEquals(FailureKind.VERIFICATION, failureKind(page))
+        assertFalse(automaticRetryAllowed(page))
+        assertFalse(requiresSourceAction(image))
+        assertEquals(FailureKind.HTTP, failureKind(image))
+        assertTrue(automaticRetryAllowed(image))
+    }
+
+    @Test
     fun sessionBudgetSurvivesRepeatedChecksAndManualResetReopensIt() {
         val budget = PageRetryBudget()
         repeat(3) {

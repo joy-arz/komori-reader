@@ -65,6 +65,32 @@ class ManhwaSourceTest {
         }
     }
 
+    @Test fun cloudflareOriginCertificateFailuresRetryTheWwwHost() = runBlocking {
+        MockWebServer().use { server ->
+            val client = MangaDex.client().newBuilder()
+                .dns(object : okhttp3.Dns {
+                    override fun lookup(hostname: String) = listOf(java.net.InetAddress.getByName("127.0.0.1"))
+                })
+                .build()
+            val source = ManhwaSource("manhwa18", "http://manhwa18.com:${server.port}", client)
+            server.enqueue(MockResponse().setResponseCode(526).setBody("<html>origin certificate</html>"))
+            server.enqueue(MockResponse().setBody("<div class='series-name'><a>Overgeared</a></div>"))
+            val book = source.details(Manga(sourceId("manhwa18", "/manga/fixture"), "Old", "", ""))
+            assertEquals("Overgeared", book.title)
+            assertEquals("manhwa18.com:${server.port}", server.takeRequest().getHeader("Host"))
+            val retry = server.takeRequest()
+            assertEquals("www.manhwa18.com:${server.port}", retry.getHeader("Host"))
+            assertEquals("/manga/fixture", retry.requestUrl!!.encodedPath)
+        }
+    }
+
+    @Test fun wwwFallbackAppliesOnlyToManhwa18Origins() {
+        assertEquals("https://www.manhwa18.com/manga/x", manhwaWwwUrl("https://manhwa18.com/manga/x"))
+        assertEquals("https://www.manhwa18.cc/webtoon/x", manhwaWwwUrl("https://manhwa18.cc/webtoon/x"))
+        assertNull(manhwaWwwUrl("https://min.manhwa18.net/x"))
+        assertNull(manhwaWwwUrl("https://cdn.pornwa.club/x"))
+    }
+
     @Test fun sourceNamespacesAndImageReferersNeverOverlap() {
         val sources = Sources(MangaDex.client())
         for ((key, origin) in listOf("manhwa18" to "https://manhwa18.com", "manhwa18cc" to "https://manhwa18.cc")) {
