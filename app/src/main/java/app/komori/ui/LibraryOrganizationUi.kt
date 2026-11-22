@@ -93,17 +93,19 @@ internal fun CategoryAssignmentDialog(vm: ReaderViewModel, ids: List<String>, ti
 }
 
 @Composable
-internal fun LibraryFilterDialog(vm: ReaderViewModel, category: String, status: String, unread: Boolean, collection: String, customLibraries: Boolean,
-    apply: (String, String, Boolean, String) -> Unit, dismiss: () -> Unit) {
+internal fun LibraryFilterDialog(vm: ReaderViewModel, category: String, status: String, unread: Boolean, downloaded: Boolean, collection: String, customLibraries: Boolean,
+    apply: (String, String, Boolean, Boolean, String) -> Unit, dismiss: () -> Unit) {
     val categories by vm.categories.collectAsStateWithLifecycle()
     var collectionChoice by remember { mutableStateOf(collection) }
     var categoryChoice by remember { mutableStateOf(category) }
     var statusChoice by remember { mutableStateOf(status) }
     var unreadChoice by remember { mutableStateOf(unread) }
+    var downloadedChoice by remember { mutableStateOf(downloaded) }
     var manage by remember { mutableStateOf(false) }
     AlertDialog(onDismissRequest = dismiss, title = { Text("Filter Library") }, text = {
         LazyColumn(Modifier.heightIn(max = 440.dp)) {
             item { ToolSwitch("Only titles with unread chapters", unreadChoice) { unreadChoice = it } }
+            item { ToolSwitch("Only downloaded titles", downloadedChoice) { downloadedChoice = it } }
             item { Text("Collection", style = MaterialTheme.typography.titleSmall) }
             items((if (customLibraries) listOf("All titles") else emptyList()) + listOf("Saved", "Liked", "History", "Downloaded")) { choice ->
                 Row(Modifier.fillMaxWidth().clickable { collectionChoice = choice }) {
@@ -124,9 +126,9 @@ internal fun LibraryFilterDialog(vm: ReaderViewModel, category: String, status: 
             }
             item { TextButton(onClick = { manage = true }) { Text("Manage libraries") } }
         }
-    }, confirmButton = { TextButton(onClick = { apply(categoryChoice, statusChoice, unreadChoice, collectionChoice); dismiss() }) { Text("Apply") } },
+    }, confirmButton = { TextButton(onClick = { apply(categoryChoice, statusChoice, unreadChoice, downloadedChoice, collectionChoice); dismiss() }) { Text("Apply") } },
         dismissButton = { Row {
-            TextButton(onClick = { apply("", "", false, if (customLibraries) "All titles" else "Saved"); dismiss() }) { Text("Reset") }
+            TextButton(onClick = { apply("", "", false, false, if (customLibraries) "All titles" else "Saved"); dismiss() }) { Text("Reset") }
             TextButton(onClick = dismiss) { Text("Cancel") }
         } })
     if (manage) CategoryManagerDialog(vm) { manage = false }

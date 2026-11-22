@@ -94,6 +94,7 @@ internal fun Library(vm: ReaderViewModel, discover: () -> Unit) {
     var category by rememberSaveable { mutableStateOf("") }
     var status by rememberSaveable { mutableStateOf("") }
     var unreadOnly by rememberSaveable { mutableStateOf(false) }
+    var downloadedOnly by rememberSaveable { mutableStateOf(false) }
     var showLibraryFilters by remember { mutableStateOf(false) }
     var manageLibraries by remember { mutableStateOf(false) }
     if (manageLibraries) CategoryManagerDialog(vm) { manageLibraries = false }
@@ -103,12 +104,12 @@ internal fun Library(vm: ReaderViewModel, discover: () -> Unit) {
         if (category in knownLibraries && category !in current) category = ""
         knownLibraries = current
     }
-    if (showLibraryFilters) LibraryFilterDialog(vm, if (librarySection) category else "", status, unreadOnly, activeCollection, librarySection,
-        { selectedCategory, selectedStatus, unread, collection ->
+    if (showLibraryFilters) LibraryFilterDialog(vm, if (librarySection) category else "", status, unreadOnly, downloadedOnly, activeCollection, librarySection,
+        { selectedCategory, selectedStatus, unread, downloaded, collection ->
             category = selectedCategory
             if (selectedCategory.isNotEmpty()) librarySection = true
             if (librarySection) libraryCollection = collection else filter = collection
-            status = selectedStatus; unreadOnly = unread
+            status = selectedStatus; unreadOnly = unread; downloadedOnly = downloaded
         },
         { showLibraryFilters = false })
     val downloadedIds = downloads.filter { it.done > 0 }.map { it.mangaId }.toSet()
@@ -165,8 +166,8 @@ internal fun Library(vm: ReaderViewModel, discover: () -> Unit) {
             if (!searchExpanded)
                 RoundControl(KomoriIcons.Search, "Search library", { searchExpanded = true })
         }
-        if (status.isNotEmpty() || unreadOnly || librarySection && libraryCollection != "All titles") {
-            Text(listOfNotNull(libraryCollection.takeIf { librarySection && it != "Saved" }, status.takeIf { it.isNotEmpty() }, "Unread chapters".takeIf { unreadOnly }).joinToString(" · "),
+        if (status.isNotEmpty() || unreadOnly || downloadedOnly || librarySection && libraryCollection != "All titles") {
+            Text(listOfNotNull(libraryCollection.takeIf { librarySection && it != "Saved" }, status.takeIf { it.isNotEmpty() }, "Unread chapters".takeIf { unreadOnly }, "Downloaded titles".takeIf { downloadedOnly }).joinToString(" · "),
                 Modifier.padding(horizontal = 18.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall)
         }
         if (searchExpanded)
@@ -216,7 +217,7 @@ internal fun Library(vm: ReaderViewModel, discover: () -> Unit) {
         }
         val recent = shelf.firstOrNull { it.lastRelease != null }
         val book = manga.find { it.id == recent?.mangaId }
-        if (book != null && settings.showContinue && query.isEmpty() && !librarySection && filter == "Saved" && category.isEmpty()) {
+        if (book != null && settings.showContinue && query.isEmpty() && !librarySection && filter == "Saved" && category.isEmpty() && !downloadedOnly) {
             Card(
                 onClick = { vm.open(book, true) },
                 modifier = Modifier.fillMaxWidth().padding(20.dp, 0.dp, 20.dp, 16.dp),
@@ -268,6 +269,7 @@ internal fun Library(vm: ReaderViewModel, discover: () -> Unit) {
                     .filter { it.title.contains(query, true) }
                     .filter { status.isEmpty() || shelfById[it.id]?.status == status }
                     .filter { !unreadOnly || (countById[it.id]?.unread ?: 0) > 0 }
+                    .filter { !downloadedOnly || it.id in downloadedIds }
                     .filter { title -> !librarySection || category.isEmpty() || if (category == "uncategorized") categoriesByTitle[title.id].isNullOrEmpty()
                         else category in categoriesByTitle[title.id].orEmpty() }
                     .let {
@@ -276,13 +278,13 @@ internal fun Library(vm: ReaderViewModel, discover: () -> Unit) {
                         else it
                     }
             if (titles.isEmpty()) {
-                val filtered = query.isNotEmpty() || status.isNotEmpty() || unreadOnly || librarySection && (category.isNotEmpty() || libraryCollection != "All titles")
+                val filtered = query.isNotEmpty() || status.isNotEmpty() || unreadOnly || downloadedOnly || librarySection && (category.isNotEmpty() || libraryCollection != "All titles")
                 EmptyState(
                     KomoriIcons.MenuBook,
                     if (filtered) "No matching titles" else if (activeCollection == "Downloaded") "No downloaded chapters" else "Your next story starts here",
                     if (filtered) "Try another library or clear your filters." else "Browse a source or download chapters to read offline.",
                     if (filtered) "Clear filters" else "Explore sources",
-                    if (filtered) ({ query = ""; status = ""; unreadOnly = false; category = ""; libraryCollection = "All titles" }) else discover,
+                    if (filtered) ({ query = ""; status = ""; unreadOnly = false; downloadedOnly = false; category = ""; libraryCollection = "All titles" }) else discover,
                 )
             }
             else
