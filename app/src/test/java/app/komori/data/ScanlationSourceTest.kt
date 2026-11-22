@@ -80,6 +80,45 @@ class ScanlationSourceTest {
             }
         }
     }
+    @Test fun asuraTagsPreferSlugsAndBrowseSendsThem() = runBlocking {
+        MockWebServer().use { server ->
+            val base = server.url("/").toString().trimEnd('/')
+            val source = ScanlationSource("asura", base, MangaDex.client())
+            val props = """{"availableGenres":[1,[[0,{"id":[0,1],"name":[0,"Action"],"slug":[0,"action"]}],[0,{"id":[0,2],"name":[0,"Fantasy"],"slug":[0,"fantasy"]}]]]}"""
+            server.enqueue(MockResponse().setBody("<astro-island component-url='/_astro/BrowseFilters.fixture.js' props='$props'></astro-island>"))
+            assertEquals(listOf("action", "fantasy"), source.tags().map { it.id })
+            server.takeRequest()
+            server.enqueue(MockResponse().setBody("<html><body></body></html>"))
+            source.browse("", 1, BrowseFilter(tags = setOf("action", "fantasy")))
+            assertEquals("action,fantasy", server.takeRequest().requestUrl!!.queryParameter("genres"))
+        }
+    }
+    @Test fun asuraMapsLegacyNumericGenresToSlugs() = runBlocking {
+        MockWebServer().use { server ->
+            val base = server.url("/").toString().trimEnd('/')
+            val source = ScanlationSource("asura", base, MangaDex.client())
+            val props = """{"availableGenres":[1,[[0,{"id":[0,1],"name":[0,"Action"],"slug":[0,"action"]}]]]}"""
+            server.enqueue(MockResponse().setBody("<astro-island component-url='/_astro/BrowseFilters.fixture.js' props='$props'></astro-island>"))
+            source.tags()
+            server.takeRequest()
+            server.enqueue(MockResponse().setBody("<html><body></body></html>"))
+            source.browse("", 1, BrowseFilter(tags = setOf("1", "Action")))
+            assertEquals("action", server.takeRequest().requestUrl!!.queryParameter("genres"))
+        }
+    }
+    @Test fun hiveStripsSignedGenreIdsAndSignsThemAgainForBrowse() = runBlocking {
+        MockWebServer().use { server ->
+            val base = server.url("/").toString().trimEnd('/')
+            val source = ScanlationSource("hive", base, MangaDex.client())
+            val doc = Jsoup.parse("""<a href='/series?genres=%2B3'>Action</a><a href='/series?genres=5'>Romance</a>
+                <script data-tsr-stream-part>genres:[{id:3,name:"Action",color:"#f00"},{id:5,name:"Romance",color:"#0f0"}]</script>""",
+                base)
+            assertEquals(listOf("3", "5"), source.parseTags(doc).map { it.id })
+            server.enqueue(MockResponse().setBody("<html><body></body></html>"))
+            source.browse("", 1, BrowseFilter(tags = setOf("+3", "5")))
+            assertEquals("+3,+5", server.takeRequest().requestUrl!!.queryParameter("genres"))
+        }
+    }
     @Test fun namespacesOriginsAndFreshOrderingRemainSeparate() {
         val source = Sources(MangaDex.client())
         assertEquals(listOf("asura", "hive", "demonic", "weeb", "atsu"), enabledSourceOrder(Settings()))

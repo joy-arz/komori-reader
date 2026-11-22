@@ -1,7 +1,10 @@
 package app.komori.data
 
 import java.io.IOException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -18,6 +21,9 @@ val scanlationSources = setOf("asura", "hive")
 class ScanlationSource(private val key: String, private val base: String, private val client: OkHttpClient) {
     private val asura = key == "asura"
     private val root = if (asura) "comics" else "series"
+    private val tagLock = Mutex()
+    @Volatile private var tagCache: Pair<Long, TagCatalog>? = null
+    private data class TagCatalog(val tags: List<SourceTag>, val aliases: Map<String, String> = emptyMap())
     private suspend fun document(route: String): Document = withContext(Dispatchers.IO) {
         require(route.startsWith('/') && !route.startsWith("//"))
         val url = (base + route).toHttpUrl().let { target ->
@@ -71,7 +77,8 @@ class ScanlationSource(private val key: String, private val base: String, privat
                     addQueryParameter(path.split('/')[1], path.substringAfter('/', "").substringAfter('/'))
                 }
                 if (query.isNotBlank()) addQueryParameter(if (asura) "q" else "searchTerm", query)
-                if (filter.tags.isNotEmpty()) addQueryParameter("genres", filter.tags.joinToString(","))
+                val genres = genreValues(filter.tags)
+                if (genres.isNotEmpty()) addQueryParameter("genres", genres.joinToString(","))
                 if (filter.status.isNotBlank()) addQueryParameter(if (asura) "status" else "seriesStatus", if (asura) filter.status else filter.status.uppercase())
                 if (asura) {
                     addQueryParameter("sort", when (filter.sort) { "Popularity" -> "popular"; "Title" -> "name"; else -> "update" })
@@ -97,18 +104,64 @@ class ScanlationSource(private val key: String, private val base: String, privat
         }
         return BrowsePage(titles, more)
     }
-    suspend fun tags(): List<SourceTag> = parseTags(document(if (asura) "/browse/comics" else "/series"))
+    suspend fun tags(): List<SourceTag> = catalog().tags
+
+    private suspend fun catalog(): TagCatalog {
+        tagCache?.takeIf { System.nanoTime() - it.first in 0 until 600_000_000_000L }?.let { return it.second }
+        return tagLock.withLock {
+            tagCache?.takeIf { System.nanoTime() - it.first in 0 until 600_000_000_000L }?.let { return@withLock it.second }
+            val d = document(if (asura) "/browse/comics" else "/series")
+            // Older saved titles still carry Asura's numeric genre IDs, so keep the slug mapping for them.
+            val aliases = if (asura) props(d, "BrowseFilters")?.optJSONArray("availableGenres")?.objects().orEmpty().mapNotNull { o ->
+                val slug = o.optString("slug").trim().takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                val id = o.optString("id").trim().takeIf { it.isNotBlank() && it != slug } ?: return@mapNotNull null
+                id to slug
+            }.toMap() else emptyMap()
+            TagCatalog(parseTags(d), aliases).also {
+                if (it.tags.isNotEmpty()) tagCache = System.nanoTime() to it
+            }
+        }
+    }
+
+    /** Asura filters by genre slug; Hive signs each numeric genre in its repeated include list. */
+    private suspend fun genreValues(values: Set<String>): List<String> {
+        if (values.isEmpty()) return emptyList()
+        if (!asura) return values.map { "+${it.trim().removePrefix("+")}" }.distinct()
+        // Slugs are already usable; numeric legacy IDs and display names need the catalog.
+        val needsLookup = values.any { value -> !value.matches(Regex("[a-z0-9][a-z0-9-]*")) }
+        val available =
+            if (needsLookup) {
+                try {
+                    catalog()
+                } catch (cancel: CancellationException) {
+                    throw cancel
+                } catch (_: Exception) {
+                    TagCatalog(emptyList())
+                }
+            } else TagCatalog(emptyList())
+        return values.mapNotNull { value ->
+            val match = available.tags.firstOrNull { it.id.equals(value, true) || it.name.equals(value, true) }
+            (match?.id ?: available.aliases[value] ?: value).trim().takeIf { it.isNotBlank() }
+        }.distinct()
+    }
+
+    private fun tag(o: JSONObject): SourceTag? {
+        val name = o.optString("name").trim().takeIf { it.isNotBlank() } ?: return null
+        val id = if (asura) o.optString("slug").ifBlank { o.optString("id") } else o.optString("id").removePrefix("+")
+        return id.trim().takeIf { it.isNotBlank() }?.let { SourceTag(it, name) }
+    }
+
     fun parseTags(d: Document): List<SourceTag> {
-        if (asura) return props(d, "BrowseFilters")?.optJSONArray("availableGenres")?.objects()?.map { SourceTag(it.get("id").toString(), it.getString("name")) }.orEmpty()
+        if (asura) return props(d, "BrowseFilters")?.optJSONArray("availableGenres")?.objects()?.mapNotNull(::tag).orEmpty()
         val links = d.select("a[href*=genres]").mapNotNull { a ->
-            val id = a.absUrl("href").toHttpUrlOrNull()?.queryParameter("genres") ?: return@mapNotNull null
-            a.text().trim().takeIf { it.isNotBlank() }?.let { SourceTag(id, it) }
+            val id = a.absUrl("href").toHttpUrlOrNull()?.queryParameter("genres")?.removePrefix("+")?.trim()
+            if (id.isNullOrBlank()) null else a.text().trim().takeIf { it.isNotBlank() }?.let { SourceTag(id, it) }
         }.distinctBy { it.id }
         val literal = "\"(?:[^\"\\\\]|\\\\.)*\""
         val genres = Regex("\\{id:([0-9]+),name:($literal),color:\"")
         val hydrated = d.select("script[data-tsr-stream-part]").flatMap { script ->
             genres.findAll(script.data()).map { match ->
-                SourceTag("+${match.groupValues[1]}", JSONArray("[${match.groupValues[2]}]").getString(0))
+                SourceTag(match.groupValues[1], JSONArray("[${match.groupValues[2]}]").getString(0))
             }.toList()
         }
         return (links + hydrated).distinctBy { it.id }
@@ -116,8 +169,11 @@ class ScanlationSource(private val key: String, private val base: String, privat
     suspend fun details(manga: Manga): Manga = parseDetails(document(sourcePath(manga.id)), manga)
     fun parseDetails(d: Document, manga: Manga): Manga {
         val data = props(d, "DescriptionModal")
-        val tags = if (data != null) data.optJSONArray("genres")?.objects()?.map { SourceTag(it.get("id").toString(), it.getString("name")) }.orEmpty()
-            else d.select("[itemprop=genre]").mapNotNull { a -> a.absUrl("href").toHttpUrlOrNull()?.queryParameter("genres")?.let { SourceTag(it, a.text()) } }
+        val tags = if (data != null) data.optJSONArray("genres")?.objects()?.mapNotNull(::tag).orEmpty()
+            else d.select("[itemprop=genre]").mapNotNull { a ->
+                a.absUrl("href").toHttpUrlOrNull()?.queryParameter("genres")?.removePrefix("+")?.trim()
+                    ?.takeIf { it.isNotBlank() }?.let { SourceTag(it, a.text()) }
+            }
         val creators = JSONArray()
         for (role in listOf("author", "artist")) {
             val name = data?.optString(role).orEmpty().takeUnless { it == "null" }.orEmpty()
