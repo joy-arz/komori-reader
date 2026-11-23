@@ -32,6 +32,16 @@ class SourceDiagnosticsTest {
         val offline = SourceRequestFailure("mangadex", SourceStage.CHAPTERS, UnknownHostException("secret"))
         assertEquals(FailureKind.OFFLINE, failureKind(offline))
     }
+    @Test fun originCertificateFailuresExplainTheOutageAndStayRetryable() {
+        val image = SourceRequestFailure("manhwa18", SourceStage.IMAGE, SourceHttpException(526, "source", image = true))
+        assertTrue(image.message.contains("origin certificate"))
+        assertTrue(image.message.contains("source-side outage"))
+        assertEquals(FailureKind.HTTP, failureKind(image))
+        assertTrue(automaticRetryAllowed(image))
+        assertEquals(FailureKind.HTTP, failureKind(SourceHttpException(526, "manhwa18")))
+        assertTrue(automaticRetryAllowed(SourceHttpException(526, "manhwa18")))
+    }
+
     @Test fun imageContentFailuresRemainSpecificAndDoNotAutomaticallyRetry() {
         for (problem in ImageContentProblem.entries) {
             val wrapped = SourceRequestFailure("demonic", SourceStage.IMAGE, ImageContentFailure(problem))

@@ -91,6 +91,24 @@ class ManhwaSourceTest {
         assertNull(manhwaWwwUrl("https://cdn.pornwa.club/x"))
     }
 
+    @Test fun legacyCdnImageHostsUseOnlyVerifiedReplacements() {
+        assertEquals(
+            "https://min.manhwa18.net/chapters/manga/chapters/chap-106/1.jpg",
+            manhwaImageFallback("https://cdn.manhwa18.com/chapters/manga/chapters/chap-106/1.jpg", "manhwa18"),
+        )
+        assertEquals(
+            "https://min.manhwa18.net/manhwa18/vnwa/chapters/99597/1.png",
+            manhwaImageFallback("https://cdn.manhwa18.net/manhwa18/vnwa/chapters/99597/1.png", "manhwa18"),
+        )
+        assertEquals(
+            "https://www.manhwa18.com/1.jpg",
+            manhwaImageFallback("https://manhwa18.com/1.jpg", "manhwa18"),
+        )
+        assertNull(manhwaImageFallback("https://cdn.manhwa18.com/chapters/1.jpg", "manhwa18cc"))
+        assertNull(manhwaImageFallback("https://img33.manhwa18.cc/chapters/1.jpg", "manhwa18cc"))
+        assertNull(manhwaImageFallback("https://cdn.pornwa.club/1.jpg", "manhwa18"))
+    }
+
     @Test fun sourceNamespacesAndImageReferersNeverOverlap() {
         val sources = Sources(MangaDex.client())
         for ((key, origin) in listOf("manhwa18" to "https://manhwa18.com", "manhwa18cc" to "https://manhwa18.cc")) {

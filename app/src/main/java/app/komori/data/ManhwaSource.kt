@@ -28,6 +28,17 @@ internal fun manhwaWwwUrl(url: String): String? {
     return target.newBuilder().host("www.${target.host}").build().toString()
 }
 
+/**
+ * Manhwa18.com's retired cdn hosts answer with 526, while the current min host serves the same
+ * paths. Numbered .cc image shards are not interchangeable, so no other mapping is attempted.
+ */
+internal fun manhwaImageFallback(url: String, source: String): String? {
+    val target = url.toHttpUrlOrNull() ?: return null
+    if (source == "manhwa18" && target.host in setOf("cdn.manhwa18.com", "cdn.manhwa18.net"))
+        return target.newBuilder().host("min.manhwa18.net").build().toString()
+    return manhwaWwwUrl(url)
+}
+
 class ManhwaSource(private val key: String, private val base: String, private val client: OkHttpClient) {
     private val com = key == "manhwa18"
     private val titlePath = if (com) "manga" else "webtoon"

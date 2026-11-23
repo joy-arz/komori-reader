@@ -24,7 +24,12 @@ class SourceRequestFailure(val source: String, val stage: SourceStage, val failu
         FailureKind.CONTENT -> (failure as? ImageContentFailure)?.problem?.message ?: "Unsupported or invalid content. Refresh or try another release."
         FailureKind.SECURE_CONNECTION -> "A secure connection failed. Check the device clock or try another network."
         FailureKind.OFFLINE -> "The network or source is unreachable. Check connectivity and retry."
-        FailureKind.HTTP -> "HTTP ${(failure as SourceHttpException).status}. Retry later or choose another release."
+        FailureKind.HTTP -> {
+            val http = failure as SourceHttpException
+            if (http.status == 526)
+                "${sourceNames[source] ?: "The source"}'s origin certificate failed Cloudflare's check (HTTP 526). This is a source-side outage, not your connection. Retry later."
+            else "HTTP ${http.status}. Retry later or choose another release."
+        }
         FailureKind.TRANSIENT -> when (failure) {
             is JSONException, is IllegalArgumentException -> "The source format could not be read. Refresh or report this source."
             is SocketTimeoutException -> "The request timed out. Retry when the connection is stable."

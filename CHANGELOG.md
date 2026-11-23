@@ -1,5 +1,13 @@
 # Komori changelog
 
+## 0.8.21
+
+- Recover Manhwa18.com downloads and reader pages from Cloudflare HTTP 526: retry main-host requests on www, move retired cdn image URLs to the verified current image host, and explain that a persistent 526 is a source-side certificate outage. Keep 526 automatically retryable.
+- Treat HTTP 401/403 responses from image CDN hosts as retryable image failures instead of source-verification requests, and send browser-style image `Accept` headers.
+- Fix AsuraScans genre browsing to send genre slugs, including older saved numeric genre IDs, and fix HiveToons genre filters to sign stored genre IDs when browsing.
+- Add an independent Only downloaded titles filter to the Library. Keep titles with at least one completed chapter while preserving collection tabs, empty states and Continue-reading behavior.
+- Add Clear queue actions for stopped or all unfinished downloads. Cancel queued work once per batch, delete rows in chunks with their chapter locks, skip the open reader, and never clear completed downloads. Large queues now clear without a per-chapter database scan.
+
 ## 0.8.20
 
 - Send browser-style HTML `Accept` headers on AsuraScans and HiveToons page requests, so the source edge no longer answers title details, chapter lists or reader pages with a Cloudflare challenge.

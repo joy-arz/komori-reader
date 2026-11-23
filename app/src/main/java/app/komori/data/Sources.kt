@@ -171,9 +171,9 @@ class Sources(val client: OkHttpClient, apiClient: OkHttpClient = client) {
             catch (error: IOException) {
                 val location = request.url
                 val alternative = when {
-                    // Cloudflare 526 is hostname/origin-certificate specific; Manhwa18 also serves on www.
+                    // Cloudflare 526 is hostname/origin-certificate specific; retry on www or the verified replacement image host.
                     sourceKey(id) in manhwaSources && error is SourceHttpException && error.status == 526 ->
-                        manhwaWwwUrl(location.toString())?.toHttpUrlOrNull()
+                        manhwaImageFallback(location.toString(), sourceKey(id))?.toHttpUrlOrNull()
                     sourceKey(id) == "demonic" && location.isHttps && location.port == 443 &&
                         location.host == "cdn.demoniclibs.com" && location.username.isEmpty() && location.password.isEmpty() &&
                         (error is ImageContentFailure || error is SourceHttpException && error.status in setOf(404, 410)) ->

@@ -97,6 +97,8 @@ class SourceHttpException(
                 "${sourceNames[source] ?: "The source"} no longer has this page (HTTP $status). Refresh the chapter or try another release."
             503 ->
                 "${sourceNames[source] ?: "The source"} is temporarily unavailable (HTTP 503). Wait before retrying."
+            526 ->
+                "${sourceNames[source] ?: "The source"} has an invalid origin certificate at Cloudflare (HTTP 526). This is a source-side outage, not your connection. Retry later."
             else ->
                 "${sourceNames[source] ?: "The source"} returned HTTP $status. Please retry later."
         }
