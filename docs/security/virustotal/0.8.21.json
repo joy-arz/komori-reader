@@ -1,0 +1,10 @@
+{
+  "version": "0.8.21",
+  "sha256": "7d03dc6563422de3888b4196135f72dafcb058482113cd1d950fb58647531ed5",
+  "apk_size": 2879664,
+  "report_url": "https://www.virustotal.com/gui/file/7d03dc6563422de3888b4196135f72dafcb058482113cd1d950fb58647531ed5/detection",
+  "recorded_at": "2026-11-23T02:42:41.714658+00:00",
+  "status": "pending",
+  "source": "not-scanned",
+  "message": "Fresh API check unavailable (TimeoutError); existing same-hash evidence is retained, otherwise scan is pending."
+}
