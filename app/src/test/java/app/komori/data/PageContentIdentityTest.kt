@@ -21,6 +21,33 @@ class PageContentIdentityTest {
         assertNotEquals(first.joinToString("\n"), rotated.joinToString("\n"))
         assertEquals(PageContentIdentity.manifest("nhentai", first), PageContentIdentity.manifest("nhentai", rotated))
     }
+    @Test fun manhwa18VerifiedImageHostsSurviveRotationButSignedAndCcUrlsStayExact() {
+        val first = listOf(
+            "https://cdn.manhwa18.com/chapters/manga/chapters/chap-106/1.jpg",
+            "https://cdn.manhwa18.net/manhwa18/vnwa/chapters/99597/2.png",
+        )
+        val rotated = listOf(
+            "https://min.manhwa18.net/chapters/manga/chapters/chap-106/1.jpg",
+            "https://min.manhwa18.net/manhwa18/vnwa/chapters/99597/2.png",
+        )
+        assertEquals(PageContentIdentity.manifest("manhwa18", first), PageContentIdentity.manifest("manhwa18", rotated))
+        assertTrue(PageContentIdentity.legacyCompatible("manhwa18", first.joinToString("\n"), rotated))
+        for (changed in listOf(rotated.reversed(), rotated.take(1), rotated.map { it.replace("1.jpg", "2.jpg") }))
+            assertNotEquals(PageContentIdentity.manifest("manhwa18", first), PageContentIdentity.manifest("manhwa18", changed))
+        assertNotEquals(
+            PageContentIdentity.page("manhwa18", "${first.first()}?token=first"),
+            PageContentIdentity.page("manhwa18", "${rotated.first()}?token=second"),
+        )
+        assertNotEquals(
+            PageContentIdentity.page("manhwa18cc", "https://img11.manhwa18.cc/chapters/1.jpg"),
+            PageContentIdentity.page("manhwa18cc", "https://img12.manhwa18.cc/chapters/1.jpg"),
+        )
+        assertNotEquals(
+            PageContentIdentity.page("manhwa18", "https://cdn.pornwa.club/643/1/1.jpg"),
+            PageContentIdentity.page("manhwa18", "https://cdn.pornwa.us/643/1/1.jpg"),
+        )
+    }
+
     @Test fun otherSourcesSignedQueriesAndUnrecognizedHostsRemainExact() {
         for (source in listOf("nhentai", "zap", "demonic", "weeb", "manhwa18", "manhwa18cc")) {
             val value = "https://i.nhentai.net/galleries/123/1.jpg?token=first"

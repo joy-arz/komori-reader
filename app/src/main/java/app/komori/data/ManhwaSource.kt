@@ -18,6 +18,10 @@ import org.jsoup.nodes.Element
 
 val manhwaSources = setOf("manhwa18", "manhwa18cc")
 
+/** Verified Manhwa18.com image hosts; .cc shards are deliberately absent. */
+internal val manhwaLegacyImageHosts = setOf("cdn.manhwa18.com", "cdn.manhwa18.net")
+internal val manhwaComImageHosts = manhwaLegacyImageHosts + "min.manhwa18.net"
+
 /**
  * Cloudflare 526 means the origin certificate failed validation for this hostname. Both Manhwa18
  * sites also answer on www, so retry there before failing a whole chapter transfer.
@@ -34,7 +38,8 @@ internal fun manhwaWwwUrl(url: String): String? {
  */
 internal fun manhwaImageFallback(url: String, source: String): String? {
     val target = url.toHttpUrlOrNull() ?: return null
-    if (source == "manhwa18" && target.host in setOf("cdn.manhwa18.com", "cdn.manhwa18.net"))
+    if (!target.isHttps || target.username.isNotEmpty() || target.password.isNotEmpty()) return null
+    if (source == "manhwa18" && target.host in manhwaLegacyImageHosts)
         return target.newBuilder().host("min.manhwa18.net").build().toString()
     return manhwaWwwUrl(url)
 }

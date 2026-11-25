@@ -33,13 +33,41 @@ class SourceDiagnosticsTest {
         assertEquals(FailureKind.OFFLINE, failureKind(offline))
     }
     @Test fun originCertificateFailuresExplainTheOutageAndStayRetryable() {
-        val image = SourceRequestFailure("manhwa18", SourceStage.IMAGE, SourceHttpException(526, "source", image = true))
+        val image = SourceRequestFailure(
+            "manhwa18", SourceStage.IMAGE,
+            SourceHttpException(526, "source", image = true, host = "cdn.manhwa18.com"),
+        )
         assertTrue(image.message.contains("origin certificate"))
         assertTrue(image.message.contains("source-side outage"))
+        assertTrue(image.message.contains("cdn.manhwa18.com"))
         assertEquals(FailureKind.HTTP, failureKind(image))
         assertTrue(automaticRetryAllowed(image))
+        assertTrue(image.diagnostic.contains("status=526"))
+        assertTrue(image.diagnostic.contains("host=cdn.manhwa18.com"))
         assertEquals(FailureKind.HTTP, failureKind(SourceHttpException(526, "manhwa18")))
         assertTrue(automaticRetryAllowed(SourceHttpException(526, "manhwa18")))
+    }
+
+    @Test fun httpDiagnosticsRecordOnlyTheFinalHostAndStatus() {
+        val request = okhttp3.Request.Builder()
+            .url("https://cdn.manhwa18.com/chapters/1.jpg?token=secret")
+            .build()
+        val response = okhttp3.Response.Builder()
+            .request(request)
+            .protocol(okhttp3.Protocol.HTTP_1_1)
+            .code(526)
+            .message("Origin certificate")
+            .build()
+        val failure = httpFailure(response)
+        val wrapped = SourceRequestFailure("manhwa18", SourceStage.IMAGE, failure)
+        assertEquals("cdn.manhwa18.com", failure.host)
+        assertEquals("https://cdn.manhwa18.com/chapters/1.jpg?token=secret", failure.location.toString())
+        assertTrue(wrapped.diagnostic.contains("status=526"))
+        assertTrue(wrapped.diagnostic.contains("host=cdn.manhwa18.com"))
+        assertFalse(wrapped.diagnostic.contains("token"))
+        assertFalse(wrapped.diagnostic.contains("/chapters"))
+        assertFalse(wrapped.message.contains("token"))
+        assertFalse(wrapped.message.contains("/chapters"))
     }
 
     @Test fun imageContentFailuresRemainSpecificAndDoNotAutomaticallyRetry() {

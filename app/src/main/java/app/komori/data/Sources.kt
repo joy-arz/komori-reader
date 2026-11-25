@@ -169,10 +169,13 @@ class Sources(val client: OkHttpClient, apiClient: OkHttpClient = client) {
         if (sourceKey(id) != "mangadex") {
             try { transferImage(client, request, file, progress) }
             catch (error: IOException) {
-                val location = request.url
+                // A redirect can move image delivery to another host; map the final host that failed.
+                val location = (error as? SourceHttpException)?.location ?: request.url
                 val alternative = when {
-                    // Cloudflare 526 is hostname/origin-certificate specific; retry on www or the verified replacement image host.
-                    sourceKey(id) in manhwaSources && error is SourceHttpException && error.status == 526 ->
+                    // 526 and legacy-CDN 502 are host specific; retry on www or the verified replacement image host.
+                    sourceKey(id) in manhwaSources && error is SourceHttpException &&
+                        (error.status == 526 ||
+                            error.status == 502 && location.host in manhwaLegacyImageHosts) ->
                         manhwaImageFallback(location.toString(), sourceKey(id))?.toHttpUrlOrNull()
                     sourceKey(id) == "demonic" && location.isHttps && location.port == 443 &&
                         location.host == "cdn.demoniclibs.com" && location.username.isEmpty() && location.password.isEmpty() &&

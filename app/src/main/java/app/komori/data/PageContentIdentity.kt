@@ -4,6 +4,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 /** Only source-proven content paths can survive a delivery-host rotation. Unknown URLs stay exact. */
 internal object PageContentIdentity {
+    private val manhwaImagePath = Regex("/.+\\.(jpg|jpeg|png|webp|gif|avif|bmp)", RegexOption.IGNORE_CASE)
     fun page(source: String, value: String): String {
         val url = value.toHttpUrlOrNull() ?: return value
         if (url.scheme != "https" || url.query != null || url.fragment != null) return value
@@ -11,6 +12,8 @@ internal object PageContentIdentity {
             source == "mangadex" && Regex("/(data|data-saver)/[A-Za-z0-9]+/[^/]+").matches(url.encodedPath) -> url.encodedPath
             source == "nhentai" && Regex("i[0-9]*[.]nhentai[.]net").matches(url.host) &&
                 Regex("/galleries/[0-9]+/[0-9]+[.](jpg|jpeg|png|webp|gif|avif)").matches(url.encodedPath) -> "nhentai:${url.encodedPath}"
+            source == "manhwa18" && url.host in manhwaComImageHosts && manhwaImagePath.matches(url.encodedPath) ->
+                "manhwa18:${url.encodedPath}"
             else -> value
         }
     }

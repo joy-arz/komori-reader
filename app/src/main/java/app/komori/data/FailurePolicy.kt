@@ -111,7 +111,10 @@ internal object SourceCooldowns {
     fun check(request: Request, source: String = "source", now: Long = System.currentTimeMillis()) {
         deadlines.entries.removeIf { it.value <= now }
         deadlines[origin(request)]?.let {
-            throw SourceHttpException(429, source, it, deferred = true)
+            throw SourceHttpException(
+                429, source, it, deferred = true,
+                host = request.url.host, location = request.url,
+            )
         }
     }
 
@@ -131,7 +134,10 @@ internal fun httpFailure(
                 ?: if (response.code == 429) now + 30_000 else null
         else null
     if (until != null && until > now) SourceCooldowns.record(response, until)
-    return SourceHttpException(response.code, source, until)
+    return SourceHttpException(
+        response.code, source, until,
+        host = response.request.url.host, location = response.request.url,
+    )
 }
 
 /**

@@ -83,6 +83,10 @@ class SourceHttpException(
     val deferred: Boolean = false,
     /** CDN image requests are not source pages; a 401/403 there is usually hotlink/WAF noise. */
     val image: Boolean = false,
+    /** Final response host only; safe for diagnostics, with no path, query or cookies. */
+    val host: String? = null,
+    /** Final response URL, used only to select a verified replacement and never presented or logged. */
+    internal val location: HttpUrl? = null,
 ) :
     IOException(
         when (status) {
@@ -98,7 +102,7 @@ class SourceHttpException(
             503 ->
                 "${sourceNames[source] ?: "The source"} is temporarily unavailable (HTTP 503). Wait before retrying."
             526 ->
-                "${sourceNames[source] ?: "The source"} has an invalid origin certificate at Cloudflare (HTTP 526). This is a source-side outage, not your connection. Retry later."
+                "${sourceNames[source] ?: "The source"}'s origin certificate failed Cloudflare's check${host?.let { " for $it" }.orEmpty()} (HTTP 526). This is a source-side outage, not your connection. Retry later."
             else ->
                 "${sourceNames[source] ?: "The source"} returned HTTP $status. Please retry later."
         }
@@ -195,7 +199,10 @@ class SourceSessions(context: Context) {
                     val host = response.request.url.host
                     val image = response.request.header("Referer") != null && host != origin && host != "www.$origin"
                     response.close()
-                    throw SourceHttpException(status, source, image = image)
+                    throw SourceHttpException(
+                        status, source, image = image,
+                        host = response.request.url.host, location = response.request.url,
+                    )
                 }
                 if (response.code in listOf(429, 503)) {
                     val failure = httpFailure(response, source ?: "source")

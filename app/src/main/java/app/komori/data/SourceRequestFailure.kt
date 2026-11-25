@@ -10,10 +10,16 @@ enum class SourceStage(val label: String) {
     MANIFEST("Page list"), IMAGE("Image transfer"), FILTERS("Source filters"), LANGUAGES("Languages")
 }
 
-/** Carries no query, URL, cookies or response text in its presentation/diagnostic summary. */
+/** Carries no query, full URL, cookies or response text in its presentation/diagnostic summary. */
 class SourceRequestFailure(val source: String, val stage: SourceStage, val failure: Exception) : IOException(null, failure) {
     override val message get() = "${sourceNames[source] ?: "Source"} · ${stage.label}: ${safeMessage()}"
-    val diagnostic get() = "source=${source.takeIf { it in sourceNames } ?: "unknown"}; stage=${stage.name}; kind=${failureKind(failure).name}; type=${failure.javaClass.simpleName}"
+    val diagnostic get() = buildString {
+        append("source=${source.takeIf { it in sourceNames } ?: "unknown"}; stage=${stage.name}; kind=${failureKind(failure).name}; type=${failure.javaClass.simpleName}")
+        (originalFailure(failure) as? SourceHttpException)?.let { http ->
+            append("; status=${http.status}")
+            http.host?.let { append("; host=$it") }
+        }
+    }
     private fun safeMessage(): String = when (failureKind(failure)) {
         FailureKind.VERIFICATION -> "Verification is required. Open Verify source, complete the challenge, then retry."
         FailureKind.RATE_LIMIT -> "Requests are rate limited. Wait before retrying." + retryAtMillis(failure).takeIf { it > System.currentTimeMillis() }?.let {
@@ -27,7 +33,7 @@ class SourceRequestFailure(val source: String, val stage: SourceStage, val failu
         FailureKind.HTTP -> {
             val http = failure as SourceHttpException
             if (http.status == 526)
-                "${sourceNames[source] ?: "The source"}'s origin certificate failed Cloudflare's check (HTTP 526). This is a source-side outage, not your connection. Retry later."
+                "${sourceNames[source] ?: "The source"}'s origin certificate failed Cloudflare's check${http.host?.let { " for $it" }.orEmpty()} (HTTP 526). This is a source-side outage, not your connection. Retry later."
             else "HTTP ${http.status}. Retry later or choose another release."
         }
         FailureKind.TRANSIENT -> when (failure) {

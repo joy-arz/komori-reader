@@ -92,6 +92,51 @@ class ImageFormatsTest {
         }
     }
 
+    @Test fun manhwa18FallbackUsesFinalRedirectedHostAndSavesOneValidPage() = runBlocking {
+        val instrument = InstrumentationRegistry.getInstrumentation()
+        val bytes = instrument.context.assets.open("images/sample.png").use { it.readBytes() }
+        val calls = mutableListOf<Request>()
+        val client = OkHttpClient.Builder().addInterceptor { chain ->
+            val request = chain.request()
+            synchronized(calls) { calls.add(request) }
+            when (request.url.host) {
+                "www.manhwa18.com" -> {
+                    // OkHttp exposes a followed redirect as response.request; model that final URL.
+                    val finalRequest =
+                        request.newBuilder()
+                            .url("https://cdn.manhwa18.com/series/202/17.jpeg?token=fixture")
+                            .build()
+                    synchronized(calls) { calls.add(finalRequest) }
+                    Response.Builder().request(finalRequest).protocol(Protocol.HTTP_1_1).code(526)
+                        .message("Origin certificate").body(ByteArray(0).toResponseBody()).build()
+                }
+                "min.manhwa18.net" ->
+                    Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(200).message("OK")
+                        .body(bytes.toResponseBody()).build()
+                else -> throw AssertionError("Unexpected image host ${request.url.host}")
+            }
+        }.build()
+        val file = File.createTempFile("manhwa-fallback-", ".img", instrument.targetContext.cacheDir)
+        try {
+            Sources(client).transferPage(
+                sourceId("manhwa18", "/manga/fixture/chap-1"),
+                "https://www.manhwa18.com/series/202/17.jpeg?token=fixture",
+                file,
+            )
+            assertTrue(validImage(file))
+            assertEquals(
+                listOf("www.manhwa18.com", "cdn.manhwa18.com", "min.manhwa18.net"),
+                calls.map { it.url.host },
+            )
+            assertEquals("/series/202/17.jpeg", calls.last().url.encodedPath)
+            assertEquals("token=fixture", calls.last().url.query)
+            assertEquals("https://manhwa18.com/", calls.last().header("Referer"))
+        } finally {
+            file.delete()
+            client.dispatcher.executorService.shutdown()
+        }
+    }
+
     @Test fun alternateCdnPreservesVerificationCooldownTlsAndStorageActions() = runBlocking {
         val app = InstrumentationRegistry.getInstrumentation().targetContext
         val until = System.currentTimeMillis() + 60000

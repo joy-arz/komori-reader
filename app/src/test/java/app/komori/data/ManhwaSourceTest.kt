@@ -107,6 +107,52 @@ class ManhwaSourceTest {
         assertNull(manhwaImageFallback("https://cdn.manhwa18.com/chapters/1.jpg", "manhwa18cc"))
         assertNull(manhwaImageFallback("https://img33.manhwa18.cc/chapters/1.jpg", "manhwa18cc"))
         assertNull(manhwaImageFallback("https://cdn.pornwa.club/1.jpg", "manhwa18"))
+        assertNull(manhwaImageFallback("http://cdn.manhwa18.com/chapters/1.jpg", "manhwa18"))
+        assertNull(manhwaImageFallback("https://user:pass@cdn.manhwa18.com/chapters/1.jpg", "manhwa18"))
+    }
+
+    @Test fun chapterAgeImageHostsOnlyUseVerifiedFallbacks() {
+        val com = ManhwaSource("manhwa18", "https://manhwa18.com", MangaDex.client())
+        val legacy =
+            com.parsePages(
+                Jsoup.parse(
+                    """<div id='chapter-content'>
+                        <img data-src='https://cdn.manhwa18.com/chapters/manga/chapters/chap-106/1.jpg'>
+                        <img data-src='https://cdn.manhwa18.net/manhwa18/vnwa/chapters/99597/2.png'>
+                    </div>""",
+                    "https://manhwa18.com/",
+                )
+            )
+        assertEquals(
+            listOf(
+                "https://min.manhwa18.net/chapters/manga/chapters/chap-106/1.jpg",
+                "https://min.manhwa18.net/manhwa18/vnwa/chapters/99597/2.png",
+            ),
+            legacy.map { manhwaImageFallback(it, "manhwa18") },
+        )
+        val current =
+            com.parsePages(
+                Jsoup.parse(
+                    """<div id='chapter-content'>
+                        <img data-src='https://min.manhwa18.net/manhwa18/vnwa/chapters/99597/1.png'>
+                        <img data-src='https://cdn.pornwa.club/643/1/1.jpg'>
+                        <img data-src='https://cdn.pornwa.us/643/1/2.jpg'>
+                    </div>""",
+                    "https://manhwa18.com/",
+                )
+            )
+        assertEquals(3, current.size)
+        assertTrue(current.all { manhwaImageFallback(it, "manhwa18") == null })
+        val cc = ManhwaSource("manhwa18cc", "https://manhwa18.cc", MangaDex.client())
+        val shards =
+            cc.parsePages(
+                Jsoup.parse(
+                    "<div class='read-content'><img data-src='https://img11.manhwa18.cc/chapters/1.jpg'></div>",
+                    "https://manhwa18.cc/",
+                )
+            )
+        assertEquals(listOf("https://img11.manhwa18.cc/chapters/1.jpg"), shards)
+        assertNull(manhwaImageFallback(shards.single(), "manhwa18cc"))
     }
 
     @Test fun sourceNamespacesAndImageReferersNeverOverlap() {
