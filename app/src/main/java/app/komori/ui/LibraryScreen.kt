@@ -195,7 +195,9 @@ internal fun Library(vm: ReaderViewModel, discover: () -> Unit) {
                 if (filters.download != LibraryDownloadFilter.ALL)
                     add(filters.download.label to { filters = filters.copy(download = LibraryDownloadFilter.ALL) })
                 filters.statuses.forEach { status -> add(status to { filters = filters.copy(statuses = filters.statuses - status) }) }
-                filters.categories.forEach { id ->
+                // The library strip already shows and removes category selections; only
+                // repeat them as chips when that strip is hidden in the Collection view.
+                if (!librarySection) filters.categories.forEach { id ->
                     val label = if (id == UNCATEGORIZED_LIBRARY) "Uncategorized" else categoryNames.find { it.id == id }?.name ?: "Library"
                     add(label to { filters = filters.copy(categories = filters.categories - id) })
                 }

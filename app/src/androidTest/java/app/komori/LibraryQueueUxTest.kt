@@ -57,6 +57,9 @@ class LibraryQueueUxTest {
             compose.onAllNodesWithText(book.title).assertCountEquals(0)
             compose.onNodeWithText(second.name).performClick()
             compose.onNodeWithText(book.title).assertExists()
+            // A second library joins the active filters. Remove the first library so the
+            // last-viewed value below still represents the single library under test.
+            compose.onNodeWithText(first.name).performClick()
             app.dao.putShelf(Shelf(book.id, saved = false))
             compose.waitUntil(5000) { vm.shelf.value.find { it.mangaId == book.id }?.saved == false }
             compose.waitForIdle()

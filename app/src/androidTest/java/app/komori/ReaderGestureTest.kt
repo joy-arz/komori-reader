@@ -75,14 +75,16 @@ class ReaderGestureTest {
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             ) as Activity
         lateinit var image: ReaderImageView
+        lateinit var canvas: Canvas
+        lateinit var output: Bitmap
         val saves = AtomicInteger()
         val taps = AtomicInteger()
         var downAt = 0L
         instrumentation.runOnMainSync {
             image = ReaderImageView(activity).apply { setMaxScale(5f) }
             val bitmap = Bitmap.createBitmap(800, 1600, Bitmap.Config.RGB_565)
-            val output = Bitmap.createBitmap(1080, 1800, Bitmap.Config.RGB_565)
-            val canvas = Canvas(output)
+            output = Bitmap.createBitmap(1080, 1800, Bitmap.Config.RGB_565)
+            canvas = Canvas(output)
             image.onReaderLongPress = { x, y ->
                 saves.incrementAndGet()
                 assertTrue("Long press must map inside the image", x in 0f..1f && y in 0f..1f)
@@ -100,7 +102,6 @@ class ReaderGestureTest {
             val down = MotionEvent.obtain(downAt, downAt, MotionEvent.ACTION_DOWN, 540f, 900f, 0)
             image.onTouchEvent(down)
             down.recycle()
-            output.recycle()
         }
         val longPressDeadline = SystemClock.uptimeMillis() + 3000
         while (saves.get() == 0 && SystemClock.uptimeMillis() < longPressDeadline) Thread.sleep(50)
@@ -115,6 +116,9 @@ class ReaderGestureTest {
         assertEquals("Long press must not open controls", 0, taps.get())
         instrumentation.runOnMainSync {
             image.setScaleAndCenter(image.minScale * 2f, PointF(540f, 900f))
+            // setScaleAndCenter defers the change until the next draw.
+            image.draw(canvas)
+            assertTrue("Test must exercise a zoomed image", image.scale > image.minScale * 1.02f)
             downAt = SystemClock.uptimeMillis()
             val down = MotionEvent.obtain(downAt, downAt, MotionEvent.ACTION_DOWN, 540f, 900f, 0)
             image.onTouchEvent(down)
@@ -127,6 +131,7 @@ class ReaderGestureTest {
             image.onTouchEvent(up)
             up.recycle()
             image.recycle()
+            output.recycle()
             activity.finish()
         }
         instrumentation.waitForIdleSync()
