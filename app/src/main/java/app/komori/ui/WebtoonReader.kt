@@ -120,6 +120,7 @@ fun WebtoonReader(
     modifier: Modifier = Modifier,
     onTap: () -> Unit = {},
     controlBounds: () -> Rect? = { null },
+    onLongPressPage: (Release, Int) -> Unit = { _, _ -> },
     state: LazyListState? = null,
 ) {
     val settings by vm.settings.collectAsStateWithLifecycle()
@@ -265,7 +266,21 @@ fun WebtoonReader(
 
     var zoom by remember { mutableFloatStateOf(1f) }
     var pan by remember { mutableStateOf(Offset.Zero) }
-    BoxWithConstraints(modifier.fillMaxWidth().clipToBounds().readerCenterTap(controlBounds, onTap)) {
+    BoxWithConstraints(modifier.fillMaxWidth().clipToBounds().readerCenterTap(controlBounds,
+        onTap = onTap,
+        onLongPress = { point ->
+            if (zoom <= 1.01f) {
+                val item = list.layoutInfo.visibleItemsInfo.firstOrNull {
+                    point.y >= it.offset && point.y < it.offset + it.size
+                }
+                val parts = item?.key?.toString()?.split('|')
+                if (parts?.size == 3) {
+                    val release = window.find { it.id == parts[0] }
+                    val page = parts[1].toIntOrNull()
+                    if (release != null && page != null) onLongPressPage(release, page)
+                }
+            }
+        })) {
         val viewportWidth = with(LocalDensity.current) { maxWidth.toPx() }
         val viewportHeight = with(LocalDensity.current) { maxHeight.toPx() }
         val zoomState = rememberTransformableState { factor, movement, _ ->

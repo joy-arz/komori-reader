@@ -93,43 +93,151 @@ internal fun CategoryAssignmentDialog(vm: ReaderViewModel, ids: List<String>, ti
 }
 
 @Composable
-internal fun LibraryFilterDialog(vm: ReaderViewModel, category: String, status: String, unread: Boolean, downloaded: Boolean, collection: String, customLibraries: Boolean,
-    apply: (String, String, Boolean, Boolean, String) -> Unit, dismiss: () -> Unit) {
+internal fun LibraryFilterDialog(
+    vm: ReaderViewModel,
+    filters: LibraryFilters,
+    collection: String,
+    customLibraries: Boolean,
+    apply: (LibraryFilters, String) -> Unit,
+    dismiss: () -> Unit,
+) {
     val categories by vm.categories.collectAsStateWithLifecycle()
-    var collectionChoice by remember { mutableStateOf(collection) }
-    var categoryChoice by remember { mutableStateOf(category) }
-    var statusChoice by remember { mutableStateOf(status) }
-    var unreadChoice by remember { mutableStateOf(unread) }
-    var downloadedChoice by remember { mutableStateOf(downloaded) }
+    val titles by vm.library.collectAsStateWithLifecycle()
+    val allowedCollections =
+        (if (customLibraries) listOf("All titles") else emptyList()) + listOf("Saved", "Liked", "History")
+    var collectionChoice by remember {
+        mutableStateOf(
+            collection.takeIf { it in allowedCollections }
+                ?: if (customLibraries) "All titles" else "Saved",
+        )
+    }
+    var filtersChoice by remember(filters) { mutableStateOf(filters) }
     var manage by remember { mutableStateOf(false) }
+    val availableSources =
+        remember(titles) {
+            titles.map { app.komori.data.sourceKey(it.id) }
+                .distinct()
+                .sortedBy { app.komori.data.sourceName(it) }
+        }
     AlertDialog(onDismissRequest = dismiss, title = { Text("Filter Library") }, text = {
-        LazyColumn(Modifier.heightIn(max = 440.dp)) {
-            item { ToolSwitch("Only titles with unread chapters", unreadChoice) { unreadChoice = it } }
-            item { ToolSwitch("Only downloaded titles", downloadedChoice) { downloadedChoice = it } }
+        LazyColumn(Modifier.heightIn(max = 460.dp)) {
+            item { Text("Download status", style = MaterialTheme.typography.titleSmall) }
+            items(
+                listOf(
+                    LibraryDownloadFilter.ALL to "All download states",
+                    LibraryDownloadFilter.DOWNLOADED to "Downloaded",
+                    LibraryDownloadFilter.NOT_DOWNLOADED to "Not downloaded",
+                )
+            ) { (key, label) ->
+                Row(
+                    Modifier.fillMaxWidth().clickable { filtersChoice = filtersChoice.copy(download = key) },
+                ) {
+                    RadioButton(filtersChoice.download == key, { filtersChoice = filtersChoice.copy(download = key) })
+                    Text(label, Modifier.padding(top = 12.dp))
+                }
+            }
+            item { ToolSwitch("Only favorites (Liked)", filtersChoice.favoritesOnly) { filtersChoice = filtersChoice.copy(favoritesOnly = it) } }
+            item { ToolSwitch("Only titles with unread chapters", filtersChoice.unreadOnly) { filtersChoice = filtersChoice.copy(unreadOnly = it) } }
             item { Text("Collection", style = MaterialTheme.typography.titleSmall) }
-            items((if (customLibraries) listOf("All titles") else emptyList()) + listOf("Saved", "Liked", "History", "Downloaded")) { choice ->
+            items(allowedCollections) { choice ->
                 Row(Modifier.fillMaxWidth().clickable { collectionChoice = choice }) {
                     RadioButton(collectionChoice == choice, { collectionChoice = choice }); Text(choice, Modifier.padding(top = 12.dp))
                 }
             }
             item { Text("Reading status", style = MaterialTheme.typography.titleSmall) }
-            items(listOf("" to "All statuses") + listOf("Plan to read", "Reading", "On hold", "Completed", "Dropped").map { it to it }) { (key, label) ->
-                Row(Modifier.fillMaxWidth().clickable { statusChoice = key }) {
-                    RadioButton(statusChoice == key, { statusChoice = key }); Text(label, Modifier.padding(top = 12.dp))
+            item {
+                Row(
+                    Modifier.fillMaxWidth().clickable { filtersChoice = filtersChoice.copy(statuses = emptySet()) },
+                ) {
+                    Checkbox(filtersChoice.statuses.isEmpty(), {
+                        if (it) filtersChoice = filtersChoice.copy(statuses = emptySet())
+                    })
+                    Text("All statuses", Modifier.padding(top = 12.dp))
+                }
+            }
+            items(listOf("Plan to read", "Reading", "On hold", "Completed", "Dropped")) { status ->
+                val selected = status in filtersChoice.statuses
+                Row(
+                    Modifier.fillMaxWidth().clickable {
+                        filtersChoice = filtersChoice.copy(
+                            statuses = if (selected) filtersChoice.statuses - status else filtersChoice.statuses + status,
+                        )
+                    },
+                ) {
+                    Checkbox(selected, {
+                        filtersChoice = filtersChoice.copy(
+                            statuses = if (selected) filtersChoice.statuses - status else filtersChoice.statuses + status,
+                        )
+                    })
+                    Text(status, Modifier.padding(top = 12.dp))
                 }
             }
             item { Text("Library", style = MaterialTheme.typography.titleSmall) }
-            items(listOf("" to "All libraries", "uncategorized" to "Uncategorized") + categories.map { it.id to it.name }) { (key, label) ->
-                Row(Modifier.fillMaxWidth().clickable { categoryChoice = key }) {
-                    RadioButton(categoryChoice == key, { categoryChoice = key }); Text(label, Modifier.padding(top = 12.dp))
+            item {
+                Row(
+                    Modifier.fillMaxWidth().clickable { filtersChoice = filtersChoice.copy(categories = emptySet()) },
+                ) {
+                    Checkbox(filtersChoice.categories.isEmpty(), { if (it) filtersChoice = filtersChoice.copy(categories = emptySet()) })
+                    Text("All libraries", Modifier.padding(top = 12.dp))
+                }
+            }
+            items(listOf(UNCATEGORIZED_LIBRARY to "Uncategorized") + categories.map { it.id to it.name }) { (key, label) ->
+                val selected = key in filtersChoice.categories
+                Row(
+                    Modifier.fillMaxWidth().clickable {
+                        filtersChoice = filtersChoice.copy(
+                            categories = if (selected) filtersChoice.categories - key else filtersChoice.categories + key,
+                        )
+                    },
+                ) {
+                    Checkbox(selected, {
+                        filtersChoice = filtersChoice.copy(
+                            categories = if (selected) filtersChoice.categories - key else filtersChoice.categories + key,
+                        )
+                    })
+                    Text(label, Modifier.padding(top = 12.dp))
                 }
             }
             item { TextButton(onClick = { manage = true }) { Text("Manage libraries") } }
+            if (availableSources.isNotEmpty()) {
+                item { Text("Sources", style = MaterialTheme.typography.titleSmall) }
+                item {
+                    Row(
+                        Modifier.fillMaxWidth().clickable { filtersChoice = filtersChoice.copy(sources = emptySet()) },
+                    ) {
+                        Checkbox(filtersChoice.sources.isEmpty(), { if (it) filtersChoice = filtersChoice.copy(sources = emptySet()) })
+                        Text("All sources", Modifier.padding(top = 12.dp))
+                    }
+                }
+                items(availableSources) { key ->
+                    val selected = key in filtersChoice.sources
+                    Row(
+                        Modifier.fillMaxWidth().clickable {
+                            filtersChoice = filtersChoice.copy(
+                                sources = if (selected) filtersChoice.sources - key else filtersChoice.sources + key,
+                            )
+                        },
+                    ) {
+                        Checkbox(selected, {
+                            filtersChoice = filtersChoice.copy(
+                                sources = if (selected) filtersChoice.sources - key else filtersChoice.sources + key,
+                            )
+                        })
+                        Text(app.komori.data.sourceName(key), Modifier.padding(top = 12.dp))
+                    }
+                }
+            }
         }
-    }, confirmButton = { TextButton(onClick = { apply(categoryChoice, statusChoice, unreadChoice, downloadedChoice, collectionChoice); dismiss() }) { Text("Apply") } },
-        dismissButton = { Row {
-            TextButton(onClick = { apply("", "", false, false, if (customLibraries) "All titles" else "Saved"); dismiss() }) { Text("Reset") }
+    }, confirmButton = {
+        TextButton(onClick = { apply(filtersChoice, collectionChoice); dismiss() }) { Text("Apply") }
+    }, dismissButton = {
+        Row {
+            TextButton(onClick = {
+                apply(LibraryFilters(), if (customLibraries) "All titles" else "Saved")
+                dismiss()
+            }) { Text("Reset") }
             TextButton(onClick = dismiss) { Text("Cancel") }
-        } })
+        }
+    })
     if (manage) CategoryManagerDialog(vm) { manage = false }
 }

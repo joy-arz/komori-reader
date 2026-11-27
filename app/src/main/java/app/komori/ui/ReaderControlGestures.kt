@@ -8,6 +8,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.Modifier
@@ -15,13 +16,19 @@ import androidx.compose.ui.input.pointer.pointerInput
 import app.komori.domain.ReaderTapZones
 
 @Composable
-internal fun Modifier.readerCenterTap(viewportBounds: () -> Rect? = { null }, onTap: () -> Unit): Modifier {
+internal fun Modifier.readerCenterTap(
+    viewportBounds: () -> Rect? = { null },
+    onLongPress: ((Offset) -> Unit)? = null,
+    onTap: () -> Unit,
+): Modifier {
     val currentTap by rememberUpdatedState(onTap)
     val currentViewport by rememberUpdatedState(viewportBounds)
+    val currentLongPress by rememberUpdatedState(onLongPress)
     var contentBounds by remember { mutableStateOf<Rect?>(null) }
     return onGloballyPositioned { contentBounds = it.boundsInWindow() }.pointerInput(Unit) {
         detectTapGestures(
             onDoubleTap = {},
+            onLongPress = { point -> currentLongPress?.invoke(point) },
             onTap = { point ->
                 val viewport = currentViewport()
                 val content = contentBounds

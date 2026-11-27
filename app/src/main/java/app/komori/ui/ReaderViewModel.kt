@@ -40,6 +40,9 @@ class ReaderViewModel(
         dao.observeCreators().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val downloads =
         dao.observeDownloads().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val savedImages =
+        dao.observeSavedImages().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val savingImage = MutableStateFlow(false)
     val selected = MutableStateFlow<Manga?>(null)
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val progress = selected.map { it?.id.orEmpty() }.distinctUntilChanged()
@@ -1395,8 +1398,121 @@ class ReaderViewModel(
 
     fun releaseReaderPages(owner: Any) { ReaderCacheFiles.release(owner); ChapterFiles.releaseReader(owner) }
 
-    suspend fun pageFileFor(chapter: Release, page: Int, speculative: Boolean = false): File {
-        val saver = settings.value.saver
+    fun savePageImage(chapter: Release, page: Int) {
+        if (!savingImage.compareAndSet(expect = false, update = true)) {
+            notice.value = "Another page image is still being saved."
+            return
+        }
+        viewModelScope.launch {
+            try {
+                if (chapter.pages > 0 && page !in 0 until chapter.pages)
+                    throw ContentFailure("This page is no longer available.")
+                val source = localSavePageFile(chapter, page, originalOnly = true) ?: try {
+                    // Data-saver pages are smaller than the source. Fetch the original page
+                    // rather than reusing the visible data-saver copy when one is available.
+                    pageFileFor(chapter, page, dataSaver = false, ignoreDownload = true)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (originalError: Exception) {
+                    try {
+                        localSavePageFile(chapter, page, originalOnly = false)
+                            ?: pageFileFor(chapter, page)
+                    } catch (fallbackError: Exception) {
+                        if (fallbackError !== originalError) fallbackError.addSuppressed(originalError)
+                        throw fallbackError
+                    }
+                }
+                val info = withContext(Dispatchers.IO) { ImageFormats.info(source) }
+                    ?: throw ContentFailure("This page is not a readable image.")
+                val title = dao.manga(chapter.mangaId)?.title.orEmpty()
+                val image = SavedImages.save(
+                    app,
+                    source,
+                    info,
+                    SavedImages.Draft(
+                        mangaId = chapter.mangaId,
+                        releaseId = chapter.id,
+                        mangaTitle = title,
+                        chapterLabel = chapter.label,
+                        page = page,
+                    ),
+                )
+                try {
+                    dao.putSavedImage(image)
+                } catch (e: Exception) {
+                    runCatching { SavedImages.delete(app, image) }
+                    throw e
+                }
+                notice.value = "Saved page ${page + 1} to Pictures/${SavedImages.ALBUM}."
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                notice.value = connectionMessage(e)
+            } finally {
+                savingImage.value = false
+            }
+        }
+    }
+
+    fun deleteSavedImage(id: String) = task {
+        val image = dao.savedImage(id) ?: return@task
+        SavedImages.delete(app, image)
+        dao.removeSavedImage(id)
+        notice.value = "Saved image deleted. Chapter downloads were not changed."
+    }
+
+    fun pruneMissingSavedImages(notify: Boolean = false) {
+        if (savingImage.value) return
+        viewModelScope.launch {
+            try {
+                val missing = withContext(Dispatchers.IO) {
+                    dao.savedImages().filter { SavedImages.isMissing(app, it) }
+                }
+                missing.forEach { image ->
+                    runCatching { SavedImages.delete(app, image) }
+                    dao.removeSavedImage(image.id)
+                }
+                if (notify && missing.isNotEmpty())
+                    notice.value =
+                        "Removed ${missing.size} saved image ${if (missing.size == 1) "entry" else "entries"} that were deleted outside Komori."
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                error.value = connectionMessage(e)
+            }
+        }
+    }
+
+    private suspend fun localSavePageFile(
+        chapter: Release,
+        page: Int,
+        originalOnly: Boolean,
+    ): File? =
+        withContext(Dispatchers.IO) {
+            val saver = settings.value.saver
+            val mangadex = sourceKey(chapter.mangaId) == "mangadex"
+            val download = dao.download(chapter.id)
+            val downloadedIsOriginal = !mangadex || download?.dataSaver != true
+            val repairPending = repairMarker(app, chapter.id, page).exists()
+            val candidates = buildList {
+                add(File(app.cacheDir, "reader/${chapter.id}-$page-false.img"))
+                if (!repairPending && (!originalOnly || downloadedIsOriginal))
+                    add(pageFile(app, chapter.id, page))
+                // Other sources ignore the data-saver manifest, so their saver cache is original.
+                if ((!originalOnly || !saver || !mangadex) && saver)
+                    add(File(app.cacheDir, "reader/${chapter.id}-$page-$saver.img"))
+            }
+            candidates.distinctBy { it.path }.firstOrNull { validImage(it) }
+        }
+
+    suspend fun pageFileFor(
+        chapter: Release,
+        page: Int,
+        speculative: Boolean = false,
+        dataSaver: Boolean = settings.value.saver,
+        ignoreDownload: Boolean = false,
+    ): File {
+        val saver = dataSaver
         // Disk hits must never queue behind an unrelated slow network request.
         val cached =
             withContext(Dispatchers.IO) {
@@ -1406,7 +1522,7 @@ class ReaderViewModel(
                     val online =
                         File(app.cacheDir, "reader/${chapter.id}-$page-${saver}.img")
                     when {
-                        validImage(offline) -> offline
+                        !ignoreDownload && validImage(offline) -> offline
                         validImage(online) ->
                             online.also { ReaderCacheAccess.touch(it) }
                         else -> null
@@ -1418,15 +1534,17 @@ class ReaderViewModel(
         return imageFetch[(key.hashCode() and Int.MAX_VALUE) % imageFetch.size].withLock {
             withContext(Dispatchers.IO) {
                 val downloaded = pageFile(app, chapter.id, page)
-                if (!repairMarker(app, chapter.id, page).exists() && validImage(downloaded)) {
+                if (!ignoreDownload && !repairMarker(app, chapter.id, page).exists() && validImage(downloaded)) {
                     return@withContext downloaded
                 }
-                val saved = dao.download(chapter.id)
-                if (saved != null && saved.state !in DownloadPolicy.activeStates)
-                    ChapterFiles.locked(chapter.id) {
-                        if (dao.download(chapter.id)?.state !in DownloadPolicy.activeStates)
-                            markPageForRepair(app, chapter.id, page)
-                    }
+                if (!ignoreDownload) {
+                    val saved = dao.download(chapter.id)
+                    if (saved != null && saved.state !in DownloadPolicy.activeStates)
+                        ChapterFiles.locked(chapter.id) {
+                            if (dao.download(chapter.id)?.state !in DownloadPolicy.activeStates)
+                                markPageForRepair(app, chapter.id, page)
+                        }
+                }
                 val repairVersion = ChapterFiles.version(chapter.id)
                 if (sourceKey(chapter.mangaId) == "local") throw ContentFailure("This local page is unavailable. Import the comic again to restore its files.")
                 val cacheDir = File(app.cacheDir, "reader").apply { mkdirs() }

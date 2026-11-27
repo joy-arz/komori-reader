@@ -24,6 +24,7 @@ internal class AnimatedReaderView(context: Context) : FrameLayout(context) {
     private var startedAtMinimum = true
     private var confirmedTap: Pair<Float, Float>? = null
     var onReaderTap: (Float, Float) -> Unit = { _, _ -> }
+    var onReaderLongPress: ((Float, Float) -> Unit)? = null
     var onReaderSwipe: ((Float) -> Unit)? = null
     init { addView(image, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)) }
     private val scale = ScaleGestureDetector(context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
@@ -48,6 +49,14 @@ internal class AnimatedReaderView(context: Context) : FrameLayout(context) {
             image.scaleX = zoom; image.scaleY = zoom
             image.translationX = 0f; image.translationY = 0f
             return true
+        }
+
+        override fun onLongPress(e: MotionEvent) {
+            if (!multi && zoom <= 1f)
+                onReaderLongPress?.invoke(
+                    e.x / width.coerceAtLeast(1),
+                    e.y / height.coerceAtLeast(1),
+                )
         }
         override fun onScroll(a: MotionEvent?, b: MotionEvent, dx: Float, dy: Float): Boolean {
             if (zoom <= 1f) return false

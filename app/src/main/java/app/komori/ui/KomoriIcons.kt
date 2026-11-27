@@ -48,6 +48,8 @@ object KomoriIcons {
             "M10,3a7,7 0,1 0,0 14c1.6,0 3,-0.5 4.2,-1.4L20,21l1,-1 -5.4,-5.8A7,7 0,0 0,10 3ZM10,5a5,5 0,1 1,0 10a5,5 0,1 1,0 -10Z",
         )
     val PlayArrow = icon("Read", "M8,5v14l11,-7Z")
+    val Image = icon("Image", "M4,4h16v16H4ZM6,6v9.1l3.4,-3.4 2.6,2.6 3.5,-4.5 2.5,3V6ZM8.5,8a1.5,1.5 0,1 0,0 3a1.5,1.5 0,0 0,0 -3Z")
+    val Delete = icon("Delete", "M6,19c0,1.1 0.9,2 2,2h8c1.1,0 2,-0.9 2,-2V7H6ZM8,9h8v10H8ZM19,4h-3.5l-1,-1h-5l-1,1H5v2h14Z")
     val BookmarkAdd = icon("Save", "M5,3h14v18l-7,-4 -7,4ZM7,5v12.5l5,-2.8 5,2.8V5Z")
     val BookmarkAdded = icon("Saved", "M5,3h14v18l-7,-4 -7,4ZM8,9l-1,1 4,4 6,-6 -1,-1 -5,5Z")
     val FavoriteBorder =

@@ -80,7 +80,7 @@ class MigrationTest {
                     LibraryDatabase::class.java,
                     "reader-mode-test",
                 )
-                .addMigrations(app.komori.data.FEED_MIGRATION, app.komori.data.METADATA_MIGRATION, app.komori.data.ORGANIZATION_MIGRATION, app.komori.data.LIBRARY_ORDER_MIGRATION)
+                .addMigrations(app.komori.data.FEED_MIGRATION, app.komori.data.METADATA_MIGRATION, app.komori.data.ORGANIZATION_MIGRATION, app.komori.data.LIBRARY_ORDER_MIGRATION, app.komori.data.SAVED_IMAGES_MIGRATION)
                 .build()
         try {
             val pref = kotlinx.coroutines.runBlocking { db.dao().titlePreferences("manga") }
@@ -98,13 +98,15 @@ class MigrationTest {
         helper
             .runMigrationsAndValidate(
                 "full-upgrade-test",
-                6,
+                8,
                 true,
                 app.komori.data.SCROLL_MIGRATION,
                 app.komori.data.READER_MODE_MIGRATION,
                 app.komori.data.FEED_MIGRATION,
                 app.komori.data.METADATA_MIGRATION,
                 app.komori.data.ORGANIZATION_MIGRATION,
+                app.komori.data.LIBRARY_ORDER_MIGRATION,
+                app.komori.data.SAVED_IMAGES_MIGRATION,
             )
             .close()
     }
@@ -198,6 +200,39 @@ class MigrationTest {
             }
             db.query("SELECT categoryId FROM category_memberships WHERE mangaId='book'").use { assertTrue(it.moveToFirst()); assertEquals("z", it.getString(0)) }
             db.query("SELECT page,scroll FROM progress WHERE releaseId='release'").use { assertTrue(it.moveToFirst()); assertEquals(4, it.getInt(0)); assertEquals(0.25f, it.getFloat(1), 0f) }
+        }
+    }
+
+    @Test fun savedImagesUpgradeKeepsDownloadsAndAddsIndependentMetadata() {
+        helper.createDatabase("saved-images-test", 7).apply {
+            execSQL(
+                "INSERT INTO downloads (releaseId, mangaId, label, total, done, state, error, dataSaver, queuePosition) VALUES ('chapter', 'book', 'Chapter 1', 4, 4, 'Complete', '', 1, 0)"
+            )
+            execSQL("INSERT INTO progress (releaseId, mangaId, chapterKey, page, completed, scroll) VALUES ('chapter', 'book', 'key', 3, 1, 0.5)")
+            close()
+        }
+        helper.runMigrationsAndValidate(
+            "saved-images-test",
+            8,
+            true,
+            app.komori.data.SAVED_IMAGES_MIGRATION,
+        ).use { db ->
+            db.query("SELECT done, state FROM downloads WHERE releaseId = 'chapter'").use {
+                assertTrue(it.moveToFirst()); assertEquals(4, it.getInt(0)); assertEquals("Complete", it.getString(1))
+            }
+            db.query("SELECT page, completed FROM progress WHERE releaseId = 'chapter'").use {
+                assertTrue(it.moveToFirst()); assertEquals(3, it.getInt(0)); assertEquals(1, it.getInt(1))
+            }
+            db.execSQL(
+                "INSERT INTO saved_images (id, uri, mangaId, releaseId, mangaTitle, chapterLabel, page, fileName, mimeType, width, height, savedAt) VALUES ('image', 'content://media/1', 'book', 'chapter', 'Title', 'Chapter 1', 2, 'page.jpg', 'image/jpeg', 800, 1200, 123)"
+            )
+            db.query("SELECT page, fileName FROM saved_images WHERE id = 'image'").use {
+                assertTrue(it.moveToFirst()); assertEquals(2, it.getInt(0)); assertEquals("page.jpg", it.getString(1))
+            }
+            db.execSQL("DELETE FROM saved_images WHERE id = 'image'")
+            db.query("SELECT done FROM downloads WHERE releaseId = 'chapter'").use {
+                assertTrue(it.moveToFirst()); assertEquals(4, it.getInt(0))
+            }
         }
     }
 

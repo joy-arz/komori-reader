@@ -2,9 +2,14 @@
 
 package app.komori.ui
 
+import android.Manifest
 import android.app.Activity
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -22,12 +27,14 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import app.komori.domain.ReaderTapZones
+import app.komori.data.SavedImages
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
@@ -40,6 +47,8 @@ import app.komori.domain.ReadingMode
 import app.komori.domain.Release
 import com.davemorrissey.labs.subscaleview.ImageSource
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
+
+private data class ReaderSaveTarget(val chapter: Release, val page: Int)
 
 @Suppress("DEPRECATION")
 @Composable
@@ -67,6 +76,28 @@ fun ReaderScreen(vm: ReaderViewModel, chapter: Release) {
     var controls by rememberSaveable { mutableStateOf(false) }
     var options by rememberSaveable { mutableStateOf(false) }
     var jump by rememberSaveable { mutableStateOf(false) }
+    var saveTarget by remember { mutableStateOf<ReaderSaveTarget?>(null) }
+    var pendingPermissionTarget by remember { mutableStateOf<ReaderSaveTarget?>(null) }
+    val savingImage by vm.savingImage.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val storagePermission =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            val target = pendingPermissionTarget
+            pendingPermissionTarget = null
+            if (granted && target != null) saveTarget = target
+            else if (!granted)
+                vm.notice.value =
+                    "Allow storage access to save images to Pictures/${SavedImages.ALBUM}."
+        }
+    fun requestImageSave(target: ReaderSaveTarget) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
+            context.checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            pendingPermissionTarget = target
+            storagePermission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        } else saveTarget = target
+    }
     val gapTarget by vm.readerGapTarget.collectAsStateWithLifecycle()
     val view = LocalView.current
     val window = (view.context as? Activity)?.window
@@ -103,10 +134,16 @@ fun ReaderScreen(vm: ReaderViewModel, chapter: Release) {
     fun navigate(delta: Int) = vm.navigateReader(delta)
     Box(Modifier.fillMaxSize().background(Color.Black).safeDrawingPadding().onGloballyPositioned { viewportBounds = it.boundsInWindow() }.semantics {
         contentDescription = "Reading area"
-        customActions = listOf(CustomAccessibilityAction(if (controls) "Hide reader controls" else "Show reader controls") {
-            controls = !controls
-            true
-        })
+        customActions = listOf(
+            CustomAccessibilityAction(if (controls) "Hide reader controls" else "Show reader controls") {
+                controls = !controls
+                true
+            },
+            CustomAccessibilityAction("Save current page image") {
+                requestImageSave(ReaderSaveTarget(chapter, page))
+                true
+            },
+        )
     }) {
         Column(Modifier.fillMaxSize()) {
             if (controls)
@@ -135,11 +172,12 @@ fun ReaderScreen(vm: ReaderViewModel, chapter: Release) {
                     RoundControl(KomoriIcons.Tune, "Reader settings", { options = true })
                 }
             if (mode == ReadingMode.WEBTOON && ready) {
-                WebtoonReader(vm, chapter, Modifier.weight(1f).graphicsLayer(alpha = 1f - settings.dim / 100f), onTap = { controls = !controls }, controlBounds = { viewportBounds })
+                WebtoonReader(vm, chapter, Modifier.weight(1f).graphicsLayer(alpha = 1f - settings.dim / 100f), onTap = { controls = !controls }, controlBounds = { viewportBounds },
+                    onLongPressPage = { release, page -> requestImageSave(ReaderSaveTarget(release, page)) })
             } else
                 Box(
                     Modifier.weight(1f).fillMaxWidth().then(
-                        if (file == null || error != null) Modifier.readerCenterTap({ viewportBounds }) { controls = !controls }
+                        if (file == null || error != null) Modifier.readerCenterTap({ viewportBounds }, onTap = { controls = !controls })
                         else Modifier
                     ),
                     contentAlignment = Alignment.Center,
@@ -187,6 +225,9 @@ fun ReaderScreen(vm: ReaderViewModel, chapter: Release) {
                                         }
                                     }
                                     image.onReaderSwipe = { navigate(mode.swipeDelta(it)) }
+                                    image.onReaderLongPress = { _, _ ->
+                                        requestImageSave(ReaderSaveTarget(chapter, page))
+                                    }
                                 }, modifier = Modifier.fillMaxSize().clipToBounds().graphicsLayer(alpha = 1f - settings.dim / 100f),
                                 onReset = null, onRelease = { it.release() },
                             ) else
@@ -226,6 +267,9 @@ fun ReaderScreen(vm: ReaderViewModel, chapter: Release) {
                                         }
                                     }
                                     image.onReaderSwipe = { navigate(mode.swipeDelta(it)) }
+                                    image.onReaderLongPress = { _, _ ->
+                                        requestImageSave(ReaderSaveTarget(chapter, page))
+                                    }
                                 },
                                 modifier = Modifier.fillMaxSize().clipToBounds().graphicsLayer(alpha = 1f - settings.dim / 100f),
                                 onReset = null,
@@ -292,6 +336,31 @@ fun ReaderScreen(vm: ReaderViewModel, chapter: Release) {
                     style = MaterialTheme.typography.labelSmall,
                 )
             }
+    }
+    saveTarget?.let { target ->
+        AlertDialog(
+            onDismissRequest = { if (!savingImage) saveTarget = null },
+            title = { Text("Save image") },
+            text = {
+                Text(
+                    "Save page ${target.page + 1} from ${target.chapter.label} to Pictures/${SavedImages.ALBUM}? " +
+                        "The original page image is copied; chapter downloads are not changed."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !savingImage,
+                    onClick = {
+                        val selected = target
+                        saveTarget = null
+                        vm.savePageImage(selected.chapter, selected.page)
+                    },
+                ) { Text(if (savingImage) "Saving…" else "Save Image") }
+            },
+            dismissButton = {
+                TextButton(enabled = !savingImage, onClick = { saveTarget = null }) { Text("Cancel") }
+            },
+        )
     }
     gapTarget?.let { next ->
         AlertDialog(onDismissRequest = { vm.readerGapTarget.value = null }, title = { Text("Chapter gap") },

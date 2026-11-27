@@ -40,6 +40,7 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
@@ -123,7 +124,15 @@ fun KomoriScreen(vm: ReaderViewModel) {
                 key(readerSession) {
                     MaterialTheme(colorScheme = Night) {
                         Surface(color = Color.Black, contentColor = Night.onSurface) {
-                            ReaderScreen(vm, reader!!)
+                            Box {
+                                ReaderScreen(vm, reader!!)
+                                SnackbarHost(
+                                    snackbar,
+                                    Modifier.align(Alignment.BottomCenter)
+                                        .navigationBarsPadding()
+                                        .padding(12.dp),
+                                )
+                            }
                         }
                     }
                 }
@@ -281,10 +290,13 @@ internal fun MangaCover(
     contentScale: ContentScale = ContentScale.Crop,
     showSource: Boolean = false,
 ) {
-    var coverState by remember(manga.cover) { mutableIntStateOf(if (manga.cover.isEmpty()) 2 else 0) }
+    val request = coverRequest(manga)
+    var coverState by remember(manga.id, manga.cover, request.data) {
+        mutableIntStateOf(if (request.data.toString().isEmpty()) 2 else 0)
+    }
     val languages = remember(manga.tagsJson) { manga.coverLanguages() }
-    Box(modifier) {
-        AsyncImage(coverRequest(manga), description, Modifier.matchParentSize(), contentScale = contentScale,
+    Box(modifier.clipToBounds()) {
+        AsyncImage(request, description, Modifier.matchParentSize(), contentScale = contentScale,
             onLoading = { coverState = 0 }, onSuccess = { coverState = 1 }, onError = { coverState = 2 })
         if (coverState != 1) Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
             if (coverState == 0) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
@@ -681,7 +693,7 @@ internal fun MangaGrid(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
-            items(manga, key = { it.id }) { title ->
+            items(manga, key = { it.id }, contentType = { "manga" }) { title ->
                 Column {
                     Box {
                         MangaCover(

@@ -51,6 +51,25 @@ data class Progress(
     @ColumnInfo(defaultValue = "0") val scroll: Float = 0f,
 )
 
+@Entity(
+    tableName = "saved_images",
+    indices = [Index("savedAt"), Index("mangaId"), Index("releaseId")],
+)
+data class SavedImage(
+    @PrimaryKey val id: String,
+    val uri: String,
+    val mangaId: String,
+    val releaseId: String,
+    val mangaTitle: String,
+    val chapterLabel: String,
+    val page: Int,
+    val fileName: String,
+    val mimeType: String,
+    val width: Int,
+    val height: Int,
+    val savedAt: Long,
+)
+
 @Entity(tableName = "downloads")
 data class Download(
     @PrimaryKey val releaseId: String,
@@ -125,6 +144,11 @@ interface LibraryDao {
     @Query("SELECT EXISTS(SELECT 1 FROM downloads WHERE mangaId = :id)") suspend fun hasDownloads(id: String): Boolean
 
     @Query("SELECT * FROM downloads ORDER BY queuePosition, releaseId") fun observeDownloads(): Flow<List<Download>>
+    @Query("SELECT * FROM saved_images ORDER BY savedAt DESC, id") fun observeSavedImages(): Flow<List<SavedImage>>
+    @Query("SELECT * FROM saved_images WHERE id = :id") suspend fun savedImage(id: String): SavedImage?
+    @Query("SELECT * FROM saved_images ORDER BY savedAt DESC, id") suspend fun savedImages(): List<SavedImage>
+    @Upsert suspend fun putSavedImage(image: SavedImage)
+    @Query("DELETE FROM saved_images WHERE id = :id") suspend fun removeSavedImage(id: String)
     @Query("SELECT * FROM downloads WHERE state IN ('Queued','Downloading','Retrying','Waiting for storage') ORDER BY queuePosition, releaseId")
     suspend fun orderedQueue(): List<Download>
     @Query("SELECT * FROM downloads WHERE state IN ('Queued','Downloading','Retrying','Waiting for storage') ORDER BY CASE WHEN state = 'Downloading' THEN 0 ELSE 1 END, queuePosition, releaseId LIMIT 1")
@@ -258,6 +282,7 @@ interface LibraryDao {
             ChapterFeed::class,
             Progress::class,
             Download::class,
+            SavedImage::class,
             Creator::class,
             TitlePreferences::class,
             LibraryCategory::class,
@@ -267,7 +292,7 @@ interface LibraryDao {
             CreatorSnapshot::class,
             MigrationLink::class,
         ],
-    version = 7,
+    version = 8,
     exportSchema = true,
 )
 abstract class LibraryDatabase : RoomDatabase() {
@@ -371,5 +396,14 @@ val LIBRARY_ORDER_MIGRATION = object : androidx.room.migration.Migration(6, 7) {
     override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
         db.execSQL("ALTER TABLE library_categories ADD COLUMN position INTEGER NOT NULL DEFAULT 0")
         db.execSQL("UPDATE library_categories SET position = (SELECT COUNT(*) FROM library_categories AS preceding WHERE preceding.name COLLATE NOCASE < library_categories.name COLLATE NOCASE OR (preceding.name COLLATE NOCASE = library_categories.name COLLATE NOCASE AND preceding.id < library_categories.id))")
+    }
+}
+
+val SAVED_IMAGES_MIGRATION = object : androidx.room.migration.Migration(7, 8) {
+    override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS saved_images (id TEXT NOT NULL PRIMARY KEY, uri TEXT NOT NULL, mangaId TEXT NOT NULL, releaseId TEXT NOT NULL, mangaTitle TEXT NOT NULL, chapterLabel TEXT NOT NULL, page INTEGER NOT NULL, fileName TEXT NOT NULL, mimeType TEXT NOT NULL, width INTEGER NOT NULL, height INTEGER NOT NULL, savedAt INTEGER NOT NULL)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_saved_images_savedAt ON saved_images(savedAt)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_saved_images_mangaId ON saved_images(mangaId)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_saved_images_releaseId ON saved_images(releaseId)")
     }
 }

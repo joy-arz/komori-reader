@@ -10,6 +10,7 @@ import kotlin.math.abs
 class ReaderImageView(context: Context) : SubsamplingScaleImageView(context) {
     init { setRegionDecoderFactory { CompatibleRegionDecoder() } }
     var onReaderTap: (Float, Float) -> Unit = { _, _ -> }
+    var onReaderLongPress: ((Float, Float) -> Unit)? = null
     var onReaderSwipe: ((Float) -> Unit)? = null
     private var multiplePointers = false
     private var startedAtMinimum = false
@@ -24,6 +25,14 @@ class ReaderImageView(context: Context) : SubsamplingScaleImageView(context) {
                 override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
                     if (!multiplePointers) onReaderTap(e.x / width.coerceAtLeast(1), e.y / height.coerceAtLeast(1))
                     return true
+                }
+
+                override fun onLongPress(e: MotionEvent) {
+                    if (!multiplePointers && isReady && scale <= minScale * 1.02f)
+                        onReaderLongPress?.invoke(
+                            e.x / width.coerceAtLeast(1),
+                            e.y / height.coerceAtLeast(1),
+                        )
                 }
             },
         )
