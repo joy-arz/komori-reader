@@ -1,5 +1,12 @@
 # Komori changelog
 
+## 0.8.22
+
+- Keep Library covers inside their cards with consistent cropping, stable image state and preserved grid scroll when filters or tabs change.
+- Replace the duplicate Downloaded collection with All, Downloaded and Not downloaded states, and allow multiple reading statuses, custom libraries, sources and favorite or unread filters at once. Show every active filter with individual removal, Clear all, and a recoverable empty state.
+- Long-press a reader page to save the original image to Pictures/Komori Reader. Add an Images tab to open or delete saved copies; independent Room metadata and the schema 8 migration keep saved images separate from chapter downloads, and files deleted outside Komori are cleaned up.
+- Recover Manhwa18.com images when the final image host returns HTTP 526 by retrying the verified current host. Keep persistent 526 failures retryable with a source-side certificate explanation.
+
 ## 0.8.21
 
 - Recover Manhwa18.com downloads and reader pages from Cloudflare HTTP 526: retry main-host requests on www, move retired cdn image URLs to the verified current image host, and explain that a persistent 526 is a source-side certificate outage. Keep 526 automatically retryable.
