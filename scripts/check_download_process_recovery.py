@@ -113,6 +113,10 @@ def main():
 
     try:
         shell("am", "start", "-W", "-n", PACKAGE + "/app.komori.MainActivity")
+        # Emulator Wi-Fi occasionally fails to validate, leaving only metered cellular.
+        # This probe exercises storage, WorkManager and the OS network constraint, not
+        # Wi-Fi-only behavior, so allow the loopback fixture to run over any connection.
+        command("allow-metered", paused)
         for identity in identities:
             command(f"configure:{port}", identity)
         # A paused row must remain paused across restart, without creating any HTTP work.
@@ -200,6 +204,7 @@ def main():
         shell("input", "keyevent", "KEYCODE_WAKEUP"); shell("wm", "dismiss-keyguard")
         shell("svc", "wifi", "enable" if wifi_before else "disable")
         shell("svc", "data", "enable" if data_before else "disable")
+        command("require-unmetered", paused)
         for identity in identities:
             command("cleanup", identity)
         adb("reverse", "--remove", f"tcp:{port}")

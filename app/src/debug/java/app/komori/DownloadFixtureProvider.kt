@@ -57,6 +57,10 @@ class DownloadFixtureProvider : ContentProvider() {
             "pause" -> app.dao.download(id)?.let { DownloadCoordinator(app).stop(it, "Paused") }
             "delete" -> app.dao.download(id)?.let { DownloadCoordinator(app).delete(it) }
             "low" -> preferences.edit(commit = true) { putBoolean("low:$id", extras?.getBoolean("value") == true || method == "low:1") }
+            // Shell probes must not depend on an emulator's virtual Wi-Fi being validated.
+            // The instrumentation suite already allows metered loopback fixtures the same way.
+            "allow-metered" -> app.settings.set("wifi", false)
+            "require-unmetered" -> app.settings.set("wifi", true)
             "recover" -> kickDownloadQueue(app, recoverInterrupted = true)
             "cleanup" -> {
                 app.dao.download(id)?.let { DownloadCoordinator(app).delete(it) }
